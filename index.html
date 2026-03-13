@@ -4080,16 +4080,6 @@ function snTipoChanged(tipo) {
   // Numero step nota: 2 se dolori, 1 se normale
   const stepNum = document.getElementById('sn-step-note-num');
   if (stepNum) stepNum.textContent = isDolori ? '2' : '1';
-  // Se si attiva dolori e fine chart è vuoto, pre-popola con zone inizio
-  if (isDolori) {
-    const startZones = Object.keys(_snPainStart);
-    if (startZones.length > 0 && Object.keys(_snPainEnd).length === 0) {
-      const merged = { ..._snPainStart };
-      document.getElementById('sn-chart-end').innerHTML = _buildSnChart('end', merged, startZones);
-      startZones.forEach(z => { _snPainEnd[z] = _snPainStart[z] || 5; });
-      _snUpdateSummary('end');
-    }
-  }
   // update button styles
   document.getElementById('sn-tipo-normale').className = `sn-tipo-btn ${tipo==='normale' ? 'active-normale' : ''}`;
   document.getElementById('sn-tipo-dolori').className  = `sn-tipo-btn ${tipo==='dolori'  ? 'active-dolori'  : ''}`;
@@ -4220,7 +4210,12 @@ function openSessionNote(clientId, prefillPain = null) {
   }
 
   preselected.forEach(l => { _snPainStart[l] = preIntensities[l] || 5; });
-  const endPreselected = Object.keys(preEndIntensities);
+  // Se non ci sono dati fine, pre-popola con le stesse zone dell'inizio
+  let endPreselected = Object.keys(preEndIntensities);
+  if (endPreselected.length === 0 && preselected.length > 0) {
+    preselected.forEach(l => { preEndIntensities[l] = preIntensities[l] || 5; });
+    endPreselected = [...preselected];
+  }
   endPreselected.forEach(l => { _snPainEnd[l] = preEndIntensities[l] || 5; });
   document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preIntensities, preselected);
   document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', preEndIntensities, endPreselected);
@@ -4252,6 +4247,16 @@ function openSessionNote(clientId, prefillPain = null) {
     statoList.innerHTML = _buildStatoList(chronicZones);
   } else {
     statoBlock.style.display = 'none';
+  }
+
+  // Pre-fill exercises from workout of that date if note text is empty
+  const noteDate = document.getElementById('sn-date').value;
+  const textEl = document.getElementById('sn-text');
+  if (textEl && !textEl.value) {
+    const matchingWorkout = [...workouts].reverse().find(wk =>
+      wk.clientId == clientId && wk.createdAt?.split('T')[0] === noteDate && wk.blocchi?.length
+    );
+    if (matchingWorkout) textEl.value = _workoutToNoteText(matchingWorkout);
   }
 
   openModal('modal-session-note');
@@ -4320,27 +4325,55 @@ function getSessionNotes(clientId) {
 
 let _editingNoteId = null;
 
+function _workoutToNoteText(w) {
+  // Build a readable exercise list from workout blocks
+  if (!w.blocchi?.length) return '';
+  const BLOCCO_LABELS = {
+    mobilita: 'Mobilità', warmup: 'Warm Up', core: 'Core',
+    fase1: 'Fase 1', fase2: 'Fase 2', fase3: 'Fase 3', workout: 'Workout'
+  };
+  const lines = [];
+  w.blocchi.forEach(b => {
+    const label = BLOCCO_LABELS[b.tipo] || b.tipo;
+    const exs = (b.esercizi || []).filter(e => e.nome);
+    if (!exs.length) return;
+    lines.push(`[ ${label} ]`);
+    exs.forEach(e => {
+      const parts = [e.nome];
+      if (e.serie || e.reps) parts.push(`${e.serie||''}×${e.reps||''}`);
+      if (e.kg) parts.push(`${e.kg}kg`);
+      lines.push(`  • ${parts.join(' ')}`);
+    });
+  });
+  return lines.join('\n');
+}
+
 function openOrEditNoteForWorkout(clientId, workoutId) {
-  // Find the workout to get its date and painStart
   const w = workouts.find(wk => wk.id === workoutId);
   if (!w) return;
   const wDate = w.createdAt?.split('T')[0];
 
-  // Check if a note already exists for that date
   const notes = getSessionNotes(clientId);
   const existingNote = notes.find(n => n.date === wDate);
 
   if (existingNote) {
-    // Open existing note for editing — preserves all data already saved
+    // Open existing note — if text is empty or was auto-generated, inject exercises
     editSessionNote(clientId, existingNote.id);
+    setTimeout(() => {
+      const textEl = document.getElementById('sn-text');
+      if (textEl && (!textEl.value || textEl.value === '_da scheda_')) {
+        textEl.value = _workoutToNoteText(w);
+      }
+    }, 80);
   } else {
-    // No note yet — open fresh modal pre-filled with workout's painStart
+    // No note yet — open fresh with exercises pre-filled
     openSessionNote(clientId, w.painStart || []);
-    // Also pre-set the date to the workout date (not necessarily today)
     setTimeout(() => {
       const dateEl = document.getElementById('sn-date');
       if (dateEl) dateEl.value = wDate;
-    }, 50);
+      const textEl = document.getElementById('sn-text');
+      if (textEl && !textEl.value) textEl.value = _workoutToNoteText(w);
+    }, 80);
   }
 }
 
