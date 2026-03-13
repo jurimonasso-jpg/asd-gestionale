@@ -6693,6 +6693,7 @@ function openQuickTemplate(clientId) {
         <span>Esercizio</span><span style="text-align:center;">Serie</span><span style="text-align:center;">Reps</span><span style="text-align:center;color:var(--accent);">Kg</span><span></span>
       </div>
       <div id="qt-block-${clientId}-${block.id}">${rows}</div>
+      <button onclick="addQtRow(this,'${clientId}','${block.id}')" style="margin-top:6px;width:100%;background:none;border:1px dashed var(--border);border-radius:6px;color:var(--text3);font-size:11px;font-family:monospace;cursor:pointer;padding:5px 0;">+ aggiungi</button>
     </div>`;
   });
 
@@ -6729,6 +6730,25 @@ function openQuickTemplate(clientId) {
   if (!target) btns.forEach(b => { if (b.closest('.card')) target = b.closest('.card'); });
   if (target) target.insertAdjacentElement('afterend', div);
   else document.getElementById('agenda-content').appendChild(div);
+}
+
+function addQtRow(btn, clientId, blockId) {
+  const container = document.getElementById('qt-block-' + clientId + '-' + blockId);
+  if (!container) return;
+  const idx = container.children.length;
+  const row = document.createElement('div');
+  row.id = 'qt-row-' + clientId + '-' + blockId + '-' + idx;
+  row.style.cssText = 'padding:5px 0;border-bottom:1px solid var(--border);';
+  row.innerHTML = `<div style="display:grid;grid-template-columns:1fr 52px 72px 60px 28px;gap:5px;align-items:center;">
+    <input value="" style="background:transparent;border:none;border-bottom:1px dashed var(--border);color:var(--text);font-size:12px;font-weight:600;outline:none;padding:2px 4px;" placeholder="Nuovo esercizio"
+      onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+    <input value="3" style="background:transparent;border:1px dashed var(--border);border-radius:4px;color:var(--text3);font-size:11px;font-family:monospace;text-align:center;outline:none;padding:2px 3px;width:100%;" placeholder="3x">
+    <input value="10-12" style="background:transparent;border:1px dashed var(--border);border-radius:4px;color:var(--text3);font-size:11px;font-family:monospace;text-align:center;outline:none;padding:2px 3px;width:100%;" placeholder="reps">
+    <input value="" style="background:transparent;border:1px dashed var(--border);border-radius:4px;color:var(--accent);font-size:11px;font-family:monospace;text-align:center;outline:none;padding:2px 3px;width:100%;" placeholder="kg">
+    <button onclick="this.closest('[id^=qt-row-]').remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0;">✕</button>
+  </div>`;
+  container.appendChild(row);
+  row.querySelector('input').focus();
 }
 
 function saveQuickTemplate(clientId) {
