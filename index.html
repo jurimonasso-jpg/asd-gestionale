@@ -2276,7 +2276,6 @@ body { font-size: 15px; }
         <select class="form-input" style="width:220px;" id="seduta-client-select" onchange="renderSedutaSetup()">
           <option value="">— Seleziona Cliente —</option>
         </select>
-        <button class="btn btn-secondary" onclick="generateSedutaAuto()" id="btn-gen-auto">⚡ Genera automatica</button>
         <button class="btn btn-primary" onclick="newSedutaBuilder()" id="btn-gen-seduta">+ Nuova Seduta</button>
       </div>
     </div>
@@ -6364,7 +6363,7 @@ function renderAgendaDay() {
             '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">' +
               '<button onclick="openClientDetail(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">👤 Scheda</button>' +
               '<button onclick="openSessionNote(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">📝 Nota</button>' +
-              '<button onclick="openQuickTemplate(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">⚡ Seduta</button>' +
+              '<button onclick="newSedutaBuilderForClient(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">⚡ Seduta</button>' +
             '</div>'
           ) : '') +
         '</div>' +
@@ -6519,7 +6518,7 @@ function renderAgenda() {
           ${manual && session.note ? `<div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${session.note}</div>` : ''}
           <div style="display:flex;gap:4px;">
             <button onclick="openSessionNote(${c.id})" style="flex:1;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:'DM Mono';">📝 Nota</button>
-            <button onclick="openQuickTemplate(${c.id})" style="flex:1;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:'DM Mono';">⚡ Seduta</button>
+            <button onclick="newSedutaBuilderForClient(${c.id})" style="flex:1;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:'DM Mono';">⚡ Seduta</button>
           </div>
         </div>`;
       });
@@ -6584,7 +6583,7 @@ function renderAgenda() {
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" onclick="openClientDetail(${c.id})">👤 Scheda</button>
             <button class="btn btn-secondary btn-sm" onclick="openSessionNote(${c.id})">📝 Nota</button>
-            <button class="btn btn-primary btn-sm" onclick="openQuickTemplate(${c.id})">⚡ Seduta rapida</button>
+            <button class="btn btn-primary btn-sm" onclick="newSedutaBuilderForClient(${c.id})">⚡ Seduta</button>
           </div>
         </div>
       </div>`;
@@ -7932,6 +7931,19 @@ function _openBuilderNote(clientId) {
     );
     if (saved) openOrEditNoteForWorkout(clientId, saved.id);
   }
+}
+
+// Apre il builder seduta da agenda con cliente pre-selezionato
+function newSedutaBuilderForClient(clientId) {
+  showPage('seduta');
+  // Set the client select
+  setTimeout(() => {
+    const sel = document.getElementById('seduta-client-select');
+    if (sel) {
+      sel.value = clientId;
+      newSedutaBuilder();
+    }
+  }, 80);
 }
 
 function newSedutaBuilder() {
