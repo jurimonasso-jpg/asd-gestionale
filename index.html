@@ -2825,6 +2825,9 @@ body { font-size: 15px; }
     <input class="ex-picker-search" id="ex-picker-search" type="text" placeholder="🔍 Cerca nel catalogo..." oninput="renderExPickerGrid()">
     <div class="ex-picker-filters" id="ex-picker-filters"></div>
     <div class="ex-picker-grid" id="ex-picker-grid"></div>
+    <div id="ex-picker-footer" style="display:none;padding-top:10px;border-top:1px solid var(--border);margin-top:8px;">
+      <button class="btn btn-primary" style="width:100%;" onclick="confirmPickedExercises()" id="ex-picker-confirm-btn">Aggiungi 0 esercizi</button>
+    </div>
   </div>
 </div>
 
@@ -4014,29 +4017,17 @@ function snToggleZone(side, zone, labelEl, checked) {
     else delete _wPainStart[zone];
     _wUpdateSummary();
   } else if (side === 'sb') {
-    if (checked) {
-      const endWrap  = document.querySelector(`#sb-chart-end .snz-wrap[data-zone-name="${zone.toLowerCase()}"]`);
-      const endCb    = endWrap?.querySelector('input[type=checkbox]');
-      const endLabel = endWrap?.querySelector('.sn-zone-cb');
-      const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
-      if (!endIntEl?.dataset.modified) {
-        _sbPainEnd[zone] = 5;
-        if (endCb)    endCb.checked = true;
-        endLabel?.classList.add('sn-checked');
-        endIntEl?.classList.add('visible');
-        const sl = endIntEl?.querySelector('input[type=range]');
-        if (sl) sl.value = 5;
-      }
-    } else {
-      const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
-      if (!endIntEl?.dataset.modified) {
-        delete _sbPainEnd[zone];
-        const endWrap  = document.querySelector(`#sb-chart-end .snz-wrap[data-zone-name="${zone.toLowerCase()}"]`);
-        endWrap?.querySelector('input[type=checkbox]') && (endWrap.querySelector('input[type=checkbox]').checked = false);
-        endWrap?.querySelector('.sn-zone-cb')?.classList.remove('sn-checked');
-        endIntEl?.classList.remove('visible');
-      }
-    }
+    // Aggiorna _wPainStart
+    if (checked) _wPainStart[zone] = _wPainStart[zone] || 5;
+    else delete _wPainStart[zone];
+    // Sync live → fine
+    _sbSyncEndZone(zone, checked);
+  } else if (side === 'sbend') {
+    // Modifica manuale dolori fine
+    if (checked) _sbPainEnd[zone] = _sbPainEnd[zone] || 5;
+    else delete _sbPainEnd[zone];
+    const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
+    if (endIntEl) endIntEl.dataset.modified = '1';
   } else {
     const painObj = side === 'start' ? _snPainStart : _snPainEnd;
     if (checked) painObj[zone] = painObj[zone] || 5;
@@ -4087,6 +4078,8 @@ function snToggleZone(side, zone, labelEl, checked) {
 
 function snSetInt(side, zone, val) {
   if (side === 'sb') {
+    _wPainStart[zone] = val;
+    // Sync to end if not modified
     const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
     if (!endIntEl?.dataset.modified && _sbPainEnd[zone] !== undefined) {
       _sbPainEnd[zone] = val;
@@ -5293,6 +5286,8 @@ let exPickerCat = '';
 function openExPicker(bi) {
   exPickerTarget = { bi };
   exPickerCat = '';
+  _pickedExercises = [];
+  document.getElementById('ex-picker-footer').style.display = 'none';
   const overlay = document.getElementById('ex-picker-overlay');
   overlay.style.display = 'flex';
 
@@ -5327,8 +5322,11 @@ function renderExPickerGrid() {
     if (exPickerCat && cat !== exPickerCat) continue;
     for (const ex of data.items) {
       if (search && !ex.toLowerCase().includes(search)) continue;
-      html += `<div class="ex-picker-item" onclick="pickExercise('${ex.replace(/'/g,"\\'")}')">
-        <span>${ex}</span>
+      const isPicked = _pickedExercises.includes(ex);
+      html += `<div class="ex-picker-item" data-nome="${ex.replace(/"/g,'&quot;')}"
+        onclick="pickExercise('${ex.replace(/'/g,"\\'")}') "
+        style="${isPicked ? 'border-color:var(--accent);background:rgba(232,255,71,0.08);color:var(--accent);' : ''}">
+        <span>${isPicked ? '✓ ' : ''}${ex}</span>
         <span style="font-size:10px;color:var(--text3);">${cat.split(' ')[0]}</span>
       </div>`;
     }
@@ -5336,21 +5334,45 @@ function renderExPickerGrid() {
   grid.innerHTML = html || `<div style="color:var(--text3);grid-column:1/-1;padding:20px;text-align:center;font-size:13px;">Nessun esercizio trovato</div>`;
 }
 
+let _pickedExercises = [];
+
 function pickExercise(nome) {
   if (exPickerTarget === null) return;
-  const { bi } = exPickerTarget;
-  schedaBlocchi[bi].esercizi.push({
-    nome,
-    stimolo: '',
-    serie: '',
-    reps: '',
-    pausa: '',
-    noteEx: '',
-    prog: [{},{},{},{}]
+  const idx = _pickedExercises.indexOf(nome);
+  if (idx >= 0) {
+    _pickedExercises.splice(idx, 1);
+  } else {
+    _pickedExercises.push(nome);
+  }
+  // Update item style
+  document.querySelectorAll('.ex-picker-item').forEach(el => {
+    const isPicked = _pickedExercises.includes(el.dataset.nome);
+    el.style.borderColor = isPicked ? 'var(--accent)' : '';
+    el.style.background  = isPicked ? 'rgba(232,255,71,0.08)' : '';
+    el.style.color       = isPicked ? 'var(--accent)' : '';
   });
+  // Update footer
+  const footer = document.getElementById('ex-picker-footer');
+  const btn    = document.getElementById('ex-picker-confirm-btn');
+  if (_pickedExercises.length > 0) {
+    footer.style.display = 'block';
+    btn.textContent = `+ Aggiungi ${_pickedExercises.length} esercizio${_pickedExercises.length > 1 ? 'i' : ''}`;
+  } else {
+    footer.style.display = 'none';
+  }
+}
+
+function confirmPickedExercises() {
+  if (!exPickerTarget || !_pickedExercises.length) return;
+  const { bi } = exPickerTarget;
+  _pickedExercises.forEach(nome => {
+    schedaBlocchi[bi].esercizi.push({
+      nome, stimolo: '', serie: '', reps: '', pausa: '', noteEx: '', prog: [{},{},{},{}]
+    });
+  });
+  _pickedExercises = [];
   closeExPicker();
   renderSchedaBlocchi();
-  // scroll to the block
   setTimeout(() => {
     document.getElementById(`blocco-${bi}`)?.scrollIntoView({ behavior:'smooth', block:'nearest' });
   }, 100);
@@ -5360,6 +5382,9 @@ function closeExPicker(event) {
   if (event && event.target !== document.getElementById('ex-picker-overlay')) return;
   document.getElementById('ex-picker-overlay').style.display = 'none';
   exPickerTarget = null;
+  _pickedExercises = [];
+  const footer = document.getElementById('ex-picker-footer');
+  if (footer) footer.style.display = 'none';
 }
 
 function addManualExercise() {
@@ -8126,6 +8151,33 @@ function newSedutaBuilder() {
 
 let _sbPainStart = {};
 let _sbPainEnd   = {};
+
+function _sbSyncEndZone(zone, checked) {
+  const endWrap  = document.querySelector(`#sb-chart-end .snz-wrap[data-zone-name="${zone.toLowerCase()}"]`);
+  const endCb    = endWrap?.querySelector('input[type=checkbox]');
+  const endLabel = endWrap?.querySelector('.sn-zone-cb');
+  const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
+  if (checked) {
+    if (!endIntEl?.dataset.modified) {
+      const intensity = _wPainStart[zone] || 5;
+      _sbPainEnd[zone] = intensity;
+      if (endCb)    { endCb.checked = true; }
+      endLabel?.classList.add('sn-checked');
+      if (endIntEl) {
+        endIntEl.classList.add('visible');
+        const sl = endIntEl.querySelector('input[type=range]');
+        if (sl) { sl.value = intensity; sl.nextElementSibling.textContent = intensity; }
+      }
+    }
+  } else {
+    if (!endIntEl?.dataset.modified) {
+      delete _sbPainEnd[zone];
+      if (endCb)    { endCb.checked = false; }
+      endLabel?.classList.remove('sn-checked');
+      endIntEl?.classList.remove('visible');
+    }
+  }
+}
 
 function sbTipoChanged(tipo) {
   document.getElementById('sb-tipo-normale').className = tipo === 'normale' ? 'sn-tipo-btn active-normale' : 'sn-tipo-btn';
