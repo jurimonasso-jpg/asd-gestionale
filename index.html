@@ -3390,7 +3390,8 @@ function openClientDetail(clientId) {
     <div class="tabs" id="detail-tabs">
       <button class="tab-btn active" onclick="switchDetailTab('dt-info', this)">Info</button>
       <button class="tab-btn" onclick="switchDetailTab('dt-pain', this)">Dolori</button>
-      <button class="tab-btn" onclick="switchDetailTab('dt-schede', this)">Schede (${clientWorkouts.length})</button>
+      <button class="tab-btn" onclick="switchDetailTab('dt-schede', this)">🏠 Schede (${clientWorkouts.filter(w=>(w.categoria||'scheda')==='scheda').length})</button>
+      <button class="tab-btn" onclick="switchDetailTab('dt-sedute', this)">⚡ Sedute (${clientWorkouts.filter(w=>w.categoria==='seduta').length})</button>
       <button class="tab-btn" onclick="switchDetailTab('dt-anamnesi', this)">Anamnesi</button>
       <button class="tab-btn" onclick="switchDetailTab('dt-note', this)">📝 Note</button>
       <button class="tab-btn" onclick="switchDetailTab('dt-abb', this)">📅 Percorso</button>
@@ -3477,24 +3478,26 @@ function openClientDetail(clientId) {
     </div>
 
     <div id="dt-schede" class="tab-content">
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:16px;flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm" onclick="openNewWorkoutModalCat(${client.id},'seduta')">+ Seduta palestra</button>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
         <button class="btn btn-primary btn-sm" onclick="openNewWorkoutModalCat(${client.id},'scheda')">+ Scheda casa</button>
       </div>
       ${(() => {
-        const schede  = clientWorkouts.filter(w => (w.categoria||'scheda') === 'scheda');
-        const sedute  = clientWorkouts.filter(w => w.categoria === 'seduta');
-        let html = '';
-        if (schede.length > 0) {
-          html += '<div style="font-family:monospace;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">🏠 Schede per casa</div>';
-          html += schede.map(w => renderWorkoutCard(w)).join('');
-        }
-        if (sedute.length > 0) {
-          html += '<div style="font-family:monospace;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin:16px 0 8px;">⚡ Sedute in palestra</div>';
-          html += sedute.map(w => renderWorkoutCard(w)).join('');
-        }
-        if (!schede.length && !sedute.length) html = '<div class="empty-state"><div class="icon">📋</div><p>Nessuna scheda o seduta</p></div>';
-        return html;
+        const schede = clientWorkouts.filter(w => (w.categoria||'scheda') === 'scheda');
+        return schede.length > 0
+          ? schede.map(w => renderWorkoutCard(w)).join('')
+          : '<div class="empty-state"><div class="icon">🏠</div><p>Nessuna scheda per casa</p></div>';
+      })()}
+    </div>
+
+    <div id="dt-sedute" class="tab-content">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+        <button class="btn btn-primary btn-sm" onclick="openNewWorkoutModalCat(${client.id},'seduta')">+ Seduta palestra</button>
+      </div>
+      ${(() => {
+        const sedute = clientWorkouts.filter(w => w.categoria === 'seduta');
+        return sedute.length > 0
+          ? sedute.map(w => renderWorkoutCard(w)).join('')
+          : '<div class="empty-state"><div class="icon">⚡</div><p>Nessuna seduta salvata</p></div>';
       })()}
     </div>
 
@@ -3520,7 +3523,7 @@ function infoRow(label, value) {
 
 function switchDetailTab(tabId, btn) {
   document.querySelectorAll('#detail-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-  ['dt-info','dt-pain','dt-schede','dt-anamnesi','dt-note','dt-abb'].forEach(id => {
+  ['dt-info','dt-pain','dt-schede','dt-sedute','dt-anamnesi','dt-note','dt-abb'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
