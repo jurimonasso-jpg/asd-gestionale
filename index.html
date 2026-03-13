@@ -4013,6 +4013,30 @@ function snToggleZone(side, zone, labelEl, checked) {
     if (checked) _wPainStart[zone] = _wPainStart[zone] || 5;
     else delete _wPainStart[zone];
     _wUpdateSummary();
+  } else if (side === 'sb') {
+    if (checked) {
+      const endWrap  = document.querySelector(`#sb-chart-end .snz-wrap[data-zone-name="${zone.toLowerCase()}"]`);
+      const endCb    = endWrap?.querySelector('input[type=checkbox]');
+      const endLabel = endWrap?.querySelector('.sn-zone-cb');
+      const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
+      if (!endIntEl?.dataset.modified) {
+        _sbPainEnd[zone] = 5;
+        if (endCb)    endCb.checked = true;
+        endLabel?.classList.add('sn-checked');
+        endIntEl?.classList.add('visible');
+        const sl = endIntEl?.querySelector('input[type=range]');
+        if (sl) sl.value = 5;
+      }
+    } else {
+      const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
+      if (!endIntEl?.dataset.modified) {
+        delete _sbPainEnd[zone];
+        const endWrap  = document.querySelector(`#sb-chart-end .snz-wrap[data-zone-name="${zone.toLowerCase()}"]`);
+        endWrap?.querySelector('input[type=checkbox]') && (endWrap.querySelector('input[type=checkbox]').checked = false);
+        endWrap?.querySelector('.sn-zone-cb')?.classList.remove('sn-checked');
+        endIntEl?.classList.remove('visible');
+      }
+    }
   } else {
     const painObj = side === 'start' ? _snPainStart : _snPainEnd;
     if (checked) painObj[zone] = painObj[zone] || 5;
@@ -4062,6 +4086,21 @@ function snToggleZone(side, zone, labelEl, checked) {
 }
 
 function snSetInt(side, zone, val) {
+  if (side === 'sb') {
+    const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
+    if (!endIntEl?.dataset.modified && _sbPainEnd[zone] !== undefined) {
+      _sbPainEnd[zone] = val;
+      const sl = endIntEl?.querySelector('input[type=range]');
+      if (sl) { sl.value = val; sl.nextElementSibling.textContent = val; }
+    }
+    return;
+  }
+  if (side === 'sbend') {
+    _sbPainEnd[zone] = val;
+    const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
+    if (endIntEl) endIntEl.dataset.modified = '1';
+    return;
+  }
   const painObj = side === 'start' ? _snPainStart : _snPainEnd;
   painObj[zone] = val;
   _snUpdateSummary(side);
@@ -8021,38 +8060,31 @@ function newSedutaBuilder() {
   const content = document.getElementById('seduta-content');
   content.innerHTML = `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:12px;">
+      <!-- Header: nome cliente + toggle normale/dolori + nome seduta -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
         <div>
           <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">Seduta · ${new Date().toLocaleDateString('it-IT')}</div>
           <div style="font-size:18px;font-weight:800;">${client.nome} ${client.cognome}</div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <input class="form-input" type="text" id="seduta-builder-name" placeholder="Nome seduta (es. Giorno A)" style="width:200px;margin:0;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label class="sn-tipo-btn active-normale" id="sb-tipo-normale">
+            <input type="radio" name="sb-tipo" value="normale" checked style="display:none;" onchange="sbTipoChanged('normale')">✅ Normale
+          </label>
+          <label class="sn-tipo-btn" id="sb-tipo-dolori">
+            <input type="radio" name="sb-tipo" value="dolori" style="display:none;" onchange="sbTipoChanged('dolori')">💢 Con dolori
+          </label>
+          <input class="form-input" type="text" id="seduta-builder-name" placeholder="Nome seduta" style="width:150px;margin:0;">
         </div>
       </div>
 
-      <!-- Stato dolore -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-          <div style="font-size:12px;font-weight:700;">Stato inizio seduta</div>
-          <div style="display:flex;gap:8px;">
-            <label class="sn-tipo-btn active-normale" id="sb-tipo-normale">
-              <input type="radio" name="sb-tipo" value="normale" checked style="display:none;" onchange="sbTipoChanged('normale')">✅ Normale
-            </label>
-            <label class="sn-tipo-btn" id="sb-tipo-dolori">
-              <input type="radio" name="sb-tipo" value="dolori" style="display:none;" onchange="sbTipoChanged('dolori')">💢 Con dolori
-            </label>
-          </div>
-        </div>
-        <div id="sb-dolori-section" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
-          <div id="sb-chart-start"></div>
-        </div>
+      <!-- 1. Dolori INIZIO — solo se dolori -->
+      <div id="sb-dolori-section" style="display:none;background:var(--surface);border:1px solid rgba(255,71,87,0.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;">🔴 Dolori inizio seduta</div>
+        <div id="sb-chart-start"></div>
       </div>
 
-      <!-- Blocchi -->
+      <!-- 2. Blocchi esercizi -->
       <div id="seduta-builder-blocchi"></div>
-
-      <!-- Add block buttons -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <button class="btn btn-secondary" onclick="addSedutaBlocco('mobilita')">+ Mobilità</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('warmup')">+ Warm Up</button>
@@ -8063,32 +8095,44 @@ function newSedutaBuilder() {
         <button class="btn btn-secondary" onclick="addSedutaBlocco('workout')">+ Workout</button>
       </div>
 
-      <div class="form-group" style="margin-bottom:14px;">
-        <label class="form-label">Note seduta</label>
-        <textarea class="form-input" id="seduta-builder-notes" placeholder="Indicazioni, osservazioni..." style="min-height:50px;"></textarea>
+      <!-- 3. Dolori FINE — solo se dolori -->
+      <div id="sb-dolori-fine-section" style="display:none;background:var(--surface);border:1px solid rgba(71,255,160,0.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:8px;">🟢 Dolori fine seduta</div>
+        <div id="sb-chart-end"></div>
       </div>
 
+      <!-- 4. Note seduta -->
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label">📝 Note seduta</label>
+        <textarea class="form-input" id="seduta-builder-notes" placeholder="Indicazioni, osservazioni..." style="min-height:60px;"></textarea>
+      </div>
+
+      <!-- 5. Bottoni -->
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="document.getElementById('seduta-content').innerHTML=''">Annulla</button>
-        <button class="btn btn-secondary" onclick="_openBuilderNote(${clientId})">🟢 Dolori fine + Nota</button>
         <button class="btn btn-primary" onclick="saveSedutaBuilder()">✓ Salva Seduta</button>
       </div>
     </div>`;
 
-  // Init pain chart
+  // Init charts
   const c = clients.find(cl => cl.id == clientId);
   const preselected = c?.painPoints?.map(p => p.label) || [];
+  _sbPainEnd = {};
   document.getElementById('sb-chart-start').innerHTML = _buildSnChart('sb', {}, preselected);
+  document.getElementById('sb-chart-end').innerHTML   = _buildSnChart('sbend', {}, []);
   renderSedutaBuilderBlocchi();
   content.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 let _sbPainStart = {};
+let _sbPainEnd   = {};
 
 function sbTipoChanged(tipo) {
   document.getElementById('sb-tipo-normale').className = tipo === 'normale' ? 'sn-tipo-btn active-normale' : 'sn-tipo-btn';
   document.getElementById('sb-tipo-dolori').className  = tipo === 'dolori'  ? 'sn-tipo-btn active-dolori'  : 'sn-tipo-btn';
-  document.getElementById('sb-dolori-section').style.display = tipo === 'dolori' ? 'block' : 'none';
+  document.getElementById('sb-dolori-section').style.display      = tipo === 'dolori' ? 'block' : 'none';
+  const fine = document.getElementById('sb-dolori-fine-section');
+  if (fine) fine.style.display = tipo === 'dolori' ? 'block' : 'none';
 }
 
 function addSedutaBlocco(tipo) {
@@ -8111,6 +8155,10 @@ function saveSedutaBuilder() {
   const notes = document.getElementById('seduta-builder-notes')?.value || '';
   const tipoSeduta = document.querySelector('input[name="sb-tipo"]:checked')?.value || 'normale';
 
+  const painStartArr = Object.entries(_wPainStart).map(([l,i])=>({label:l,intensity:i}));
+  const painEndArr   = Object.entries(_sbPainEnd).map(([l,i])=>({label:l,intensity:i}));
+  const finalPainEnd = painEndArr.length ? painEndArr : [...painStartArr];
+
   const workout = {
     id: Date.now(),
     clientId: parseInt(clientId),
@@ -8120,7 +8168,8 @@ function saveSedutaBuilder() {
     blocchi: JSON.parse(JSON.stringify(schedaBlocchi)),
     notes,
     tipoSeduta,
-    painStart: [],
+    painStart: tipoSeduta === 'dolori' ? painStartArr : [],
+    painEnd:   tipoSeduta === 'dolori' ? finalPainEnd : [],
     categoria: 'seduta',
     createdAt: new Date().toISOString()
   };
@@ -8143,6 +8192,7 @@ function saveSedutaBuilder() {
     </div>`;
 
   schedaBlocchi = [];
+  _sbPainEnd = {};
 }
 
 // ── Render seduta con blocchi editabili ──────────────
