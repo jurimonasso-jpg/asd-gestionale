@@ -8153,10 +8153,12 @@ let _sbPainStart = {};
 let _sbPainEnd   = {};
 
 function _sbSyncEndZone(zone, checked) {
-  const endWrap  = document.querySelector(`#sb-chart-end .snz-wrap[data-zone-name="${zone.toLowerCase()}"]`);
+  // Find via id — most reliable
+  const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
+  // Checkbox is sibling inside same snz-wrap
+  const endWrap  = endIntEl?.closest('.snz-wrap');
   const endCb    = endWrap?.querySelector('input[type=checkbox]');
   const endLabel = endWrap?.querySelector('.sn-zone-cb');
-  const endIntEl = document.getElementById(`sn-int-sbend-${CSS.escape(zone)}`);
   if (checked) {
     if (!endIntEl?.dataset.modified) {
       const intensity = _wPainStart[zone] || 5;
