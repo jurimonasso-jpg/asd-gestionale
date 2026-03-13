@@ -2712,7 +2712,19 @@ body { font-size: 15px; }
 <div class="modal-overlay" id="modal-new-workout">
   <div class="modal" style="max-width:920px;">
     <div class="modal-header">
-      <div class="modal-title">Nuova Scheda di Allenamento</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div class="modal-title" id="workout-modal-title">Nuova Scheda</div>
+        <div style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+          <label style="cursor:pointer;">
+            <input type="radio" name="w-categoria" value="scheda" checked style="display:none;" onchange="wCategoriaChanged()">
+            <span id="btn-cat-scheda" style="display:block;padding:5px 12px;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;background:var(--accent);color:var(--bg);">🏠 Scheda casa</span>
+          </label>
+          <label style="cursor:pointer;">
+            <input type="radio" name="w-categoria" value="seduta" style="display:none;" onchange="wCategoriaChanged()">
+            <span id="btn-cat-seduta" style="display:block;padding:5px 12px;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;background:var(--surface2);color:var(--text2);">⚡ Seduta palestra</span>
+          </label>
+        </div>
+      </div>
       <button class="modal-close" onclick="closeModal('modal-new-workout')">×</button>
     </div>
 
@@ -3465,13 +3477,25 @@ function openClientDetail(clientId) {
     </div>
 
     <div id="dt-schede" class="tab-content">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
-        <button class="btn btn-primary btn-sm" onclick="openNewWorkoutModal(${client.id})">+ Nuova Scheda</button>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="openNewWorkoutModalCat(${client.id},'seduta')">+ Seduta palestra</button>
+        <button class="btn btn-primary btn-sm" onclick="openNewWorkoutModalCat(${client.id},'scheda')">+ Scheda casa</button>
       </div>
-      ${clientWorkouts.length === 0
-        ? `<div class="empty-state"><div class="icon">📋</div><p>Nessuna scheda assegnata</p></div>`
-        : clientWorkouts.map(w => renderWorkoutCard(w)).join('')
-      }
+      ${(() => {
+        const schede  = clientWorkouts.filter(w => (w.categoria||'scheda') === 'scheda');
+        const sedute  = clientWorkouts.filter(w => w.categoria === 'seduta');
+        let html = '';
+        if (schede.length > 0) {
+          html += '<div style="font-family:monospace;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">🏠 Schede per casa</div>';
+          html += schede.map(w => renderWorkoutCard(w)).join('');
+        }
+        if (sedute.length > 0) {
+          html += '<div style="font-family:monospace;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin:16px 0 8px;">⚡ Sedute in palestra</div>';
+          html += sedute.map(w => renderWorkoutCard(w)).join('');
+        }
+        if (!schede.length && !sedute.length) html = '<div class="empty-state"><div class="icon">📋</div><p>Nessuna scheda o seduta</p></div>';
+        return html;
+      })()}
     </div>
 
     <div id="dt-anamnesi" class="tab-content">
@@ -4750,11 +4774,15 @@ const BLOCCO_META = {
 let _wPainStart = {}; // { label: intensity }
 
 function openNewWorkoutModal(clientId = null, prefillPain = null) {
+  _workoutEditId = null;
   schedaBlocchi = [];
   _wPainStart = {};
   document.getElementById('w-name').value = '';
   document.getElementById('w-notes').value = '';
   document.getElementById('w-meso').value = '';
+  // Reset categoria to scheda
+  document.querySelectorAll('input[name="w-categoria"]').forEach(r => { r.checked = r.value === 'scheda'; });
+  wCategoriaChanged();
 
   const sel = document.getElementById('w-client');
   sel.innerHTML = '<option value="">— Seleziona —</option>' +
@@ -4803,6 +4831,15 @@ function openNewWorkoutModal(clientId = null, prefillPain = null) {
 
   renderSchedaBlocchi();
   openModal('modal-new-workout');
+}
+
+function openNewWorkoutModalCat(clientId, categoria) {
+  openNewWorkoutModal(clientId);
+  // Set categoria after modal opens
+  setTimeout(() => {
+    document.querySelectorAll('input[name="w-categoria"]').forEach(r => { r.checked = r.value === categoria; });
+    wCategoriaChanged();
+  }, 50);
 }
 
 function wClientChanged() {
@@ -5228,42 +5265,123 @@ function autoUpdatePercorsoFromWorkout(clientId, blocchi) {
 }
 
 // ===== SAVE WORKOUT =====
+let _workoutEditId = null; // null = new, number = editing existing
+
+function wCategoriaChanged() {
+  const cat = document.querySelector('input[name="w-categoria"]:checked')?.value || 'scheda';
+  const activeStyle  = 'display:block;padding:5px 12px;font-family:Syne,sans-serif;font-weight:700;font-size:11px;background:var(--accent);color:var(--bg);';
+  const inactiveStyle = 'display:block;padding:5px 12px;font-family:Syne,sans-serif;font-weight:700;font-size:11px;background:var(--surface2);color:var(--text2);';
+  document.getElementById('btn-cat-scheda').style.cssText = cat === 'scheda' ? activeStyle : inactiveStyle;
+  document.getElementById('btn-cat-seduta').style.cssText = cat === 'seduta' ? activeStyle : inactiveStyle;
+  document.getElementById('workout-modal-title').textContent = _workoutEditId
+    ? (cat === 'scheda' ? 'Modifica Scheda' : 'Modifica Seduta')
+    : (cat === 'scheda' ? 'Nuova Scheda' : 'Nuova Seduta');
+}
+
 function saveWorkout() {
   const clientId = document.getElementById('w-client').value;
   const name = document.getElementById('w-name').value.trim();
-  if (!name) { alert('Inserisci un nome per la scheda!'); return; }
+  if (!name) { alert('Inserisci un nome!'); return; }
 
   const tipoSeduta = document.querySelector('input[name="w-tipo"]:checked')?.value || 'normale';
+  const categoria  = document.querySelector('input[name="w-categoria"]:checked')?.value || 'scheda';
   const painStart  = Object.entries(_wPainStart).map(([label, intensity]) => ({ label, intensity }));
 
-  const workout = {
-    id: Date.now(),
-    clientId: parseInt(clientId) || null,
-    name,
-    type: document.getElementById('w-type').value,
-    meso: document.getElementById('w-meso').value,
-    blocchi: JSON.parse(JSON.stringify(schedaBlocchi)),
-    notes: document.getElementById('w-notes').value,
-    tipoSeduta,
-    painStart: tipoSeduta === 'dolori' ? painStart : [],
-    createdAt: new Date().toISOString()
-  };
-
-  workouts.push(workout);
-  save();
-  autoUpdatePercorsoFromWorkout(clientId, workout.blocchi);
-
-  // ── SYNC TO SESSION NOTE ──────────────────────────────────
-  if (clientId && tipoSeduta === 'dolori' && painStart.length > 0) {
-    _syncPainToNote(parseInt(clientId), painStart);
+  if (_workoutEditId !== null) {
+    // Edit existing
+    const idx = workouts.findIndex(w => w.id === _workoutEditId);
+    if (idx >= 0) {
+      workouts[idx] = {
+        ...workouts[idx],
+        clientId: parseInt(clientId) || null,
+        name,
+        type: document.getElementById('w-type').value,
+        meso: document.getElementById('w-meso').value,
+        blocchi: JSON.parse(JSON.stringify(schedaBlocchi)),
+        notes: document.getElementById('w-notes').value,
+        tipoSeduta,
+        categoria,
+        painStart: tipoSeduta === 'dolori' ? painStart : [],
+        updatedAt: new Date().toISOString()
+      };
+    }
+    _workoutEditId = null;
+  } else {
+    // New
+    const workout = {
+      id: Date.now(),
+      clientId: parseInt(clientId) || null,
+      name,
+      type: document.getElementById('w-type').value,
+      meso: document.getElementById('w-meso').value,
+      blocchi: JSON.parse(JSON.stringify(schedaBlocchi)),
+      notes: document.getElementById('w-notes').value,
+      tipoSeduta,
+      categoria,
+      painStart: tipoSeduta === 'dolori' ? painStart : [],
+      createdAt: new Date().toISOString()
+    };
+    workouts.push(workout);
+    autoUpdatePercorsoFromWorkout(clientId, workout.blocchi);
+    if (clientId && tipoSeduta === 'dolori' && painStart.length > 0) {
+      _syncPainToNote(parseInt(clientId), painStart);
+    }
   }
-  // ─────────────────────────────────────────────────────────
 
+  save();
   closeModal('modal-new-workout');
   renderWorkouts();
 
+  // Refresh client detail if open
+  const detailPage = document.getElementById('page-client-detail');
+  if (detailPage && detailPage.classList.contains('active') && clientId) {
+    openClientDetail(parseInt(clientId));
+  }
+
   const dashWo = document.getElementById('dash-workouts');
   if (dashWo) dashWo.textContent = workouts.length;
+}
+
+function editWorkout(id) {
+  const w = workouts.find(wk => wk.id === id);
+  if (!w) return;
+  _workoutEditId = id;
+
+  schedaBlocchi = JSON.parse(JSON.stringify(w.blocchi || []));
+  _wPainStart = {};
+  (w.painStart || []).forEach(p => { _wPainStart[p.label] = p.intensity || 5; });
+
+  document.getElementById('w-name').value = w.name || '';
+  document.getElementById('w-notes').value = w.notes || '';
+  document.getElementById('w-meso').value = w.meso || '';
+
+  const sel = document.getElementById('w-client');
+  sel.innerHTML = '<option value="">— Seleziona —</option>' +
+    clients.map(c => `<option value="${c.id}" ${c.id == w.clientId ? 'selected' : ''}>${c.nome} ${c.cognome}</option>`).join('');
+
+  // Set type
+  const typeEl = document.getElementById('w-type');
+  if (typeEl) typeEl.value = w.type || 'Full Body';
+
+  // Set categoria
+  const cat = w.categoria || 'scheda';
+  document.querySelectorAll('input[name="w-categoria"]').forEach(r => { r.checked = r.value === cat; });
+  wCategoriaChanged();
+
+  // Set tipo seduta
+  const tipo = w.tipoSeduta || 'normale';
+  document.querySelectorAll('input[name="w-tipo"]').forEach(r => { r.checked = r.value === tipo; });
+  wTipoChanged(tipo);
+
+  // Pain chart
+  const preIntensities = {};
+  (w.painStart||[]).forEach(p => { preIntensities[p.label] = p.intensity||5; });
+  document.getElementById('w-chart-start').innerHTML = _buildSnChart('w', preIntensities, (w.painStart||[]).map(p=>p.label));
+  _wUpdateSummary();
+
+  document.getElementById('workout-modal-title').textContent = cat === 'scheda' ? 'Modifica Scheda' : 'Modifica Seduta';
+  renderSchedaBlocchi();
+  openModal('modal-new-workout');
 }
 
 // ── STATO DOLORE CRONICO ─────────────────────────────────────────────────────
@@ -5399,6 +5517,7 @@ function renderWorkoutCard(w, showClient = false) {
              <span style="background:rgba(255,71,87,0.12);color:var(--red);padding:3px 8px;border-radius:20px;font-family:'DM Mono';font-size:9px;">💢 dolori</span>`
           : ''
         }
+        <button class="btn btn-secondary" style="padding:5px 10px;font-size:11px;" onclick="event.stopPropagation();editWorkout(${w.id})">✏️</button>
         <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;" onclick="event.stopPropagation();deleteWorkout(${w.id})">🗑</button>
         <span class="cv-chev" style="color:var(--text3);font-size:16px;">▸</span>
       </div>
