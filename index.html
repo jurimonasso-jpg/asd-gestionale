@@ -8074,6 +8074,20 @@ function saveExData(clientId, exName, sets, reps, kg, note) {
   saveExHistory(clientId, h);
 }
 
+// Apre modal nota dalla seduta con painStart pre-popolato
+// e focus sulla sezione dolori FINE
+function openSedutaNoteWithPainEnd(clientId, painStart) {
+  const today = new Date().toISOString().split('T')[0];
+  const todayNote = getSessionNotes(clientId).find(n => n.date === today);
+  const todayW    = _findLatestWorkoutForClient(clientId, today);
+  _openUnifiedNote(clientId, todayW?.id || null, todayNote?.id || null, painStart);
+  // Scroll/open the "fine" section after modal opens
+  setTimeout(() => {
+    const fineSection = document.getElementById('sn-dolori-fine-section');
+    if (fineSection) fineSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 200);
+}
+
 function renderSedutaEditable(session, clientId) {
   const c = session.client;
   const zoneLabels = { piede:'🦶 Piede', anca:'🦴 Anca', colonna:'🔄 Colonna', spalla:'💪 Spalla', movimenti:'🏋️ Movimenti', knee:'🦵 Ginocchio' };
@@ -8172,6 +8186,7 @@ function renderSedutaEditable(session, clientId) {
 
   html += `<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
     <button class="btn btn-secondary" onclick="showPage('percorso')">📊 Percorso</button>
+    <button class="btn btn-secondary" onclick="openSedutaNoteWithPainEnd(${clientId}, ${JSON.stringify(session.painStart||[])})">🟢 Dolori fine + Nota</button>
     <button class="btn btn-primary" onclick="markSedutaDone()">✓ Segna come completata</button>
   </div>`;
 
@@ -8201,6 +8216,8 @@ function addExerciseRow(btn, clientId, blockId) {
 function markSedutaDone() {
   const clientId = document.getElementById('seduta-client-select').value;
   if (!clientId) return;
+
+
 
   // Save exercise history from all visible blocks
   const blockContainers = document.querySelectorAll('[id^="block-rows-' + clientId + '-"]');
