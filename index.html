@@ -2181,7 +2181,10 @@ body { font-size: 15px; }
         <div class="page-title">Schede</div>
         <div class="page-title-big">Allenamenti</div>
       </div>
-      <button class="btn btn-primary" onclick="openNewWorkoutModal()">+ Nuova Scheda</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary" onclick="openNewWorkoutModalCat(null,'seduta')">+ Seduta</button>
+        <button class="btn btn-primary" onclick="openNewWorkoutModal()">+ Scheda casa</button>
+      </div>
     </div>
 
     <div id="workouts-list"></div>
@@ -2265,11 +2268,12 @@ body { font-size: 15px; }
         <div class="page-title">Pianificazione</div>
         <div class="page-title-big">Seduta di Allenamento</div>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <select class="form-input" style="width:220px;" id="seduta-client-select" onchange="renderSedutaSetup()">
           <option value="">— Seleziona Cliente —</option>
         </select>
-        <button class="btn btn-primary" onclick="generateSeduta()" id="btn-gen-seduta">⚡ Genera Seduta</button>
+        <button class="btn btn-secondary" onclick="generateSedutaAuto()" id="btn-gen-auto">⚡ Genera automatica</button>
+        <button class="btn btn-primary" onclick="newSedutaBuilder()" id="btn-gen-seduta">+ Nuova Seduta</button>
       </div>
     </div>
     <div id="seduta-setup" style="margin-bottom:20px;"></div>
@@ -4944,13 +4948,23 @@ function removeBlocco(idx) {
 }
 
 function renderSchedaBlocchi() {
+  // Update modal builder (schede)
   const container = document.getElementById('scheda-blocchi');
-  if (schedaBlocchi.length === 0) {
-    container.innerHTML = `<div style="text-align:center;padding:24px 0;color:var(--text3);font-size:13px;">
-      Aggiungi blocchi con i pulsanti qui sotto ↓</div>`;
-    return;
+  if (container) {
+    if (schedaBlocchi.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:24px 0;color:var(--text3);font-size:13px;">
+        Aggiungi blocchi con i pulsanti qui sotto ↓</div>`;
+    } else {
+      container.innerHTML = schedaBlocchi.map((b, i) => renderBloccoEditor(b, i)).join('');
+    }
   }
-  container.innerHTML = schedaBlocchi.map((b, i) => renderBloccoEditor(b, i)).join('');
+  // Also update seduta builder if open
+  const sbContainer = document.getElementById('seduta-builder-blocchi');
+  if (sbContainer) {
+    sbContainer.innerHTML = schedaBlocchi.length === 0
+      ? ''
+      : schedaBlocchi.map((b, i) => renderBloccoEditor(b, i)).join('');
+  }
 }
 
 function renderBloccoEditor(b, i) {
@@ -5450,12 +5464,25 @@ function _syncPainToNote(clientId, painStart) {
 
 function renderWorkouts() {
   const list = document.getElementById('workouts-list');
+  const schede = workouts.filter(w => (w.categoria||'scheda') === 'scheda');
+  const sedute = workouts.filter(w => w.categoria === 'seduta');
+
   if (workouts.length === 0) {
     list.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>Nessuna scheda creata</p>
       <button class="btn btn-primary" onclick="openNewWorkoutModal()">+ Crea la prima scheda</button></div>`;
     return;
   }
-  list.innerHTML = workouts.map(w => renderWorkoutCard(w, true)).join('');
+
+  let html = '';
+  if (schede.length > 0) {
+    html += `<div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;margin-top:4px;">🏠 Schede per casa (${schede.length})</div>`;
+    html += schede.map(w => renderWorkoutCard(w, true)).join('');
+  }
+  if (sedute.length > 0) {
+    html += `<div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;margin-top:${schede.length?'20px':'4px'};">⚡ Sedute in palestra (${sedute.length})</div>`;
+    html += sedute.map(w => renderWorkoutCard(w, true)).join('');
+  }
+  list.innerHTML = html;
 }
 
 function renderWorkoutCard(w, showClient = false) {
@@ -6566,72 +6593,122 @@ function generateEvidenceSession(clientId) {
   const painAnalysis = analyzeClientPain(c);
   const isPRT = c.prt && c.prt !== 'no';
 
-  // Merge zone critiche da test + dolori
   const allCriticalZones = new Set([...testAnalysis.ko, ...testAnalysis.limit]);
   painAnalysis.painZones.forEach(z => allCriticalZones.add(z));
 
-  // Esercizi recenti — legge dalla history carichi (ultime 2 sedute)
-  // Un esercizio è "recente" se è stato fatto nelle ultime 2 sedute distinte
+  // Esercizi usati nelle ultime 4 sedute (da history carichi)
   const exHistory = getExHistory(clientId);
-  const today = new Date().toISOString().split('T')[0];
-
-  // Raccogli tutte le date distinte in cui è stato fatto almeno un esercizio
   const allDates = [...new Set(Object.values(exHistory).map(h => h.date))].sort().reverse();
   const last4Dates = new Set(allDates.slice(0, 4));
-
-  // Esercizi fatti nelle ultime 4 sedute
   const recentEx = new Set();
-  Object.entries(exHistory).forEach(([exKey, data]) => {
-    if (last4Dates.has(data.date)) recentEx.add(exKey); // key è già lowercase
-  });
+  Object.entries(exHistory).forEach(([k, d]) => { if (last4Dates.has(d.date)) recentEx.add(k); });
 
-  // ── BLOCCO 1: RELEASE ────────────────────────────
-  const releasePool = [];
-  allCriticalZones.forEach(zone => {
-    if (EVIDENCE_RULES[zone]?.release) releasePool.push(...EVIDENCE_RULES[zone].release);
-  });
-  // Sempre almeno Foam Roll
-  if (releasePool.length === 0) releasePool.push('Foam Roll', 'Massaggi Schiena (pallina)');
-  const releaseExs = pickUnique(releasePool, recentEx, 2);
+  // Esercizi già usati in questa seduta (per evitare ripetizioni tra fasi)
+  const usedInSession = new Set();
 
-  // ── BLOCCO 2: ATTIVAZIONE & RESPIRAZIONE ─────────
-  const attivazionePool = ['Respirazione Diaframmatica'];
-  allCriticalZones.forEach(zone => {
-    if (EVIDENCE_RULES[zone]?.attivazione) attivazionePool.push(...EVIDENCE_RULES[zone].attivazione);
-  });
-  if (attivazionePool.length < 2) attivazionePool.push('Cat Cow', 'Hip Hinge', 'Attivazione Glutei');
-  const attivazioneExs = pickUnique(attivazionePool, recentEx, 2);
+  // ── HELPER: pick N esercizi da un pool evitando recenti e già usati ────────
+  function pick(pool, n) {
+    const seen = new Set();
+    const fresh = [], fallback = [];
+    pool.forEach(e => {
+      if (seen.has(e)) return;
+      seen.add(e);
+      const key = e.toLowerCase();
+      if (!recentEx.has(key) && !usedInSession.has(key)) fresh.push(e);
+      else fallback.push(e);
+    });
+    const result = [...fresh, ...fallback].slice(0, n);
+    result.forEach(e => usedInSession.add(e.toLowerCase()));
+    return result;
+  }
 
-  // ── BLOCCO 3: MOBILITÀ ───────────────────────────
+  // ── BLOCCO MOBILITÀ ──────────────────────────────────────────────────────
   const mobPool = [];
   allCriticalZones.forEach(zone => {
-    if (EVIDENCE_RULES[zone]?.mobilita) mobPool.push(...EVIDENCE_RULES[zone].mobilita);
+    if (EVIDENCE_RULES[zone]?.release)    mobPool.push(...EVIDENCE_RULES[zone].release);
+    if (EVIDENCE_RULES[zone]?.mobilita)   mobPool.push(...EVIDENCE_RULES[zone].mobilita);
+    if (EVIDENCE_RULES[zone]?.attivazione) mobPool.push(...EVIDENCE_RULES[zone].attivazione);
   });
-  if (mobPool.length < 2) mobPool.push(...(EXERCISES['Mobilità & Attivazione']?.items || []).slice(0, 5));
-  const mobExs = pickUnique(mobPool, recentEx, 2);
+  if (mobPool.length < 3) mobPool.push(
+    'Respirazione Diaframmatica','Cat Cow','Hip Hinge',
+    'Foam Roll','Attivazione Scapole','Clam Shell','T-Spine Rotation'
+  );
+  const mobExs = pick(mobPool, 3);
 
-  // ── BLOCCO 4: CORE ───────────────────────────────
-  // PRT / dolore lombare → isometria prima del dinamico
-  const corePool = [];
-  const useDynamicCore = !allCriticalZones.has('colonna') && !isPRT;
-  if (allCriticalZones.has('colonna') || isPRT) {
-    corePool.push(...(EXERCISES['Core — Isometria']?.items || []));
-  } else {
-    corePool.push(...(EXERCISES['Core — Isometria']?.items || []), ...(EXERCISES['Core — Dinamico']?.items || []));
+  // ── BLOCCO FASE 1: potenza + core ────────────────────────────────────────
+  // Potenza: esplosivi/metabolici — escludi se PRT o dolore acuto
+  const potenzaPool = isPRT
+    ? [...(EXERCISES['Core — Dinamico']?.items || []).slice(0,6)]
+    : [
+        ...(EXERCISES['Metabolico']?.items || []),
+        ...(EXERCISES['🔴 Rastapower']?.items || []).slice(0,8),
+      ];
+  const potenzaEx = pick(potenzaPool, 1);
+
+  // Core Fase1: isometria se PRT/colonna, dinamico altrimenti
+  const coreF1Pool = (allCriticalZones.has('colonna') || isPRT)
+    ? [...(EXERCISES['Core — Isometria']?.items || [])]
+    : [...(EXERCISES['Core — Isometria']?.items || []), ...(EXERCISES['Core — Dinamico']?.items || [])];
+  const coreF1Ex = pick(coreF1Pool, 1);
+
+  // ── BLOCCO FASE 2: gambe + parte alta ────────────────────────────────────
+  const blocked = testAnalysis.blockedExercises;
+
+  // Gambe: hinge o squat — dipende da zone critiche
+  const gambePool = [
+    ...(EXERCISES['Hip Dominant / Glutei']?.items || []),
+    ...(EXERCISES['Knee Dominant / Squat']?.items || []),
+  ].filter(e => !blocked.has?.(e) && !blocked.includes?.(e));
+  // Se ginocchio critico, priorità hinge
+  if (allCriticalZones.has('knee')) {
+    gambePool.unshift(...(EXERCISES['Hip Dominant / Glutei']?.items || []));
   }
-  // Priorità per evidenza
-  const coreSorted = corePool.sort((a, b) => getEvidenceWeight(b) - getEvidenceWeight(a));
-  const coreExs = pickUnique(coreSorted, recentEx, 2);
+  const gambeEx = pick(gambePool, 1);
 
-  // ── BLOCCO 5: FORZA PRINCIPALE ──────────────────
-  // Pull → Push → Hinge/Knee — rispettando controindicazioni
-  const forceBlocks = buildForceBlocks(testAnalysis, painAnalysis, isPRT, recentEx);
+  // Parte alta: pull prima di push (gerarchia evidence-based)
+  const altoPool = [
+    ...(EXERCISES['Pull Verticale']?.items || []),
+    ...(EXERCISES['Pull Orizzontale']?.items || []),
+    ...(EXERCISES['Push Orizzontale']?.items || []),
+    ...(EXERCISES['Push Verticale']?.items || []),
+  ].filter(e => !blocked.has?.(e) && !blocked.includes?.(e));
+  // Escludi spalla se critica
+  const altoPoolFinal = allCriticalZones.has('scapola') || allCriticalZones.has('spalla')
+    ? altoPool.filter(e => !e.toLowerCase().includes('press') && !e.toLowerCase().includes('push'))
+    : altoPool;
+  const altoEx = pick(altoPoolFinal.length ? altoPoolFinal : altoPool, 1);
 
-  // ── NOTE CLINICHE ────────────────────────────────
+  // ── BLOCCO FASE 3: 2-3 esercizi misti core+gambe+parte alta ─────────────
+  // Alterna pattern: se Fase2 era hinge → Fase3 squat, e viceversa
+  const wasHinge = gambeEx[0] && EXERCISES['Hip Dominant / Glutei']?.items?.includes(gambeEx[0]);
+  const gambeF3Pool = wasHinge
+    ? [...(EXERCISES['Knee Dominant / Squat']?.items || [])].filter(e => !blocked.includes?.(e) && !blocked.has?.(e))
+    : [...(EXERCISES['Hip Dominant / Glutei']?.items || [])].filter(e => !blocked.includes?.(e) && !blocked.has?.(e));
+
+  // Parte alta F3: opposta a F2 (se F2 era pull → F3 push, viceversa)
+  const wasPull = altoEx[0] && (
+    EXERCISES['Pull Verticale']?.items?.includes(altoEx[0]) ||
+    EXERCISES['Pull Orizzontale']?.items?.includes(altoEx[0])
+  );
+  const altoF3Pool = wasPull
+    ? [...(EXERCISES['Push Orizzontale']?.items || []), ...(EXERCISES['Push Verticale']?.items || [])]
+    : [...(EXERCISES['Pull Orizzontale']?.items || []), ...(EXERCISES['Pull Verticale']?.items || [])];
+
+  const coreF3Pool = (allCriticalZones.has('colonna') || isPRT)
+    ? [...(EXERCISES['Core — Isometria']?.items || [])]
+    : [...(EXERCISES['Core — Dinamico']?.items || []), ...(EXERCISES['Core — Isometria']?.items || [])];
+
+  // Mescola i tre pool e prendi 3 esercizi (1 per tipo, nell'ordine: gambe → core → alto)
+  const f3Gambe = pick(gambeF3Pool, 1);
+  const f3Core  = pick(coreF3Pool, 1);
+  const f3Alto  = pick(altoF3Pool, 1);
+  const fase3Exs = [...f3Gambe, ...f3Core, ...f3Alto].filter(Boolean);
+
+  // ── NOTE CLINICHE ────────────────────────────────────────────────────────
   const clinicalNotes = [...new Set([
     ...testAnalysis.notes,
-    isPRT ? '🧠 Profilo PRT attivo — attenzione al sistema nervioso autonomo, inizia lento' : null,
-    painAnalysis.hasPain ? `💢 Dolore attivo in ${painAnalysis.activePain.length} zone — monitorare NRS inizio/fine seduta` : null,
+    isPRT ? '🧠 PRT attivo — inizia lento, monitora risposta sistema nervioso' : null,
+    painAnalysis.hasPain ? `💢 Dolore attivo in ${painAnalysis.activePain.length} zone — NRS inizio/fine` : null,
   ].filter(Boolean))];
 
   return {
@@ -6640,11 +6717,26 @@ function generateEvidenceSession(clientId) {
     blockedExercises: [...testAnalysis.blockedExercises],
     clinicalNotes,
     blocks: [
-      { id: 'release',     label: '🟠 Release & Miofasciale', color: '#ff9f47', exs: releaseExs, sets: '1', reps: '60s', note: 'Foam roll / pallina — pressione sostenuta sulle zone tese' },
-      { id: 'attivazione', label: '🟡 Respirazione & Attivazione', color: '#ffd447', exs: attivazioneExs, sets: '2', reps: '8-10', note: 'Attivare prima di caricare — respiro diaframmatico' },
-      { id: 'mobilita',    label: '🔵 Mobilità Selettiva', color: '#47c8ff', exs: mobExs, sets: '2', reps: '8-10', note: 'Zone critiche emerse dai test' },
-      { id: 'core',        label: '🟣 Core & Stabilità', color: '#c847ff', exs: coreExs, sets: '3', reps: useDynamicCore ? '10-12' : '30-45s', note: useDynamicCore ? 'Core dinamico — controllo lombare' : 'Core isometrico — dolore/PRT attivo' },
-      ...forceBlocks
+      {
+        id: 'mobilita', label: '🔵 Mobilità', color: '#47c8ff',
+        exs: mobExs, sets: '2', reps: '8-10',
+        note: 'Release + mobilità zone critiche — respiro diaframmatico'
+      },
+      {
+        id: 'fase1', label: '🟡 Fase 1 — Potenza & Core', color: '#ffd447',
+        exs: [...potenzaEx, ...coreF1Ex], sets: '3', reps: isPRT ? '30-45s' : '6-8',
+        note: isPRT ? 'Core isometrico — no esplosivo' : 'Esplosivo + stabilità core'
+      },
+      {
+        id: 'fase2', label: '🟢 Fase 2 — Gambe & Parte Alta', color: '#47ffa0',
+        exs: [...gambeEx, ...altoEx], sets: '3', reps: '8-10',
+        note: 'Schema motorio principale — controllo tecnico'
+      },
+      {
+        id: 'fase3', label: '🟠 Fase 3 — Circuito Finale', color: '#ff9f47',
+        exs: fase3Exs, sets: '3', reps: '10-12',
+        note: 'Misto gambe/core/parte alta — evitati esercizi già fatti'
+      },
     ]
   };
 }
@@ -7655,6 +7747,11 @@ function renderSedutaSetup() {
 }
 
 function generateSeduta() {
+  // Legacy — now redirects to builder
+  newSedutaBuilder();
+}
+
+function generateSedutaAuto() {
   const clientId = document.getElementById('seduta-client-select').value;
   if (!clientId) { alert('Seleziona prima un cliente!'); return; }
   const sedutaContent = document.getElementById('seduta-content');
@@ -7662,6 +7759,136 @@ function generateSeduta() {
   if (!session) return;
   sedutaContent.innerHTML = renderSedutaEditable(session, clientId);
   sedutaContent.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function newSedutaBuilder() {
+  const clientId = document.getElementById('seduta-client-select').value;
+  if (!clientId) { alert('Seleziona prima un cliente!'); return; }
+  const client = clients.find(c => c.id == clientId);
+  if (!client) return;
+
+  // Use the same schedaBlocchi system as workout modal
+  schedaBlocchi = [];
+  _wPainStart = {};
+
+  const content = document.getElementById('seduta-content');
+  content.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">Seduta · ${new Date().toLocaleDateString('it-IT')}</div>
+          <div style="font-size:18px;font-weight:800;">${client.nome} ${client.cognome}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input class="form-input" type="text" id="seduta-builder-name" placeholder="Nome seduta (es. Giorno A)" style="width:200px;margin:0;">
+        </div>
+      </div>
+
+      <!-- Stato dolore -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:12px;font-weight:700;">Stato inizio seduta</div>
+          <div style="display:flex;gap:8px;">
+            <label class="sn-tipo-btn active-normale" id="sb-tipo-normale">
+              <input type="radio" name="sb-tipo" value="normale" checked style="display:none;" onchange="sbTipoChanged('normale')">✅ Normale
+            </label>
+            <label class="sn-tipo-btn" id="sb-tipo-dolori">
+              <input type="radio" name="sb-tipo" value="dolori" style="display:none;" onchange="sbTipoChanged('dolori')">💢 Con dolori
+            </label>
+          </div>
+        </div>
+        <div id="sb-dolori-section" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
+          <div id="sb-chart-start"></div>
+        </div>
+      </div>
+
+      <!-- Blocchi -->
+      <div id="seduta-builder-blocchi"></div>
+
+      <!-- Add block buttons -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button class="btn btn-secondary" onclick="addSedutaBlocco('mobilita')">+ Mobilità</button>
+        <button class="btn btn-secondary" onclick="addSedutaBlocco('warmup')">+ Warm Up</button>
+        <button class="btn btn-secondary" onclick="addSedutaBlocco('core')">+ Core</button>
+        <button class="btn btn-secondary" onclick="addSedutaBlocco('fase1')">+ Fase 1</button>
+        <button class="btn btn-secondary" onclick="addSedutaBlocco('fase2')">+ Fase 2</button>
+        <button class="btn btn-secondary" onclick="addSedutaBlocco('fase3')">+ Fase 3</button>
+        <button class="btn btn-secondary" onclick="addSedutaBlocco('workout')">+ Workout</button>
+      </div>
+
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label">Note seduta</label>
+        <textarea class="form-input" id="seduta-builder-notes" placeholder="Indicazioni, osservazioni..." style="min-height:50px;"></textarea>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="document.getElementById('seduta-content').innerHTML=''">Annulla</button>
+        <button class="btn btn-primary" onclick="saveSedutaBuilder()">✓ Salva Seduta</button>
+      </div>
+    </div>`;
+
+  // Init pain chart
+  const c = clients.find(cl => cl.id == clientId);
+  const preselected = c?.painPoints?.map(p => p.label) || [];
+  document.getElementById('sb-chart-start').innerHTML = _buildSnChart('sb', {}, preselected);
+  renderSedutaBuilderBlocchi();
+  content.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+let _sbPainStart = {};
+
+function sbTipoChanged(tipo) {
+  document.getElementById('sb-tipo-normale').className = tipo === 'normale' ? 'sn-tipo-btn active-normale' : 'sn-tipo-btn';
+  document.getElementById('sb-tipo-dolori').className  = tipo === 'dolori'  ? 'sn-tipo-btn active-dolori'  : 'sn-tipo-btn';
+  document.getElementById('sb-dolori-section').style.display = tipo === 'dolori' ? 'block' : 'none';
+}
+
+function addSedutaBlocco(tipo) {
+  addBlocco(tipo); // reuse same function — uses schedaBlocchi
+  renderSedutaBuilderBlocchi();
+}
+
+function renderSedutaBuilderBlocchi() {
+  const container = document.getElementById('seduta-builder-blocchi');
+  if (!container) return;
+  if (schedaBlocchi.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = schedaBlocchi.map((b, i) => renderBloccoEditor(b, i)).join('');
+}
+
+function saveSedutaBuilder() {
+  const clientId = document.getElementById('seduta-client-select').value;
+  if (!clientId) return;
+  const nameEl = document.getElementById('seduta-builder-name');
+  const name = nameEl ? nameEl.value.trim() : '';
+  const notes = document.getElementById('seduta-builder-notes')?.value || '';
+  const tipoSeduta = document.querySelector('input[name="sb-tipo"]:checked')?.value || 'normale';
+
+  const workout = {
+    id: Date.now(),
+    clientId: parseInt(clientId),
+    name: name || ('Seduta ' + new Date().toLocaleDateString('it-IT')),
+    type: 'Seduta palestra',
+    meso: '',
+    blocchi: JSON.parse(JSON.stringify(schedaBlocchi)),
+    notes,
+    tipoSeduta,
+    painStart: [],
+    categoria: 'seduta',
+    createdAt: new Date().toISOString()
+  };
+
+  workouts.push(workout);
+  save();
+
+  document.getElementById('seduta-content').innerHTML = `
+    <div style="text-align:center;padding:40px;background:var(--surface2);border-radius:var(--radius);">
+      <div style="font-size:32px;margin-bottom:12px;">✅</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px;">Seduta salvata!</div>
+      <div style="font-family:'DM Mono';font-size:11px;color:var(--text3);margin-bottom:16px;">Archiviata nel tab ⚡ Sedute del cliente</div>
+      <button class="btn btn-primary" onclick="newSedutaBuilder()">+ Nuova Seduta</button>
+    </div>`;
+
+  schedaBlocchi = [];
 }
 
 // ── Render seduta con blocchi editabili ──────────────
