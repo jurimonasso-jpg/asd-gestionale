@@ -4019,6 +4019,45 @@ function snToggleZone(side, zone, labelEl, checked) {
     else delete painObj[zone];
     _snUpdateSummary(side);
     _snUpdateDelta();
+
+    // ── LIVE SYNC start → end ────────────────────────────────────────────
+    if (side === 'start') {
+      if (checked) {
+        // Attiva la stessa zona in end se non già presente
+        if (!_snPainEnd[zone]) {
+          _snPainEnd[zone] = painObj[zone] || 5;
+          // Aggiorna il chart end nel DOM
+          const endWrap  = document.querySelector(`#sn-chart-end .snz-wrap[data-zone-name="${zone.toLowerCase()}"]`);
+          const endCb    = endWrap?.querySelector('input[type=checkbox]');
+          const endLabel = endWrap?.querySelector('.sn-zone-cb');
+          const endIntEl = document.getElementById(`sn-int-end-${CSS.escape(zone)}`);
+          if (endCb)    { endCb.checked = true; }
+          if (endLabel) { endLabel.classList.add('sn-checked'); }
+          if (endIntEl) {
+            endIntEl.classList.add('visible');
+            const slider = endIntEl.querySelector('input[type=range]');
+            if (slider) slider.value = _snPainEnd[zone];
+          }
+          _snUpdateSummary('end');
+          _snUpdateDelta();
+        }
+      } else {
+        // Disattiva in end solo se non è stata modificata manualmente
+        const endIntEl2 = document.getElementById(`sn-int-end-${CSS.escape(zone)}`);
+        if (_snPainEnd[zone] !== undefined && !endIntEl2?.dataset.modified) {
+          delete _snPainEnd[zone];
+          const endWrap  = document.querySelector(`#sn-chart-end .snz-wrap[data-zone-name="${zone.toLowerCase()}"]`);
+          const endCb    = endWrap?.querySelector('input[type=checkbox]');
+          const endLabel = endWrap?.querySelector('.sn-zone-cb');
+          if (endCb)    { endCb.checked = false; }
+          if (endLabel) { endLabel.classList.remove('sn-checked'); }
+          if (endIntEl2) { endIntEl2.classList.remove('visible'); }
+          _snUpdateSummary('end');
+          _snUpdateDelta();
+        }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────
   }
 }
 
@@ -4027,6 +4066,27 @@ function snSetInt(side, zone, val) {
   painObj[zone] = val;
   _snUpdateSummary(side);
   _snUpdateDelta();
+
+  // ── LIVE SYNC start → end (solo se end ha ancora lo stesso valore) ───
+  if (side === 'start' && _snPainEnd[zone] !== undefined) {
+    // Aggiorna end solo se non è stato modificato manualmente (stesso valore)
+    const endIntEl = document.getElementById(`sn-int-end-${CSS.escape(zone)}`);
+    const endSlider = endIntEl?.querySelector('input[type=range]');
+    const currentEndVal = endSlider ? parseInt(endSlider.value) : _snPainEnd[zone];
+    // Considera "non modificato" se end == vecchio start (prima del cambio)
+    // Usiamo un attributo data per tracciare se è stato toccato
+    if (!endIntEl?.dataset.modified) {
+      _snPainEnd[zone] = val;
+      if (endSlider) endSlider.value = val;
+      _snUpdateSummary('end');
+      _snUpdateDelta();
+    }
+  }
+  // Marca il campo end come modificato se l'utente lo tocca direttamente
+  if (side === 'end') {
+    const endIntEl = document.getElementById(`sn-int-end-${CSS.escape(zone)}`);
+    if (endIntEl) endIntEl.dataset.modified = '1';
+  }
 }
 
 function _snUpdateSummary(side) {
@@ -4163,7 +4223,9 @@ function saveSessionNote() {
   if (!date) { alert('Inserisci la data'); return; }
 
   const painStart = Object.entries(_snPainStart).map(([label, intensity]) => ({ label, intensity }));
-  const painEnd   = Object.entries(_snPainEnd).map(([label, intensity]) => ({ label, intensity }));
+  // Se dolori fine non compilati, copia da inizio
+  let painEnd = Object.entries(_snPainEnd).map(([label, intensity]) => ({ label, intensity }));
+  if (!painEnd.length && painStart.length) painEnd = [...painStart];
   const avgPain   = painStart.length > 0
     ? Math.round(painStart.reduce((s,p) => s + p.intensity, 0) / painStart.length)
     : null;
