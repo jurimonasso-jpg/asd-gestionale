@@ -4157,6 +4157,7 @@ function snSetStato(label, stato) {
 
 function openSessionNote(clientId, prefillPain = null) {
   _sessionNoteClientId = clientId;
+  _editingNoteId = null;
   _snPainStart = {};
   _snPainEnd   = {};
 
@@ -4276,8 +4277,10 @@ function saveSessionNote() {
 
   const key   = `session_notes_${_sessionNoteClientId}`;
   const notes = JSON.parse(localStorage.getItem(key) || '[]');
-  // Replace existing note for same date if present
-  const existIdx = notes.findIndex(n => n.date === date);
+  // Replace existing note: by editing id, or by same date
+  const existIdx = _editingNoteId !== null
+    ? notes.findIndex(n => n.id === _editingNoteId)
+    : notes.findIndex(n => n.date === date);
   const note = {
     id: existIdx >= 0 ? notes[existIdx].id : Date.now(),
     date, mood, text, tipo,
@@ -4289,16 +4292,19 @@ function saveSessionNote() {
   else notes.unshift(note);
   localStorage.setItem(key, JSON.stringify(notes));
 
-  // ── SYNC BACK TO TODAY'S WORKOUT ──────────────────────────
-  if (tipo === 'dolori' && painStart.length > 0 && date === new Date().toISOString().split('T')[0]) {
-    const todayWorkout = [...workouts].reverse().find(w =>
-      w.clientId == _sessionNoteClientId && w.createdAt?.split('T')[0] === date
-    );
-    if (todayWorkout) {
-      todayWorkout.tipoSeduta = 'dolori';
-      todayWorkout.painStart  = painStart;
-      save();
+  // ── SYNC BACK TO WORKOUT (qualsiasi data) ─────────────────
+  const matchingWorkout = [...workouts].reverse().find(w =>
+    w.clientId == _sessionNoteClientId && w.createdAt?.split('T')[0] === date
+  );
+  if (matchingWorkout) {
+    if (tipo === 'dolori' && painStart.length > 0) {
+      matchingWorkout.tipoSeduta = 'dolori';
+      matchingWorkout.painStart  = painStart;
+    } else if (tipo === 'normale') {
+      matchingWorkout.tipoSeduta = 'normale';
+      matchingWorkout.painStart  = [];
     }
+    save();
   }
   // ─────────────────────────────────────────────────────────
 
@@ -4308,12 +4314,92 @@ function saveSessionNote() {
   }
   // ─────────────────────────────────────────────────────────
 
+  _editingNoteId = null;
   closeModal('modal-session-note');
   openClientDetail(_sessionNoteClientId);
 }
 
 function getSessionNotes(clientId) {
   return JSON.parse(localStorage.getItem(`session_notes_${clientId}`) || '[]');
+}
+
+let _editingNoteId = null;
+
+function editSessionNote(clientId, noteId) {
+  const notes = getSessionNotes(clientId);
+  const note = notes.find(n => n.id === noteId);
+  if (!note) return;
+
+  _sessionNoteClientId = clientId;
+  _snPainStart = {};
+  _snPainEnd   = {};
+  _editingNoteId = noteId;
+
+  const c = clients.find(cl => cl.id == clientId);
+  const lbl = document.getElementById('session-note-client-label');
+  lbl.innerHTML = (c ? `${c.nome} ${c.cognome}` : '') +
+    ` <span style="color:var(--accent2);margin-left:8px;">✏️ Modifica nota ${new Date(note.date+'T12:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short'})}</span>`;
+
+  document.getElementById('sn-date').value = note.date;
+  document.getElementById('sn-text').value = note.text || '';
+  document.getElementById('sn-mood').value = note.mood || '';
+
+  // Tipo
+  const tipoVal = note.tipo || 'normale';
+  document.querySelector(`input[name="sn-tipo"][value="${tipoVal}"]`).checked = true;
+  snTipoChanged(tipoVal);
+
+  // Pain start
+  const preIntensities = {};
+  const preselected = [];
+  (note.painStart || []).forEach(p => {
+    preIntensities[p.label] = p.intensity || 5;
+    preselected.push(p.label);
+    _snPainStart[p.label] = p.intensity || 5;
+  });
+
+  // Pain end
+  const preEndIntensities = {};
+  const preEndSelected = [];
+  (note.painEnd || []).forEach(p => {
+    preEndIntensities[p.label] = p.intensity || 5;
+    preEndSelected.push(p.label);
+    _snPainEnd[p.label] = p.intensity || 5;
+  });
+
+  document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preIntensities, preselected);
+  document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', preEndIntensities, preEndSelected);
+  _snUpdateSummary('start');
+  _snUpdateSummary('end');
+  document.getElementById('sn-delta-preview').style.display = 'none';
+
+  // Stato cronici
+  _snStatoMap = {};
+  const chronicZones = c?.painPoints || [];
+  const statoBlock = document.getElementById('sn-block-stato');
+  const statoList  = document.getElementById('sn-stato-list');
+  if (chronicZones.length > 0) {
+    statoBlock.style.display = '';
+    chronicZones.forEach(p => { _snStatoMap[p.label] = p.stato || 'attivo'; });
+    statoList.innerHTML = _buildStatoList(chronicZones);
+  } else {
+    statoBlock.style.display = 'none';
+  }
+
+  // Open both blocks if pain data present
+  document.getElementById('sn-body-start').style.display = 'block';
+  document.getElementById('sn-chevron-start').textContent = '▼';
+  if (preEndSelected.length > 0) {
+    document.getElementById('sn-body-end').style.display = 'block';
+    document.getElementById('sn-chevron-end').textContent = '▼';
+  } else {
+    document.getElementById('sn-body-end').style.display = 'none';
+    document.getElementById('sn-chevron-end').textContent = '▶';
+  }
+  document.getElementById('sn-body-stato').style.display = 'none';
+  document.getElementById('sn-chevron-stato').textContent = '▶';
+
+  openModal('modal-session-note');
 }
 
 function deleteSessionNote(clientId, noteId) {
@@ -4522,6 +4608,7 @@ function renderSessionNotes(clientId) {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           ${tipoBadge}
           ${n.mood ? `<span style="font-size:12px;">${moodIcon[n.mood] || ''} ${n.mood}</span>` : ''}
+          <button onclick="editSessionNote(${clientId}, ${n.id})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;">✏️</button>
           <button onclick="deleteSessionNote(${clientId}, ${n.id})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;">🗑</button>
         </div>
       </div>
