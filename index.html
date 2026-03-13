@@ -7914,6 +7914,26 @@ function generateSedutaAuto() {
   sedutaContent.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
+function _openBuilderNote(clientId) {
+  // Salva la seduta se non ancora salvata, poi apre nota
+  const today = new Date().toISOString().split('T')[0];
+  const existing = [...workouts].reverse().find(wk =>
+    wk.clientId == clientId && wk.categoria === 'seduta' &&
+    wk.createdAt?.split('T')[0] === today
+  );
+  if (existing) {
+    openOrEditNoteForWorkout(clientId, existing.id);
+  } else {
+    // Salva prima, poi apri nota
+    saveSedutaBuilder();
+    const saved = [...workouts].reverse().find(wk =>
+      wk.clientId == clientId && wk.categoria === 'seduta' &&
+      wk.createdAt?.split('T')[0] === today
+    );
+    if (saved) openOrEditNoteForWorkout(clientId, saved.id);
+  }
+}
+
 function newSedutaBuilder() {
   const clientId = document.getElementById('seduta-client-select').value;
   if (!clientId) { alert('Seleziona prima un cliente!'); return; }
@@ -7976,6 +7996,7 @@ function newSedutaBuilder() {
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="document.getElementById('seduta-content').innerHTML=''">Annulla</button>
+        <button class="btn btn-secondary" onclick="_openBuilderNote(${clientId})">🟢 Dolori fine + Nota</button>
         <button class="btn btn-primary" onclick="saveSedutaBuilder()">✓ Salva Seduta</button>
       </div>
     </div>`;
