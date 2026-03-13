@@ -2616,15 +2616,15 @@ body { font-size: 15px; }
     </div>
     <div style="font-family:'DM Mono';font-size:10px;color:var(--accent);margin-bottom:14px;letter-spacing:0.06em;" id="session-note-client-label"></div>
 
-    <!-- Data + Umore -->
-    <div class="grid-2" style="margin-bottom:14px;">
-      <div>
+    <!-- Data + Umore + Tipo -->
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">
+      <div style="flex:1;min-width:120px;">
         <label class="form-label">Data seduta</label>
-        <input class="form-input" type="date" id="sn-date">
+        <input class="form-input" type="date" id="sn-date" style="margin:0;">
       </div>
-      <div>
+      <div style="flex:1;min-width:140px;">
         <label class="form-label">Umore / Stato</label>
-        <select class="form-input" id="sn-mood">
+        <select class="form-input" id="sn-mood" style="margin:0;">
           <option value="">— non registrato —</option>
           <option value="ottimo">😊 Ottimo</option>
           <option value="buono">🙂 Buono</option>
@@ -2634,74 +2634,58 @@ body { font-size: 15px; }
           <option value="ansioso">😰 Ansioso/a</option>
         </select>
       </div>
-    </div>
-
-    <!-- Tipo seduta toggle -->
-    <div style="margin-bottom:16px;">
-      <label class="form-label">Tipo seduta</label>
-      <div style="display:flex;gap:10px;margin-top:6px;">
+      <div style="display:flex;gap:8px;padding-bottom:2px;">
         <label class="sn-tipo-btn" id="sn-tipo-normale">
           <input type="radio" name="sn-tipo" value="normale" checked onchange="snTipoChanged('normale')">
           ✅ Normale
         </label>
         <label class="sn-tipo-btn" id="sn-tipo-dolori">
           <input type="radio" name="sn-tipo" value="dolori" onchange="snTipoChanged('dolori')">
-          💢 Con dolori
+          💢 Dolori
         </label>
       </div>
     </div>
 
-    <!-- SEZIONE DOLORI (nascosta di default) -->
+    <!-- ① DOLORI INIZIO — sempre visibile se dolori attivi -->
     <div id="sn-dolori-section" style="display:none;">
-
-      <!-- INIZIO SEDUTA -->
-      <div class="sn-pain-block" id="sn-block-start">
-        <div class="sn-pain-block-header" onclick="snToggleBlock('start')">
-          <span>🔴 Dolori inizio seduta</span>
-          <span id="sn-start-summary" style="font-size:10px;color:var(--text3);font-family:'DM Mono';">nessuno</span>
-          <span class="sn-chevron" id="sn-chevron-start">▼</span>
-        </div>
-        <div class="sn-pain-block-body" id="sn-body-start">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:'DM Mono';">Seleziona zone + intensità all'INIZIO della seduta</div>
-          <div id="sn-chart-start"></div>
-        </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0;">1</div>
+        <div style="font-size:13px;font-weight:700;">Dolori inizio seduta</div>
+        <div id="sn-start-summary" style="font-size:10px;color:var(--text3);font-family:'DM Mono';margin-left:auto;"></div>
       </div>
+      <div id="sn-chart-start" style="margin-bottom:16px;"></div>
+    </div>
 
-      <!-- FINE SEDUTA -->
-      <div class="sn-pain-block" id="sn-block-end" style="margin-top:8px;">
-        <div class="sn-pain-block-header" onclick="snToggleBlock('end')">
-          <span>🟢 Dolori fine seduta</span>
-          <span id="sn-end-summary" style="font-size:10px;color:var(--text3);font-family:'DM Mono';">nessuno</span>
-          <span class="sn-chevron" id="sn-chevron-end">▶</span>
-        </div>
-        <div class="sn-pain-block-body" id="sn-body-end" style="display:none;">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:'DM Mono';">Stesse zone — come stanno ALLA FINE?</div>
-          <div id="sn-chart-end"></div>
-        </div>
+    <!-- ② NOTE / ESERCIZI — sempre visibile -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="width:22px;height:22px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#000;flex-shrink:0;" id="sn-step-note-num">2</div>
+      <div style="font-size:13px;font-weight:700;">Note seduta</div>
+    </div>
+    <textarea class="form-input" id="sn-text" placeholder="Es: ha faticato col bird dog, lombare molto tesa, ha dormito male ieri..." style="min-height:80px;margin-bottom:16px;"></textarea>
+
+    <!-- ③ DOLORI FINE — visibile solo se dolori attivi -->
+    <div id="sn-dolori-fine-section" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#000;flex-shrink:0;">3</div>
+        <div style="font-size:13px;font-weight:700;">Dolori fine seduta</div>
+        <div id="sn-end-summary" style="font-size:10px;color:var(--text3);font-family:'DM Mono';margin-left:auto;"></div>
       </div>
+      <div id="sn-chart-end" style="margin-bottom:12px;"></div>
 
-      <!-- EVOLUZIONE DOLORI CRONICI -->
-      <div class="sn-pain-block" id="sn-block-stato" style="margin-top:8px;display:none;">
-        <div class="sn-pain-block-header" onclick="snToggleBlock('stato')">
-          <span>📈 Evoluzione dolori cronici</span>
-          <span style="font-size:10px;color:var(--text3);font-family:'DM Mono';">aggiorna il profilo</span>
-          <span class="sn-chevron" id="sn-chevron-stato">▶</span>
+      <!-- Delta live -->
+      <div id="sn-delta-preview" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(71,255,160,0.06);border:1px solid rgba(71,255,160,0.2);border-radius:8px;font-family:'DM Mono';font-size:11px;"></div>
+
+      <!-- Evoluzione cronici -->
+      <div id="sn-block-stato" style="display:none;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;" onclick="snToggleBlock('stato')">
+          <div style="font-size:13px;font-weight:700;">📈 Evoluzione dolori cronici</div>
+          <span class="sn-chevron" id="sn-chevron-stato" style="margin-left:auto;">▶</span>
         </div>
-        <div class="sn-pain-block-body" id="sn-body-stato" style="display:none;">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-family:'DM Mono';">Per le zone del profilo cronico — aggiorna lo stato. Verrà salvato nel profilo cliente.</div>
+        <div id="sn-body-stato" style="display:none;">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px;font-family:'DM Mono';">Aggiorna lo stato per le zone del profilo cronico.</div>
           <div id="sn-stato-list"></div>
         </div>
       </div>
-
-      <!-- DELTA LIVE -->
-      <div id="sn-delta-preview" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(71,255,160,0.06);border:1px solid rgba(71,255,160,0.2);border-radius:8px;font-family:'DM Mono';font-size:11px;"></div>
-
-    </div>
-
-    <!-- Note libere -->
-    <div class="form-group" style="margin-top:14px;">
-      <label class="form-label">Note libere</label>
-      <textarea class="form-input" id="sn-text" placeholder="Es: ha faticato col bird dog, lombare molto tesa, ha dormito male ieri..." style="min-height:80px;"></textarea>
     </div>
 
     <div class="divider"></div>
@@ -4087,8 +4071,25 @@ function _snUpdateDelta() {
 }
 
 function snTipoChanged(tipo) {
-  const sec = document.getElementById('sn-dolori-section');
-  sec.style.display = tipo === 'dolori' ? 'block' : 'none';
+  const isDolori = tipo === 'dolori';
+  // Sezione dolori inizio
+  document.getElementById('sn-dolori-section').style.display = isDolori ? 'block' : 'none';
+  // Sezione dolori fine
+  const fineSection = document.getElementById('sn-dolori-fine-section');
+  if (fineSection) fineSection.style.display = isDolori ? 'block' : 'none';
+  // Numero step nota: 2 se dolori, 1 se normale
+  const stepNum = document.getElementById('sn-step-note-num');
+  if (stepNum) stepNum.textContent = isDolori ? '2' : '1';
+  // Se si attiva dolori e fine chart è vuoto, pre-popola con zone inizio
+  if (isDolori) {
+    const startZones = Object.keys(_snPainStart);
+    if (startZones.length > 0 && Object.keys(_snPainEnd).length === 0) {
+      const merged = { ..._snPainStart };
+      document.getElementById('sn-chart-end').innerHTML = _buildSnChart('end', merged, startZones);
+      startZones.forEach(z => { _snPainEnd[z] = _snPainStart[z] || 5; });
+      _snUpdateSummary('end');
+    }
+  }
   // update button styles
   document.getElementById('sn-tipo-normale').className = `sn-tipo-btn ${tipo==='normale' ? 'active-normale' : ''}`;
   document.getElementById('sn-tipo-dolori').className  = `sn-tipo-btn ${tipo==='dolori'  ? 'active-dolori'  : ''}`;
@@ -4238,13 +4239,7 @@ function openSessionNote(clientId, prefillPain = null) {
     }
   }
 
-  // Open start block, close end
-  document.getElementById('sn-body-start').style.display = 'block';
-  document.getElementById('sn-chevron-start').textContent = '▼';
-  document.getElementById('sn-body-end').style.display   = 'none';
-  document.getElementById('sn-chevron-end').textContent  = '▶';
-  document.getElementById('sn-body-stato').style.display = 'none';
-  document.getElementById('sn-chevron-stato').textContent = '▶';
+  // Sections are always visible when tipo=dolori — nothing to collapse
 
   // Build stato block for chronic zones
   _snStatoMap = {};
@@ -4325,6 +4320,30 @@ function getSessionNotes(clientId) {
 
 let _editingNoteId = null;
 
+function openOrEditNoteForWorkout(clientId, workoutId) {
+  // Find the workout to get its date and painStart
+  const w = workouts.find(wk => wk.id === workoutId);
+  if (!w) return;
+  const wDate = w.createdAt?.split('T')[0];
+
+  // Check if a note already exists for that date
+  const notes = getSessionNotes(clientId);
+  const existingNote = notes.find(n => n.date === wDate);
+
+  if (existingNote) {
+    // Open existing note for editing — preserves all data already saved
+    editSessionNote(clientId, existingNote.id);
+  } else {
+    // No note yet — open fresh modal pre-filled with workout's painStart
+    openSessionNote(clientId, w.painStart || []);
+    // Also pre-set the date to the workout date (not necessarily today)
+    setTimeout(() => {
+      const dateEl = document.getElementById('sn-date');
+      if (dateEl) dateEl.value = wDate;
+    }, 50);
+  }
+}
+
 function editSessionNote(clientId, noteId) {
   const notes = getSessionNotes(clientId);
   const note = notes.find(n => n.id === noteId);
@@ -4386,18 +4405,7 @@ function editSessionNote(clientId, noteId) {
     statoBlock.style.display = 'none';
   }
 
-  // Open both blocks if pain data present
-  document.getElementById('sn-body-start').style.display = 'block';
-  document.getElementById('sn-chevron-start').textContent = '▼';
-  if (preEndSelected.length > 0) {
-    document.getElementById('sn-body-end').style.display = 'block';
-    document.getElementById('sn-chevron-end').textContent = '▼';
-  } else {
-    document.getElementById('sn-body-end').style.display = 'none';
-    document.getElementById('sn-chevron-end').textContent = '▶';
-  }
-  document.getElementById('sn-body-stato').style.display = 'none';
-  document.getElementById('sn-chevron-stato').textContent = '▶';
+  // Sections are always visible when tipo=dolori — nothing to collapse
 
   openModal('modal-session-note');
 }
@@ -5653,7 +5661,7 @@ function renderWorkoutCard(w, showClient = false) {
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         ${w.tipoSeduta === 'dolori' && w.painStart?.length
-          ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:11px;" onclick="event.stopPropagation();openSessionNote(${w.clientId}, ${JSON.stringify(w.painStart).replace(/"/g,'&quot;')})">📝 Completa nota</button>
+          ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:11px;" onclick="event.stopPropagation();openOrEditNoteForWorkout(${w.clientId}, ${w.id})">📝 Completa nota</button>
              <span style="background:rgba(255,71,87,0.12);color:var(--red);padding:3px 8px;border-radius:20px;font-family:'DM Mono';font-size:9px;">💢 dolori</span>`
           : ''
         }
