@@ -4253,12 +4253,20 @@ function openSessionNote(clientId, prefillPain = null) {
     statoBlock.style.display = 'none';
   }
 
-  // Pre-fill exercises from most recent workout if note text is empty
+  // Pre-fill exercises from most recent workout
   const noteDate = document.getElementById('sn-date').value;
   const textEl = document.getElementById('sn-text');
-  if (textEl && !textEl.value) {
+  const currentText = textEl ? textEl.value.trim() : '';
+  const shouldPrefill = !currentText || currentText === '_da scheda_';
+  console.log('[NOTE DEBUG] clientId:', clientId, 'noteDate:', noteDate, 'currentText:', JSON.stringify(currentText), 'shouldPrefill:', shouldPrefill, 'workouts total:', workouts.length);
+  if (textEl && shouldPrefill) {
     const matchingWorkout = _findLatestWorkoutForClient(clientId, noteDate);
-    if (matchingWorkout) textEl.value = _workoutToNoteText(matchingWorkout);
+    console.log('[NOTE DEBUG] matchingWorkout:', matchingWorkout ? matchingWorkout.name + ' blocchi:' + (matchingWorkout.blocchi||matchingWorkout.blocks||[]).length : 'NOT FOUND');
+    if (matchingWorkout) {
+      const generated = _workoutToNoteText(matchingWorkout);
+      console.log('[NOTE DEBUG] generated text:', JSON.stringify(generated));
+      textEl.value = generated;
+    }
   }
 
   openModal('modal-session-note');
