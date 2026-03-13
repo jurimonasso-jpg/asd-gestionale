@@ -4401,8 +4401,9 @@ function openOrEditNoteForWorkout(clientId, workoutId) {
 function _openUnifiedNote(clientId, workoutId) {
   const w = workoutId ? workouts.find(wk => wk.id === workoutId) : null;
   const wDate = w?.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
-  const _dbg = getSessionNotes(clientId).find(n => n.date === wDate);
-  alert('DEBUG v3\nworkout: ' + (w ? w.name + ' blocchi:' + (w.blocchi?.length||0) : 'nessuno') + '\nnota: ' + (_dbg ? 'trovata painEnd:' + (_dbg.painEnd?.length||0) : 'non trovata') + '\ndata: ' + wDate);
+  const _dbgAllNotes = getSessionNotes(clientId);
+  const _dbg = _dbgAllNotes.find(n => n.date === wDate);
+  alert('DEBUG v4\nworkout: ' + (w ? w.name + ' blocchi:' + (w.blocchi?.length||0) : 'nessuno') + '\nwDate: ' + wDate + '\nnota trovata: ' + (_dbg ? 'SI tipo:' + _dbg.tipo + ' painEnd:' + (_dbg.painEnd?.length||0) : 'NO') + '\ntutte note dates: ' + _dbgAllNotes.map(n=>n.date).join(','));
 
   _sessionNoteClientId = clientId;
   _editingNoteId = null;
