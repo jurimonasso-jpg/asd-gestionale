@@ -8034,12 +8034,17 @@ function saveSedutaBuilder() {
   save();
   _syncAll(clientId, workout.id);
 
+  const _savedWid = workout.id;
+  const _savedCid = parseInt(clientId);
   document.getElementById('seduta-content').innerHTML = `
     <div style="text-align:center;padding:40px;background:var(--surface2);border-radius:var(--radius);">
       <div style="font-size:32px;margin-bottom:12px;">✅</div>
       <div style="font-size:18px;font-weight:800;margin-bottom:8px;">Seduta salvata!</div>
       <div style="font-family:'DM Mono';font-size:11px;color:var(--text3);margin-bottom:16px;">Archiviata nel tab ⚡ Sedute del cliente</div>
-      <button class="btn btn-primary" onclick="newSedutaBuilder()">+ Nuova Seduta</button>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="openOrEditNoteForWorkout(${_savedCid}, ${_savedWid})">🟢 Dolori fine + Nota</button>
+        <button class="btn btn-primary" onclick="newSedutaBuilder()">+ Nuova Seduta</button>
+      </div>
     </div>`;
 
   schedaBlocchi = [];
