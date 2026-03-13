@@ -4253,13 +4253,11 @@ function openSessionNote(clientId, prefillPain = null) {
     statoBlock.style.display = 'none';
   }
 
-  // Pre-fill exercises from workout of that date if note text is empty
+  // Pre-fill exercises from most recent workout if note text is empty
   const noteDate = document.getElementById('sn-date').value;
   const textEl = document.getElementById('sn-text');
   if (textEl && !textEl.value) {
-    const matchingWorkout = [...workouts].reverse().find(wk =>
-      wk.clientId == clientId && wk.createdAt?.split('T')[0] === noteDate && wk.blocchi?.length
-    );
+    const matchingWorkout = _findLatestWorkoutForClient(clientId, noteDate);
     if (matchingWorkout) textEl.value = _workoutToNoteText(matchingWorkout);
   }
 
@@ -4330,19 +4328,25 @@ function getSessionNotes(clientId) {
 let _editingNoteId = null;
 
 function _workoutToNoteText(w) {
-  // Build a readable exercise list from workout blocks
-  if (!w.blocchi?.length) return '';
   const BLOCCO_LABELS = {
     mobilita: 'Mobilità', warmup: 'Warm Up', core: 'Core',
-    fase1: 'Fase 1', fase2: 'Fase 2', fase3: 'Fase 3', workout: 'Workout'
+    fase1: 'Fase 1', fase2: 'Fase 2', fase3: 'Fase 3', workout: 'Workout',
+    release: 'Release', attivazione: 'Attivazione'
   };
   const lines = [];
-  w.blocchi.forEach(b => {
-    const label = BLOCCO_LABELS[b.tipo] || b.tipo;
-    const exs = (b.esercizi || []).filter(e => e.nome);
+
+  // Supports both w.blocchi (manual builder) and w.blocks (generated session)
+  const blocchi = w.blocchi || w.blocks || [];
+  if (!blocchi.length) return '';
+
+  blocchi.forEach(b => {
+    const label = BLOCCO_LABELS[b.tipo || b.id] || b.label || b.tipo || b.id || '';
+    // esercizi array (builder) or exs array (generator)
+    const exs = (b.esercizi || b.exs || []).filter(e => (e.nome || typeof e === 'string'));
     if (!exs.length) return;
     lines.push(`[ ${label} ]`);
     exs.forEach(e => {
+      if (typeof e === 'string') { lines.push(`  • ${e}`); return; }
       const parts = [e.nome];
       if (e.serie || e.reps) parts.push(`${e.serie||''}×${e.reps||''}`);
       if (e.kg) parts.push(`${e.kg}kg`);
@@ -4350,6 +4354,24 @@ function _workoutToNoteText(w) {
     });
   });
   return lines.join('\n');
+}
+
+function _findLatestWorkoutForClient(clientId, preferDate) {
+  // First try exact date match, then fall back to most recent
+  const clientWorkouts = workouts.filter(wk =>
+    wk.clientId == clientId && (wk.blocchi?.length || wk.blocks?.length)
+  );
+  if (!clientWorkouts.length) return null;
+  if (preferDate) {
+    const exact = [...clientWorkouts].reverse().find(wk =>
+      wk.createdAt?.split('T')[0] === preferDate
+    );
+    if (exact) return exact;
+  }
+  // Most recent
+  return [...clientWorkouts].sort((a,b) =>
+    new Date(b.createdAt||0) - new Date(a.createdAt||0)
+  )[0] || null;
 }
 
 function openOrEditNoteForWorkout(clientId, workoutId) {
