@@ -4161,26 +4161,18 @@ function openSessionNote(clientId, prefillPain = null) {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('sn-date').value = today;
 
-  // Reset tipo
-  document.querySelector('input[name="sn-tipo"][value="normale"]').checked = true;
-  snTipoChanged('normale');
-
-  // Determine preselected pain zones (priority: explicit prefill > today's note > today's workout > client profile)
-  let preselected   = [];
-  let preIntensities = {};
+  // Collect all data first, then build UI
+  let preselected      = [];
+  let preIntensities   = {};
   let preEndIntensities = {};
-  let sourceLabel   = '';
+  let sourceLabel      = '';
+  let tipoFinal        = 'normale';
 
-  // Always check if a note exists for today first — load it fully
   const todayNote = _getTodayNote(clientId);
   if (!prefillPain?.length && todayNote) {
-    // Pre-fill text, mood, tipo from existing note
     document.getElementById('sn-text').value = todayNote.text || '';
     document.getElementById('sn-mood').value = todayNote.mood || '';
-    if (todayNote.tipo === 'dolori') {
-      document.querySelector('input[name="sn-tipo"][value="dolori"]').checked = true;
-      snTipoChanged('dolori');
-    }
+    tipoFinal = todayNote.tipo || 'normale';
     if (todayNote.painStart?.length) {
       todayNote.painStart.forEach(p => { preIntensities[p.label] = p.intensity || 5; });
       preselected = todayNote.painStart.map(p => p.label);
@@ -4198,8 +4190,8 @@ function openSessionNote(clientId, prefillPain = null) {
     prefillPain.forEach(p => { preIntensities[p.label] = p.intensity || 5; });
     preselected = prefillPain.map(p => p.label);
     sourceLabel = 'da scheda';
+    if (preselected.length) tipoFinal = 'dolori';
   } else if (!todayNote) {
-    // Check today's workout for this client
     const todayWorkout = [...workouts].reverse().find(w =>
       w.clientId == clientId && w.tipoSeduta === 'dolori' &&
       w.createdAt?.split('T')[0] === today && w.painStart?.length
@@ -4208,34 +4200,37 @@ function openSessionNote(clientId, prefillPain = null) {
       todayWorkout.painStart.forEach(p => { preIntensities[p.label] = p.intensity || 5; });
       preselected = todayWorkout.painStart.map(p => p.label);
       sourceLabel = 'da scheda di oggi';
+      tipoFinal = 'dolori';
     } else {
       preselected = c?.painPoints?.map(p => p.label) || [];
+      if (preselected.length) tipoFinal = 'dolori';
     }
   }
 
+  // Populate state objects
   preselected.forEach(l => { _snPainStart[l] = preIntensities[l] || 5; });
-  // Se non ci sono dati fine, pre-popola con le stesse zone dell'inizio
   let endPreselected = Object.keys(preEndIntensities);
   if (endPreselected.length === 0 && preselected.length > 0) {
     preselected.forEach(l => { preEndIntensities[l] = preIntensities[l] || 5; });
     endPreselected = [...preselected];
   }
   endPreselected.forEach(l => { _snPainEnd[l] = preEndIntensities[l] || 5; });
+
+  // Build charts FIRST
   document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preIntensities, preselected);
   document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', preEndIntensities, endPreselected);
   _snUpdateSummary('start');
   _snUpdateSummary('end');
   document.getElementById('sn-delta-preview').style.display = 'none';
 
-  // Auto-switch to dolori if we have real pain data
-  if (preselected.length > 0 && Object.keys(preIntensities).length > 0) {
-    document.querySelector('input[name="sn-tipo"][value="dolori"]').checked = true;
-    snTipoChanged('dolori');
-    if (sourceLabel) {
-      const lbl = document.getElementById('session-note-client-label');
-      lbl.innerHTML = (c ? `${c.nome} ${c.cognome}` : '') +
-        ` <span style="color:var(--accent2);margin-left:8px;">↩ Dolori importati (${sourceLabel})</span>`;
-    }
+  // THEN show/hide sections based on tipo
+  document.querySelector(`input[name="sn-tipo"][value="${tipoFinal}"]`).checked = true;
+  snTipoChanged(tipoFinal);
+
+  if (sourceLabel && tipoFinal === 'dolori') {
+    const lbl = document.getElementById('session-note-client-label');
+    lbl.innerHTML = (c ? `${c.nome} ${c.cognome}` : '') +
+      ` <span style="color:var(--accent2);margin-left:8px;">↩ Dolori importati (${sourceLabel})</span>`;
   }
 
   // Sections are always visible when tipo=dolori — nothing to collapse
@@ -4430,12 +4425,7 @@ function editSessionNote(clientId, noteId) {
   document.getElementById('sn-text').value = note.text || '';
   document.getElementById('sn-mood').value = note.mood || '';
 
-  // Tipo
-  const tipoVal = note.tipo || 'normale';
-  document.querySelector(`input[name="sn-tipo"][value="${tipoVal}"]`).checked = true;
-  snTipoChanged(tipoVal);
-
-  // Pain start
+  // Pain start — populate state first
   const preIntensities = {};
   const preselected = [];
   (note.painStart || []).forEach(p => {
@@ -4453,11 +4443,17 @@ function editSessionNote(clientId, noteId) {
     _snPainEnd[p.label] = p.intensity || 5;
   });
 
+  // Build charts before showing sections
   document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preIntensities, preselected);
   document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', preEndIntensities, preEndSelected);
   _snUpdateSummary('start');
   _snUpdateSummary('end');
   document.getElementById('sn-delta-preview').style.display = 'none';
+
+  // Now set tipo and show/hide sections
+  const tipoVal = note.tipo || 'normale';
+  document.querySelector(`input[name="sn-tipo"][value="${tipoVal}"]`).checked = true;
+  snTipoChanged(tipoVal);
 
   // Stato cronici
   _snStatoMap = {};
@@ -4471,8 +4467,6 @@ function editSessionNote(clientId, noteId) {
   } else {
     statoBlock.style.display = 'none';
   }
-
-  // Sections are always visible when tipo=dolori — nothing to collapse
 
   openModal('modal-session-note');
 }
