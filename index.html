@@ -4162,26 +4162,48 @@ function openSessionNote(clientId, prefillPain = null) {
 
   const c = clients.find(cl => cl.id == clientId);
   document.getElementById('session-note-client-label').textContent = c ? `${c.nome} ${c.cognome}` : '';
-  document.getElementById('sn-date').value = new Date().toISOString().split('T')[0];
-  document.getElementById('sn-text').value = '';
-  document.getElementById('sn-mood').value = '';
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('sn-date').value = today;
 
   // Reset tipo
   document.querySelector('input[name="sn-tipo"][value="normale"]').checked = true;
   snTipoChanged('normale');
 
-  // Determine preselected pain zones (priority: explicit prefill > today's workout > client profile)
+  // Determine preselected pain zones (priority: explicit prefill > today's note > today's workout > client profile)
   let preselected   = [];
   let preIntensities = {};
+  let preEndIntensities = {};
   let sourceLabel   = '';
+
+  // Always check if a note exists for today first — load it fully
+  const todayNote = _getTodayNote(clientId);
+  if (!prefillPain?.length && todayNote) {
+    // Pre-fill text, mood, tipo from existing note
+    document.getElementById('sn-text').value = todayNote.text || '';
+    document.getElementById('sn-mood').value = todayNote.mood || '';
+    if (todayNote.tipo === 'dolori') {
+      document.querySelector('input[name="sn-tipo"][value="dolori"]').checked = true;
+      snTipoChanged('dolori');
+    }
+    if (todayNote.painStart?.length) {
+      todayNote.painStart.forEach(p => { preIntensities[p.label] = p.intensity || 5; });
+      preselected = todayNote.painStart.map(p => p.label);
+    }
+    if (todayNote.painEnd?.length) {
+      todayNote.painEnd.forEach(p => { preEndIntensities[p.label] = p.intensity || 5; });
+    }
+    sourceLabel = 'nota di oggi';
+  } else {
+    document.getElementById('sn-text').value = '';
+    document.getElementById('sn-mood').value = '';
+  }
 
   if (prefillPain?.length) {
     prefillPain.forEach(p => { preIntensities[p.label] = p.intensity || 5; });
     preselected = prefillPain.map(p => p.label);
     sourceLabel = 'da scheda';
-  } else {
+  } else if (!todayNote) {
     // Check today's workout for this client
-    const today = new Date().toISOString().split('T')[0];
     const todayWorkout = [...workouts].reverse().find(w =>
       w.clientId == clientId && w.tipoSeduta === 'dolori' &&
       w.createdAt?.split('T')[0] === today && w.painStart?.length
@@ -4191,21 +4213,15 @@ function openSessionNote(clientId, prefillPain = null) {
       preselected = todayWorkout.painStart.map(p => p.label);
       sourceLabel = 'da scheda di oggi';
     } else {
-      // Check today's existing note
-      const todayNote = _getTodayNote(clientId);
-      if (todayNote?.painStart?.length) {
-        todayNote.painStart.forEach(p => { preIntensities[p.label] = p.intensity || 5; });
-        preselected = todayNote.painStart.map(p => p.label);
-        sourceLabel = 'nota di oggi';
-      } else {
-        preselected = c?.painPoints?.map(p => p.label) || [];
-      }
+      preselected = c?.painPoints?.map(p => p.label) || [];
     }
   }
 
   preselected.forEach(l => { _snPainStart[l] = preIntensities[l] || 5; });
+  const endPreselected = Object.keys(preEndIntensities);
+  endPreselected.forEach(l => { _snPainEnd[l] = preEndIntensities[l] || 5; });
   document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preIntensities, preselected);
-  document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', {}, []);
+  document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', preEndIntensities, endPreselected);
   _snUpdateSummary('start');
   _snUpdateSummary('end');
   document.getElementById('sn-delta-preview').style.display = 'none';
@@ -5340,8 +5356,15 @@ function saveWorkout() {
     };
     workouts.push(workout);
     autoUpdatePercorsoFromWorkout(clientId, workout.blocchi);
-    if (clientId && tipoSeduta === 'dolori' && painStart.length > 0) {
-      _syncPainToNote(parseInt(clientId), painStart);
+    if (clientId) {
+      if (tipoSeduta === 'dolori' && painStart.length > 0) {
+        _syncPainToNote(parseInt(clientId), painStart);
+      }
+      // Sync note text back to workout if note exists today
+      const todayNoteCheck = _getTodayNote(parseInt(clientId));
+      if (todayNoteCheck?.text) {
+        workout.notePostSeduta = todayNoteCheck.text;
+      }
     }
   }
 
