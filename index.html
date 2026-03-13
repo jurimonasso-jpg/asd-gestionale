@@ -4335,6 +4335,13 @@ function saveSessionNote() {
   }
   // ─────────────────────────────────────────────────────────
 
+  // Sync workout ↔ nota
+  const savedDate = date;
+  const matchW = [...workouts].reverse().find(wk =>
+    wk.clientId == _sessionNoteClientId && wk.createdAt?.split('T')[0] === savedDate
+  );
+  if (matchW) _syncAll(_sessionNoteClientId, matchW.id);
+
   _editingNoteId = null;
   closeModal('modal-session-note');
   openClientDetail(_sessionNoteClientId);
@@ -4394,16 +4401,17 @@ function _findLatestWorkoutForClient(clientId, preferDate) {
 }
 
 function openOrEditNoteForWorkout(clientId, workoutId) {
-  _openUnifiedNote(clientId, workoutId);
+  const w = workouts.find(wk => wk.id === workoutId);
+  if (!w) return;
+  const wDate = w.createdAt?.split('T')[0];
+  const existingNote = getSessionNotes(clientId).find(n => n.date === wDate);
+  _openUnifiedNote(clientId, workoutId, existingNote?.id || null);
 }
 
 // Unified note opener — always merges workout exercises + saved note data
-function _openUnifiedNote(clientId, workoutId) {
+function _openUnifiedNote(clientId, workoutId, forceNoteId) {
   const w = workoutId ? workouts.find(wk => wk.id === workoutId) : null;
   const wDate = w?.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
-  const _dbgAllNotes = getSessionNotes(clientId);
-  const _dbg = _dbgAllNotes.find(n => n.date === wDate);
-  alert('DEBUG v4\nworkout: ' + (w ? w.name + ' blocchi:' + (w.blocchi?.length||0) : 'nessuno') + '\nwDate: ' + wDate + '\nnota trovata: ' + (_dbg ? 'SI tipo:' + _dbg.tipo + ' painEnd:' + (_dbg.painEnd?.length||0) : 'NO') + '\ntutte note dates: ' + _dbgAllNotes.map(n=>n.date).join(','));
 
   _sessionNoteClientId = clientId;
   _editingNoteId = null;
@@ -4412,9 +4420,11 @@ function _openUnifiedNote(clientId, workoutId) {
 
   const c = clients.find(cl => cl.id == clientId);
 
-  // ── 1. Load saved note for that date (if any) ──────────────────────────────
+  // ── 1. Load saved note — by forceNoteId or by date ───────────────────────
   const notes = getSessionNotes(clientId);
-  const existingNote = notes.find(n => n.date === wDate);
+  const existingNote = forceNoteId
+    ? notes.find(n => n.id === forceNoteId)
+    : notes.find(n => n.date === wDate);
   if (existingNote) _editingNoteId = existingNote.id;
 
   // ── 2. Determine tipo ──────────────────────────────────────────────────────
@@ -4470,11 +4480,18 @@ function _openUnifiedNote(clientId, workoutId) {
   document.getElementById('sn-date').value = wDate;
   document.getElementById('sn-mood').value = existingNote?.mood || '';
 
-  // Exercises: from note text (if real content) or from workout blocks
-  const savedText = existingNote?.text || '';
-  const isAutoText = !savedText || savedText === '_da scheda_';
+  // Exercises: always show workout exercises + append any existing note text
+  const savedText = (existingNote?.text || '').trim();
+  const isAutoOrEmpty = !savedText || savedText === '_da scheda_';
   const exerciseText = w ? _workoutToNoteText(w) : '';
-  document.getElementById('sn-text').value = isAutoText ? exerciseText : savedText;
+  if (exerciseText && isAutoOrEmpty) {
+    document.getElementById('sn-text').value = exerciseText;
+  } else if (exerciseText && savedText && !savedText.startsWith('[ ')) {
+    // Has real note text but no exercises prepended — add exercises at top
+    document.getElementById('sn-text').value = exerciseText + '\n\n' + savedText;
+  } else {
+    document.getElementById('sn-text').value = savedText;
+  }
 
   // ── 7. Build charts FIRST ──────────────────────────────────────────────────
   document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preIntensities, preselected);
@@ -4486,8 +4503,6 @@ function _openUnifiedNote(clientId, workoutId) {
   // ── 8. THEN show/hide sections ─────────────────────────────────────────────
   document.querySelector(`input[name="sn-tipo"][value="${tipoFinal}"]`).checked = true;
   snTipoChanged(tipoFinal);
-  // DEBUG
-  alert('DEBUG v5\ntipoFinal: ' + tipoFinal + '\nsn-dolori-section: ' + document.getElementById('sn-dolori-section').style.display + '\nsn-dolori-fine-section: ' + document.getElementById('sn-dolori-fine-section').style.display + '\nchart-end innerHTML len: ' + document.getElementById('sn-chart-end').innerHTML.length + '\npainEnd keys: ' + Object.keys(_snPainEnd).join(','));
 
   // ── 9. Stato cronici ───────────────────────────────────────────────────────
   _snStatoMap = {};
@@ -4509,18 +4524,15 @@ function editSessionNote(clientId, noteId) {
   const notes = getSessionNotes(clientId);
   const note = notes.find(n => n.id === noteId);
   if (!note) return;
-  // Find workout for that date to include exercises
+  // Find matching workout for that date
   const noteDate = note.date;
   const matchingWorkout = [...workouts].reverse().find(wk =>
     wk.clientId == clientId &&
     wk.createdAt?.split('T')[0] === noteDate &&
     (wk.blocchi?.length || wk.blocks?.length)
   ) || _findLatestWorkoutForClient(clientId, noteDate);
-  _openUnifiedNote(clientId, matchingWorkout?.id || null);
-  // Override _editingNoteId to the specific note being edited
-  _editingNoteId = noteId;
-  // Override date to note's date (not workout date)
-  document.getElementById('sn-date').value = note.date;
+  // Pass forceNoteId so _openUnifiedNote loads THIS note's painEnd
+  _openUnifiedNote(clientId, matchingWorkout?.id || null, noteId);
   return;
   // legacy below (unreachable)
   _sessionNoteClientId = clientId;
@@ -5635,6 +5647,15 @@ function saveWorkout() {
   }
 
   save();
+  // Sync workout ↔ nota
+  const _syncWId = _workoutEditId !== null
+    ? null  // already reset above, use last saved
+    : workouts[workouts.length - 1]?.id;
+  if (clientId && _syncWId) _syncAll(clientId, _syncWId);
+  else if (clientId) {
+    const lastW = [...workouts].reverse().find(wk => wk.clientId == clientId);
+    if (lastW) _syncAll(clientId, lastW.id);
+  }
   closeModal('modal-new-workout');
   renderWorkouts();
 
@@ -5749,6 +5770,67 @@ function _syncPainToNote(clientId, painStart) {
     });
   }
   localStorage.setItem(key, JSON.stringify(notes));
+}
+
+// ── SYNC BIDIREZIONALE WORKOUT ↔ NOTA ────────────────────────────────────────
+// Chiamata ogni volta che workout o nota vengono salvati.
+// Aggiorna sempre entrambi i lati per quella data/cliente.
+function _syncAll(clientId, workoutId) {
+  if (!clientId) return;
+  const cid = parseInt(clientId);
+
+  // Trova il workout
+  const w = workoutId ? workouts.find(wk => wk.id === workoutId) : null;
+  const wDate = w?.createdAt?.split('T')[0];
+  if (!wDate) return;
+
+  // Trova la nota per quella data
+  const key = `session_notes_${cid}`;
+  const notes = JSON.parse(localStorage.getItem(key) || '[]');
+  const noteIdx = notes.findIndex(n => n.date === wDate);
+
+  // Workout → Nota: sync tipoSeduta e painStart
+  if (w) {
+    if (noteIdx >= 0) {
+      // Aggiorna nota esistente con dati del workout se la nota non ha già dati più completi
+      if (w.tipoSeduta === 'dolori' && w.painStart?.length) {
+        if (!notes[noteIdx].painStart?.length) {
+          notes[noteIdx].painStart = w.painStart;
+          notes[noteIdx].tipo = 'dolori';
+        }
+      }
+      // Sync esercizi nel testo se vuoto
+      const exText = _workoutToNoteText(w);
+      const curText = (notes[noteIdx].text || '').trim();
+      if (exText && (!curText || curText === '_da scheda_')) {
+        notes[noteIdx].text = exText;
+      }
+    } else if (w.tipoSeduta === 'dolori' && w.painStart?.length) {
+      // Crea nota minima
+      const avgPain = Math.round(w.painStart.reduce((s,p) => s + (p.intensity||5), 0) / w.painStart.length);
+      notes.unshift({
+        id: Date.now(),
+        date: wDate,
+        tipo: 'dolori',
+        pain: avgPain,
+        painStart: w.painStart,
+        painEnd: [],
+        mood: '',
+        text: _workoutToNoteText(w)
+      });
+    }
+    localStorage.setItem(key, JSON.stringify(notes));
+  }
+
+  // Nota → Workout: sync painStart
+  const updatedNote = notes.find(n => n.date === wDate);
+  if (w && updatedNote && updatedNote.tipo === 'dolori' && updatedNote.painStart?.length) {
+    if (!w.painStart?.length) {
+      w.tipoSeduta = 'dolori';
+      w.painStart = updatedNote.painStart;
+      save();
+    }
+  }
 }
 
 function renderWorkouts() {
@@ -8168,6 +8250,7 @@ function saveSedutaBuilder() {
 
   workouts.push(workout);
   save();
+  _syncAll(clientId, workout.id);
 
   document.getElementById('seduta-content').innerHTML = `
     <div style="text-align:center;padding:40px;background:var(--surface2);border-radius:var(--radius);">
