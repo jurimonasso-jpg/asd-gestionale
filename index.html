@@ -6448,13 +6448,19 @@ function generateEvidenceSession(clientId) {
   const allCriticalZones = new Set([...testAnalysis.ko, ...testAnalysis.limit]);
   painAnalysis.painZones.forEach(z => allCriticalZones.add(z));
 
-  // Esercizi recenti (ultime 3 sessioni)
-  const recentSessions = (JSON.parse(localStorage.getItem(`sessions_${clientId}`) || '[]')).slice(0, 3);
+  // Esercizi recenti — legge dalla history carichi (ultime 2 sedute)
+  // Un esercizio è "recente" se è stato fatto nelle ultime 2 sedute distinte
+  const exHistory = getExHistory(clientId);
+  const today = new Date().toISOString().split('T')[0];
+
+  // Raccogli tutte le date distinte in cui è stato fatto almeno un esercizio
+  const allDates = [...new Set(Object.values(exHistory).map(h => h.date))].sort().reverse();
+  const last4Dates = new Set(allDates.slice(0, 4));
+
+  // Esercizi fatti nelle ultime 4 sedute
   const recentEx = new Set();
-  recentSessions.forEach(s => {
-    (s.blocchi || []).forEach(b => {
-      (b.esercizi || []).forEach(e => { if (e.nome) recentEx.add(e.nome.toLowerCase()); });
-    });
+  Object.entries(exHistory).forEach(([exKey, data]) => {
+    if (last4Dates.has(data.date)) recentEx.add(exKey); // key è già lowercase
   });
 
   // ── BLOCCO 1: RELEASE ────────────────────────────
@@ -6634,81 +6640,117 @@ function openQuickTemplate(clientId) {
   const c = clients.find(cl => cl.id == clientId);
   if (!c) return;
 
-  // Toggle
-  const existing = document.getElementById(`qt-${clientId}`);
+  // Toggle off
+  const existing = document.getElementById('qt-' + clientId);
   if (existing) { existing.remove(); return; }
 
   const session = generateEvidenceSession(clientId);
   if (!session) return;
 
-  // Evidence badge
-  const zoneLabels = {
-    piede: '🦶 Piede', anca: '🦴 Anca', colonna: '🔄 Colonna',
-    spalla: '💪 Spalla', movimenti: '🏋️ Movimenti', knee: '🦵 Ginocchio'
-  };
+  const blockColors = { release:'#ff9f47', attivazione:'#ffd447', mobilita:'#47c8ff', core:'#c847ff', pull:'#47ffa0', push:'#e8ff47', hinge:'#ff9f47', knee:'#ff6b47' };
+  const zoneLabels = { piede:'🦶 Piede', anca:'🦴 Anca', colonna:'🔄 Colonna', spalla:'💪 Spalla', movimenti:'🏋️ Movimenti', knee:'🦵 Ginocchio' };
 
   const critBadges = session.criticalZones.length > 0
-    ? session.criticalZones.map(z => `<span style="background:rgba(255,71,87,0.15);color:var(--red);border:1px solid rgba(255,71,87,0.3);border-radius:20px;padding:2px 8px;font-size:9px;font-family:'DM Mono';">${zoneLabels[z] || z}</span>`).join(' ')
-    : `<span style="background:rgba(71,255,160,0.1);color:var(--green);border:1px solid rgba(71,255,160,0.3);border-radius:20px;padding:2px 8px;font-size:9px;font-family:'DM Mono';">✓ Nessuna limitazione</span>`;
+    ? session.criticalZones.map(z => `<span style="background:rgba(255,71,87,0.15);color:var(--red);border:1px solid rgba(255,71,87,0.3);border-radius:20px;padding:2px 8px;font-size:9px;">${zoneLabels[z]||z}</span>`).join(' ')
+    : `<span style="background:rgba(71,255,160,0.1);color:var(--green);border:1px solid rgba(71,255,160,0.3);border-radius:20px;padding:2px 8px;font-size:9px;">✓ Nessuna limitazione</span>`;
 
-  const blocksHtml = session.blocks.map(block => {
-    if (block.exs.length === 0) return '';
-    const exHtml = block.exs.map(e => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg);border-radius:6px;font-size:12px;">
-        <span style="font-weight:600;">${e}</span>
-        <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${block.sets}×${block.reps}</span>
-      </div>`).join('');
-    return `
-      <div style="margin-bottom:10px;">
-        <div style="font-family:'DM Mono';font-size:9px;color:${block.color};text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;display:flex;align-items:center;gap:6px;">
-          ${block.label}
-          ${block.note ? `<span style="color:var(--yellow);font-size:8px;">— ${block.note}</span>` : ''}
+  // Build editable blocks html
+  let blocksHtml = '';
+  session.blocks.forEach(block => {
+    if (!block.exs.length) return;
+    const color = blockColors[block.id] || 'var(--accent)';
+
+    const rows = block.exs.map((ex, ei) => {
+      const last = getLastExData(clientId, ex);
+      const hint = last
+        ? `<div style="font-family:monospace;font-size:9px;color:var(--text3);padding:1px 4px 4px;display:flex;gap:8px;flex-wrap:wrap;">
+            <span>📅 ${last.date}</span>
+            ${last.sets ? `<span>${last.sets} serie</span>` : ''}
+            ${last.reps ? `<span>${last.reps} reps</span>` : ''}
+            ${last.kg   ? `<span style="color:var(--accent);">${last.kg} kg</span>` : ''}
+           </div>` : '';
+      return `<div id="qt-row-${clientId}-${block.id}-${ei}" style="padding:5px 0;border-bottom:1px solid var(--border);">
+        <div style="display:grid;grid-template-columns:1fr 52px 72px 60px 28px;gap:5px;align-items:center;">
+          <input value="${ex.replace(/"/g,'&quot;')}" style="background:transparent;border:none;border-bottom:1px dashed var(--border);color:var(--text);font-size:12px;font-weight:600;outline:none;padding:2px 4px;"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          <input value="${last?.sets||block.sets}" style="background:transparent;border:1px dashed var(--border);border-radius:4px;color:var(--text3);font-size:11px;font-family:monospace;text-align:center;outline:none;padding:2px 3px;width:100%;" placeholder="3x"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          <input value="${last?.reps||block.reps}" style="background:transparent;border:1px dashed var(--border);border-radius:4px;color:var(--text3);font-size:11px;font-family:monospace;text-align:center;outline:none;padding:2px 3px;width:100%;" placeholder="reps"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          <input value="${last?.kg||''}" style="background:transparent;border:1px dashed ${last?.kg?'var(--accent)':'var(--border)'};border-radius:4px;color:${last?.kg?'var(--accent)':'var(--text3)'};font-size:11px;font-family:monospace;text-align:center;outline:none;padding:2px 3px;width:100%;" placeholder="kg"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+          <button onclick="this.closest('[id^=qt-row-]').remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0;">✕</button>
         </div>
-        <div style="display:flex;flex-direction:column;gap:4px;">${exHtml}</div>
+        ${hint}
       </div>`;
-  }).join('');
+    }).join('');
 
-  const notesHtml = session.clinicalNotes.length > 0
-    ? `<div style="margin-bottom:12px;padding:10px 12px;background:rgba(255,212,71,0.06);border:1px solid rgba(255,212,71,0.2);border-radius:8px;">
-        ${session.clinicalNotes.map(n => `<div style="font-size:11px;color:var(--yellow);font-family:'DM Mono';margin-bottom:3px;">⚠ ${n}</div>`).join('')}
+    blocksHtml += `<div style="background:var(--surface);border:1px solid var(--border);border-top:2px solid ${color};border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-family:monospace;font-size:9px;color:${color};text-transform:uppercase;letter-spacing:0.1em;">${block.label}${block.note?` — <span style="color:var(--yellow);">${block.note}</span>`:''}</div>
+      </div>
+      <div style="font-family:monospace;font-size:9px;color:var(--text3);display:grid;grid-template-columns:1fr 52px 72px 60px 28px;gap:5px;padding-bottom:4px;border-bottom:1px solid var(--border);margin-bottom:2px;">
+        <span>Esercizio</span><span style="text-align:center;">Serie</span><span style="text-align:center;">Reps</span><span style="text-align:center;color:var(--accent);">Kg</span><span></span>
+      </div>
+      <div id="qt-block-${clientId}-${block.id}">${rows}</div>
+    </div>`;
+  });
+
+  const notesHtml = session.clinicalNotes.length
+    ? `<div style="margin-bottom:10px;padding:8px 12px;background:rgba(255,212,71,0.06);border:1px solid rgba(255,212,71,0.2);border-radius:8px;">
+        ${session.clinicalNotes.map(n=>`<div style="font-size:11px;color:var(--yellow);font-family:monospace;">⚠ ${n}</div>`).join('')}
        </div>` : '';
 
-  const blockedHtml = session.blockedExercises.length > 0
-    ? `<div style="margin-bottom:10px;font-family:'DM Mono';font-size:9px;color:var(--red);">🚫 Esercizi esclusi per controindicazione: ${session.blockedExercises.join(', ')}</div>` : '';
-
   const div = document.createElement('div');
-  div.id = `qt-${clientId}`;
-  div.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-top:2px solid var(--accent);border-radius:var(--radius);padding:16px 20px;margin-top:8px;';
+  div.id = 'qt-' + clientId;
+  div.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-top:2px solid var(--accent);border-radius:var(--radius);padding:16px 18px;margin-top:8px;';
   div.innerHTML = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:12px;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px;">
       <div>
-        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">⚡ Seduta Evidence-Based — <span style="color:var(--accent);">${c.nome}</span></div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:5px;">⚡ Seduta — <span style="color:var(--accent);">${c.nome} ${c.cognome}</span></div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;">${critBadges}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('qt-${clientId}').remove();openQuickTemplate(${clientId})" title="Rigenera">↺</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('qt-${clientId}').remove();openQuickTemplate(${clientId})">↺</button>
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('qt-${clientId}').remove()">✕</button>
       </div>
     </div>
     ${notesHtml}
-    ${blockedHtml}
-    <div style="border-top:1px solid var(--border);padding-top:10px;">
-      ${blocksHtml}
-    </div>
-    <div style="margin-top:12px;display:flex;gap:8px;align-items:center;border-top:1px solid var(--border);padding-top:10px;">
-      <button class="btn btn-primary btn-sm" onclick="openNewWorkoutModal(${clientId})">📋 Apri nuova scheda</button>
-      <span style="font-family:'DM Mono';font-size:9px;color:var(--text3);">Generato da test + profilo dolore · Piramide evidenze scientifiche</span>
+    ${blocksHtml}
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px;">
+      <button class="btn btn-primary btn-sm" onclick="saveQuickTemplate(${clientId})">✓ Segna completata</button>
+      <span style="font-family:monospace;font-size:9px;color:var(--text3);align-self:center;">Serie/Reps/Kg pre-compilati dall'ultima seduta</span>
     </div>`;
 
-  // Insert after the card/button
-  const btns = document.querySelectorAll(`[onclick="openQuickTemplate(${clientId})"]`);
+  // Insert after nearest parent card or agenda day card
+  const btns = document.querySelectorAll('[onclick="openQuickTemplate(' + clientId + ')"]');
   let target = null;
-  btns.forEach(b => { if (b.closest('.card')) target = b.closest('.card'); });
+  btns.forEach(b => { if (b.closest('.agenda-day-card')) target = b.closest('.agenda-day-card'); });
+  if (!target) btns.forEach(b => { if (b.closest('.card')) target = b.closest('.card'); });
   if (target) target.insertAdjacentElement('afterend', div);
-  else {
-    const agendaCard = document.getElementById(`agenda-card-${clientId}`);
-    if (agendaCard) agendaCard.insertAdjacentElement('afterend', div);
-  }
+  else document.getElementById('agenda-content').appendChild(div);
+}
+
+function saveQuickTemplate(clientId) {
+  // Save exercise history from all visible qt blocks
+  const blockDivs = document.querySelectorAll('[id^="qt-block-' + clientId + '-"]');
+  blockDivs.forEach(container => {
+    const blockId = container.id.replace('qt-block-' + clientId + '-', '');
+    Array.from(container.children).forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      if (inputs.length < 4) return;
+      const name = inputs[0].value.trim();
+      if (!name) return;
+      saveExData(clientId, name, inputs[1].value.trim(), inputs[2].value.trim(), inputs[3].value.trim(), '');
+    });
+  });
+  const div = document.getElementById('qt-' + clientId);
+  if (div) div.innerHTML = `<div style="text-align:center;padding:20px;">
+    <div style="font-size:24px;margin-bottom:8px;">✅</div>
+    <div style="font-size:14px;font-weight:700;">Seduta completata!</div>
+    <div style="font-family:monospace;font-size:10px;color:var(--text3);margin-top:4px;">Carichi salvati per la prossima volta</div>
+    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('qt-${clientId}').remove()" style="margin-top:12px;">Chiudi</button>
+  </div>`;
 }
 
 function renderDashboard() {
