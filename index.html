@@ -4151,6 +4151,22 @@ function snSetStato(label, stato) {
 }
 
 function openSessionNote(clientId, prefillPain = null) {
+  // Route through unified opener
+  const w = [...workouts].reverse().find(wk =>
+    wk.clientId == clientId && (wk.blocchi?.length || wk.blocks?.length)
+  );
+  _openUnifiedNote(clientId, w?.id || null);
+  // Apply explicit prefillPain override if provided
+  if (prefillPain?.length) {
+    _snPainStart = {};
+    prefillPain.forEach(p => { _snPainStart[p.label] = p.intensity || 5; });
+    const preI = {};
+    prefillPain.forEach(p => { preI[p.label] = p.intensity || 5; });
+    document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preI, prefillPain.map(p=>p.label));
+    _snUpdateSummary('start');
+  }
+  return;
+  // legacy below (unreachable, kept for safety)
   _sessionNoteClientId = clientId;
   _editingNoteId = null;
   _snPainStart = {};
@@ -4378,49 +4394,138 @@ function _findLatestWorkoutForClient(clientId, preferDate) {
 }
 
 function openOrEditNoteForWorkout(clientId, workoutId) {
-  const w = workouts.find(wk => wk.id === workoutId);
-  if (!w) return;
-  const wDate = w.createdAt?.split('T')[0];
+  _openUnifiedNote(clientId, workoutId);
+}
 
+// Unified note opener — always merges workout exercises + saved note data
+function _openUnifiedNote(clientId, workoutId) {
+  const w = workoutId ? workouts.find(wk => wk.id === workoutId) : null;
+  const wDate = w?.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
+
+  _sessionNoteClientId = clientId;
+  _editingNoteId = null;
+  _snPainStart = {};
+  _snPainEnd   = {};
+
+  const c = clients.find(cl => cl.id == clientId);
+
+  // ── 1. Load saved note for that date (if any) ──────────────────────────────
   const notes = getSessionNotes(clientId);
   const existingNote = notes.find(n => n.date === wDate);
+  if (existingNote) _editingNoteId = existingNote.id;
 
-  if (existingNote) {
-    // Open existing note — if text is empty or was auto-generated, inject exercises
-    editSessionNote(clientId, existingNote.id);
-    setTimeout(() => {
-      const textEl = document.getElementById('sn-text');
-      if (textEl && (!textEl.value || textEl.value === '_da scheda_')) {
-        textEl.value = _workoutToNoteText(w);
-      }
-    }, 80);
-  } else {
-    // No note yet — open fresh with exercises pre-filled
-    openSessionNote(clientId, w.painStart || []);
-    setTimeout(() => {
-      const dateEl = document.getElementById('sn-date');
-      if (dateEl) dateEl.value = wDate;
-      const textEl = document.getElementById('sn-text');
-      if (textEl && !textEl.value) textEl.value = _workoutToNoteText(w);
-    }, 80);
+  // ── 2. Determine tipo ──────────────────────────────────────────────────────
+  let tipoFinal = existingNote?.tipo || (w?.tipoSeduta === 'dolori' ? 'dolori' : 'normale');
+  const hasPainData = (existingNote?.painStart?.length || w?.painStart?.length);
+  if (hasPainData) tipoFinal = 'dolori';
+
+  // ── 3. Pain START — note has priority over workout ─────────────────────────
+  const preIntensities = {};
+  const preselected = [];
+  const painStartSource = existingNote?.painStart?.length ? existingNote.painStart : (w?.painStart || []);
+  painStartSource.forEach(p => {
+    preIntensities[p.label] = p.intensity || 5;
+    preselected.push(p.label);
+    _snPainStart[p.label] = p.intensity || 5;
+  });
+  // fallback: client chronic zones
+  if (!preselected.length) {
+    (c?.painPoints || []).forEach(p => {
+      preIntensities[p.label] = p.intensity || 5;
+      preselected.push(p.label);
+      _snPainStart[p.label] = p.intensity || 5;
+    });
   }
+
+  // ── 4. Pain END — from saved note ─────────────────────────────────────────
+  const preEndIntensities = {};
+  const preEndSelected = [];
+  const painEndSource = existingNote?.painEnd || [];
+  if (painEndSource.length) {
+    painEndSource.forEach(p => {
+      preEndIntensities[p.label] = p.intensity || 5;
+      preEndSelected.push(p.label);
+      _snPainEnd[p.label] = p.intensity || 5;
+    });
+  } else if (preselected.length) {
+    // pre-populate end with same zones as start
+    preselected.forEach(l => {
+      preEndIntensities[l] = preIntensities[l] || 5;
+      preEndSelected.push(l);
+      _snPainEnd[l] = preIntensities[l] || 5;
+    });
+  }
+
+  // ── 5. Header ──────────────────────────────────────────────────────────────
+  const lbl = document.getElementById('session-note-client-label');
+  const editLabel = existingNote
+    ? ` <span style="color:var(--accent2);margin-left:8px;">✏️ Modifica nota ${new Date(wDate+'T12:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short'})}</span>`
+    : '';
+  lbl.innerHTML = (c ? `${c.nome} ${c.cognome}` : '') + editLabel;
+
+  // ── 6. Date, mood, text ────────────────────────────────────────────────────
+  document.getElementById('sn-date').value = wDate;
+  document.getElementById('sn-mood').value = existingNote?.mood || '';
+
+  // Exercises: from note text (if real content) or from workout blocks
+  const savedText = existingNote?.text || '';
+  const isAutoText = !savedText || savedText === '_da scheda_';
+  const exerciseText = w ? _workoutToNoteText(w) : '';
+  document.getElementById('sn-text').value = isAutoText ? exerciseText : savedText;
+
+  // ── 7. Build charts FIRST ──────────────────────────────────────────────────
+  document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preIntensities, preselected);
+  document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', preEndIntensities, preEndSelected);
+  _snUpdateSummary('start');
+  _snUpdateSummary('end');
+  document.getElementById('sn-delta-preview').style.display = 'none';
+
+  // ── 8. THEN show/hide sections ─────────────────────────────────────────────
+  document.querySelector(`input[name="sn-tipo"][value="${tipoFinal}"]`).checked = true;
+  snTipoChanged(tipoFinal);
+
+  // ── 9. Stato cronici ───────────────────────────────────────────────────────
+  _snStatoMap = {};
+  const chronicZones = c?.painPoints || [];
+  const statoBlock = document.getElementById('sn-block-stato');
+  const statoList  = document.getElementById('sn-stato-list');
+  if (chronicZones.length > 0) {
+    statoBlock.style.display = '';
+    chronicZones.forEach(p => { _snStatoMap[p.label] = p.stato || 'attivo'; });
+    statoList.innerHTML = _buildStatoList(chronicZones);
+  } else {
+    statoBlock.style.display = 'none';
+  }
+
+  openModal('modal-session-note');
 }
 
 function editSessionNote(clientId, noteId) {
   const notes = getSessionNotes(clientId);
   const note = notes.find(n => n.id === noteId);
   if (!note) return;
-
+  // Find workout for that date to include exercises
+  const noteDate = note.date;
+  const matchingWorkout = [...workouts].reverse().find(wk =>
+    wk.clientId == clientId &&
+    wk.createdAt?.split('T')[0] === noteDate &&
+    (wk.blocchi?.length || wk.blocks?.length)
+  ) || _findLatestWorkoutForClient(clientId, noteDate);
+  _openUnifiedNote(clientId, matchingWorkout?.id || null);
+  // Override _editingNoteId to the specific note being edited
+  _editingNoteId = noteId;
+  // Override date to note's date (not workout date)
+  document.getElementById('sn-date').value = note.date;
+  return;
+  // legacy below (unreachable)
   _sessionNoteClientId = clientId;
   _snPainStart = {};
   _snPainEnd   = {};
   _editingNoteId = noteId;
-
   const c = clients.find(cl => cl.id == clientId);
   const lbl = document.getElementById('session-note-client-label');
   lbl.innerHTML = (c ? `${c.nome} ${c.cognome}` : '') +
     ` <span style="color:var(--accent2);margin-left:8px;">✏️ Modifica nota ${new Date(note.date+'T12:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short'})}</span>`;
-
   document.getElementById('sn-date').value = note.date;
   document.getElementById('sn-text').value = note.text || '';
   document.getElementById('sn-mood').value = note.mood || '';
