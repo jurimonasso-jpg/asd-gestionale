@@ -4486,6 +4486,8 @@ function _openUnifiedNote(clientId, workoutId) {
   // ── 8. THEN show/hide sections ─────────────────────────────────────────────
   document.querySelector(`input[name="sn-tipo"][value="${tipoFinal}"]`).checked = true;
   snTipoChanged(tipoFinal);
+  // DEBUG
+  alert('DEBUG v5\ntipoFinal: ' + tipoFinal + '\nsn-dolori-section: ' + document.getElementById('sn-dolori-section').style.display + '\nsn-dolori-fine-section: ' + document.getElementById('sn-dolori-fine-section').style.display + '\nchart-end innerHTML len: ' + document.getElementById('sn-chart-end').innerHTML.length + '\npainEnd keys: ' + Object.keys(_snPainEnd).join(','));
 
   // ── 9. Stato cronici ───────────────────────────────────────────────────────
   _snStatoMap = {};
