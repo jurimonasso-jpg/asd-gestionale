@@ -5664,7 +5664,7 @@ function _syncPainToNote(clientId, painStart) {
 // ── SYNC BIDIREZIONALE WORKOUT ↔ NOTA ────────────────────────────────────────
 // Chiamata ogni volta che workout o nota vengono salvati.
 // Aggiorna sempre entrambi i lati per quella data/cliente.
-function _syncAll(clientId, workoutId) {
+function _syncAll(clientId, workoutId, forceTextUpdate) {
   if (!clientId) return;
   const cid = parseInt(clientId);
 
@@ -5688,11 +5688,21 @@ function _syncAll(clientId, workoutId) {
           notes[noteIdx].tipo = 'dolori';
         }
       }
-      // Sync esercizi nel testo se vuoto
+      // Sync esercizi nel testo: sempre se forceTextUpdate, altrimenti solo se vuoto
       const exText = _workoutToNoteText(w);
       const curText = (notes[noteIdx].text || '').trim();
-      if (exText && (!curText || curText === '_da scheda_')) {
+      if (exText && (forceTextUpdate || !curText || curText === '_da scheda_')) {
         notes[noteIdx].text = exText;
+      }
+      // Sync painStart/painEnd se forceTextUpdate (modifica seduta)
+      if (forceTextUpdate && w.tipoSeduta === 'dolori') {
+        notes[noteIdx].tipo = 'dolori';
+        notes[noteIdx].painStart = w.painStart || [];
+        notes[noteIdx].painEnd   = w.painEnd   || [];
+        const allP = w.painStart || [];
+        notes[noteIdx].pain = allP.length
+          ? Math.round(allP.reduce((s,p) => s + (p.intensity||5), 0) / allP.length)
+          : notes[noteIdx].pain;
       }
     } else if (w.tipoSeduta === 'dolori' && w.painStart?.length) {
       // Crea nota minima
@@ -8335,7 +8345,9 @@ function saveSedutaBuilder() {
   };
 
   // Se stiamo modificando una seduta esistente, sovrascrivila
+  let _editingWasExisting = false;
   if (_editingSedutaId) {
+    _editingWasExisting = true;
     const idx = workouts.findIndex(w => w.id === _editingSedutaId);
     if (idx >= 0) {
       workout.id = _editingSedutaId; // mantieni lo stesso id
@@ -8348,7 +8360,7 @@ function saveSedutaBuilder() {
     workouts.push(workout);
   }
   save();
-  _syncAll(clientId, workout.id);
+  _syncAll(clientId, workout.id, _editingWasExisting);
 
   // ── Auto-save nota post-seduta se c'è testo nelle note builder ──────────
   if (notes.trim()) {
@@ -8371,10 +8383,12 @@ function saveSedutaBuilder() {
       text: notes.trim()
     };
     if (existIdx >= 0) {
-      // Merge: non sovrascrivere testo più lungo già esistente
-      const curText = (existingNotes[existIdx].text || '').trim();
-      if (curText && curText.length > notes.trim().length && curText !== '_da scheda_') {
-        autoNote.text = curText;
+      // Se stiamo modificando una seduta esistente, forza sempre il testo aggiornato
+      if (!_editingWasExisting) {
+        const curText = (existingNotes[existIdx].text || '').trim();
+        if (curText && curText.length > notes.trim().length && curText !== '_da scheda_') {
+          autoNote.text = curText;
+        }
       }
       existingNotes[existIdx] = autoNote;
     } else {
