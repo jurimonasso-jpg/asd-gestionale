@@ -3481,13 +3481,19 @@ function openClientDetail(clientId) {
     </div>
 
     <div id="dt-sedute" class="tab-content">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
-        <button class="btn btn-primary btn-sm" onclick="openNewWorkoutModalCat(${client.id},'seduta')">+ Seduta palestra</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);">Seleziona 2 sedute per confrontarle</div>
+        <div style="display:flex;gap:8px;">
+          <button id="btn-confronta-${client.id}" class="btn btn-secondary btn-sm" style="display:none;" onclick="confrontaSedute(${client.id})">⚖️ Confronta</button>
+          <button class="btn btn-primary btn-sm" onclick="openNewWorkoutModalCat(${client.id},'seduta')">+ Seduta palestra</button>
+        </div>
       </div>
+      <div id="confronto-result-${client.id}"></div>
       ${(() => {
         const sedute = clientWorkouts.filter(w => w.categoria === 'seduta');
+        const cid = client.id;
         return sedute.length > 0
-          ? sedute.map(w => renderWorkoutCard(w)).join('')
+          ? sedute.map(w => renderWorkoutCardComparable(w, cid)).join('')
           : '<div class="empty-state"><div class="icon">⚡</div><p>Nessuna seduta salvata</p></div>';
       })()}
     </div>
@@ -4686,31 +4692,107 @@ function renderSessionNotes(clientId) {
 // PAIN HISTORY (trend dolore nel tempo)
 // ===================================================
 function renderPainHistory(clientId) {
-  const notes = getSessionNotes(clientId).filter(n => n.pain !== undefined).slice(0, 20).reverse();
-  if (notes.length < 2) return `<div style="font-size:12px;color:var(--text3);padding:8px;">Aggiungi note post-seduta per vedere il trend del dolore nel tempo.</div>`;
+  // Raccoglie tutte le sedute con dolori (painStart non vuoto)
+  const allSedute = (JSON.parse(localStorage.getItem('asd_workouts') || '[]'))
+    .filter(w => w.clientId == clientId && w.categoria === 'seduta' && w.painStart?.length)
+    .sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
 
-  const max = 10;
-  const bars = notes.map(n => {
-    const h = Math.round((n.pain / max) * 36);
-    const col = n.pain <= 3 ? 'var(--green)' : n.pain <= 6 ? 'var(--yellow)' : 'var(--red)';
-    return `<div class="pain-spark-bar" style="height:${h}px;background:${col};" title="${new Date(n.date).toLocaleDateString('it-IT')} — ${n.pain}/10"></div>`;
+  if (allSedute.length < 1) return `<div style="font-size:12px;color:var(--text3);padding:8px 0;">Nessuna seduta con dolori registrata.</div>`;
+
+  // Mappa zona → array di {date, start, end}
+  const zoneMap = {};
+  allSedute.forEach(w => {
+    const dateLabel = new Date(w.createdAt).toLocaleDateString('it-IT', {day:'2-digit',month:'short'});
+    const endMap = Object.fromEntries((w.painEnd||[]).map(p=>[p.label,p.intensity]));
+    (w.painStart||[]).forEach(p => {
+      if (!zoneMap[p.label]) zoneMap[p.label] = [];
+      zoneMap[p.label].push({ date: dateLabel, start: p.intensity||5, end: endMap[p.label] ?? p.intensity });
+    });
+  });
+
+  const zones = Object.keys(zoneMap);
+  if (!zones.length) return '';
+
+  // Conta frequenza: quante sedute totali hanno almeno un painStart
+  const totalSedutePain = allSedute.length;
+
+  // Palette colori per zone
+  const palette = ['#e8ff47','#47c8ff','#ff6b47','#47ffa0','#ff47c8','#c847ff','#ffd447','#47ffee'];
+
+  const W = 320, H = 80, PAD = 8;
+
+  const zoneCards = zones.map((zone, zi) => {
+    const pts = zoneMap[zone];
+    const freq = pts.length / totalSedutePain;
+    const isRecurring = freq >= 0.5 && pts.length >= 2;
+    const color = palette[zi % palette.length];
+
+    // Prima e ultima intensità inizio
+    const firstVal = pts[0].start;
+    const lastVal  = pts[pts.length-1].start;
+    const delta = lastVal - firstVal;
+    const deltaLabel = delta < 0
+      ? `<span style="color:var(--green);">↓ ${Math.abs(delta)} punti</span>`
+      : delta > 0
+      ? `<span style="color:var(--red);">↑ ${delta} punti</span>`
+      : `<span style="color:var(--text3);">→ stabile</span>`;
+
+    // SVG sparkline — linea inizio (piena) + linea fine (tratteggiata)
+    const n = pts.length;
+    const xStep = n > 1 ? (W - PAD*2) / (n-1) : 0;
+    const yScale = v => H - PAD - ((v-1) / 9) * (H - PAD*2);
+
+    const startPoints = pts.map((p,i) => `${PAD + i*xStep},${yScale(p.start)}`).join(' ');
+    const endPoints   = pts.map((p,i) => `${PAD + i*xStep},${yScale(p.end)}`).join(' ');
+
+    // Dots per ultima seduta
+    const lastDot = `<circle cx="${PAD + (n-1)*xStep}" cy="${yScale(pts[n-1].start)}" r="3" fill="${color}"/>`;
+    const lastDotEnd = `<circle cx="${PAD + (n-1)*xStep}" cy="${yScale(pts[n-1].end)}" r="3" fill="rgba(255,255,255,0.4)"/>`;
+
+    // Griglia orizzontale leggera
+    const gridLines = [2,4,6,8,10].map(v =>
+      `<line x1="${PAD}" y1="${yScale(v)}" x2="${W-PAD}" y2="${yScale(v)}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`
+    ).join('');
+
+    const svg = `<svg width="${W}" height="${H}" style="width:100%;height:${H}px;">
+      ${gridLines}
+      ${n > 1 ? `<polyline points="${startPoints}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>` : ''}
+      ${n > 1 ? `<polyline points="${endPoints}" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5" stroke-dasharray="4,3" stroke-linejoin="round"/>` : ''}
+      ${lastDot}
+      ${n > 1 ? lastDotEnd : ''}
+      ${n === 1 ? `<circle cx="${W/2}" cy="${yScale(pts[0].start)}" r="4" fill="${color}"/>` : ''}
+    </svg>`;
+
+    // Etichette date (prima e ultima)
+    const dateRange = n > 1
+      ? `<div style="display:flex;justify-content:space-between;font-family:'DM Mono';font-size:8px;color:var(--text3);margin-top:2px;"><span>${pts[0].date}</span><span>${pts[n-1].date}</span></div>`
+      : `<div style="font-family:'DM Mono';font-size:8px;color:var(--text3);margin-top:2px;">${pts[0].date}</div>`;
+
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid ${color};border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;font-weight:700;color:${color};">${zone}</span>
+          ${isRecurring ? `<span style="font-family:'DM Mono';font-size:8px;background:rgba(255,71,87,0.12);color:var(--red);border:1px solid rgba(255,71,87,0.3);border-radius:10px;padding:1px 7px;">🔁 ricorrente</span>` : ''}
+        </div>
+        <div style="font-family:'DM Mono';font-size:10px;">${deltaLabel} · <span style="color:var(--text3);">${pts.length} sed.</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-family:'DM Mono';font-size:10px;color:${color};">■ inizio</span>
+        <span style="font-family:'DM Mono';font-size:10px;color:rgba(255,255,255,0.4);">╌ fine</span>
+        <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">ultima: inizio <b style="color:${color};">${pts[n-1].start}/10</b> → fine <b style="color:rgba(255,255,255,0.6);">${pts[n-1].end}/10</b></span>
+      </div>
+      ${svg}
+      ${dateRange}
+    </div>`;
   }).join('');
 
-  const last = notes[notes.length-1];
-  const first = notes[0];
-  const trend = last.pain < first.pain ? `↓ migliorato (${first.pain}→${last.pain})` : last.pain > first.pain ? `↑ peggiorato (${first.pain}→${last.pain})` : '→ stabile';
-  const trendCol = last.pain < first.pain ? 'var(--green)' : last.pain > first.pain ? 'var(--red)' : 'var(--text2)';
-
-  return `
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div class="section-title">Trend Dolore</div>
-        <span style="font-family:'DM Mono';font-size:11px;font-weight:700;color:${trendCol};">${trend}</span>
-      </div>
-      <div class="pain-spark">${bars}</div>
-      <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-top:6px;">← più vecchio · più recente →</div>
+  return `<div class="card" style="margin-top:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div class="section-title">Storico Dolori per Zona</div>
+      <span style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${allSedute.length} sedute analizzate</span>
     </div>
-  `;
+    ${zoneCards}
+  </div>`;
 }
 
 
@@ -5777,6 +5859,136 @@ function renderWorkoutCard(w, showClient = false) {
       ${w.notes ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-family:'Lora';font-size:12px;color:var(--text3);line-height:1.7;">${w.notes}</div>` : ''}
     </div>
   </div>`;
+}
+
+// ===================================================
+// CONFRONTO SEDUTE
+// ===================================================
+let _compareSelected = {}; // clientId -> [wId1, wId2]
+
+function renderWorkoutCardComparable(w, clientId) {
+  const date = new Date(w.createdAt).toLocaleDateString('it-IT');
+  const blocchi = w.blocchi || [];
+  const totalEx = blocchi.reduce((acc,b) => acc + (b.esercizi?.length||0), 0);
+  const bodyId = `wcard-body-${w.id}`;
+
+  const blocchiHtml = blocchi.map(b => {
+    const meta = BLOCCO_META[b.tipo] || {label:b.tipo,icon:'📌'};
+    const exHtml = b.esercizi.map(ex => {
+      const parts = [ex.nome, ex.serie?`${ex.serie}×`:'', ex.reps||'', ex.kg?`${ex.kg}kg`:'', ex.pausa?`p.${ex.pausa}`:''].filter(Boolean).join(' ');
+      return `<div class="scheda-ex-view"><div class="scheda-ex-view-name">${parts}</div></div>`;
+    }).join('');
+    return `<div style="margin-bottom:10px;"><div style="font-weight:700;font-size:12px;margin-bottom:6px;">${meta.icon} ${meta.label}</div>${exHtml}</div>`;
+  }).join('');
+
+  return `<div class="scheda-view-card" style="margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;" onclick="document.getElementById('${bodyId}').classList.toggle('open');this.querySelector('.cv-chev').textContent=document.getElementById('${bodyId}').classList.contains('open')?'▾':'▸'">
+      <input type="checkbox" id="cmp-${w.id}" onclick="event.stopPropagation();toggleCompareSelect(${clientId},${w.id})"
+        style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:13px;">${w.name}</div>
+        <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${date} · ${totalEx} esercizi
+          ${w.tipoSeduta==='dolori'&&w.painStart?.length?'<span style="color:var(--red);margin-left:6px;">💢</span>':''}
+        </div>
+      </div>
+      <button class="btn btn-danger" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();deleteWorkout(${w.id})">🗑</button>
+      <span class="cv-chev" style="color:var(--text3);font-size:16px;">▸</span>
+    </div>
+    <div class="scheda-view-body" id="${bodyId}">
+      ${blocchiHtml||'<div style="color:var(--text3);font-size:13px;">Nessun blocco</div>'}
+      ${w.notes?`<div style="margin-top:10px;font-family:'Lora';font-size:12px;color:var(--text3);">${w.notes}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function toggleCompareSelect(clientId, wId) {
+  if (!_compareSelected[clientId]) _compareSelected[clientId] = [];
+  const sel = _compareSelected[clientId];
+  const idx = sel.indexOf(wId);
+  if (idx >= 0) {
+    sel.splice(idx, 1);
+  } else {
+    if (sel.length >= 2) {
+      // Deselect the oldest selection
+      const old = sel.shift();
+      const oldCb = document.getElementById(`cmp-${old}`);
+      if (oldCb) oldCb.checked = false;
+    }
+    sel.push(wId);
+  }
+  const btn = document.getElementById(`btn-confronta-${clientId}`);
+  if (btn) btn.style.display = sel.length === 2 ? 'inline-flex' : 'none';
+}
+
+function confrontaSedute(clientId) {
+  const sel = _compareSelected[clientId] || [];
+  if (sel.length !== 2) return;
+  const w1 = workouts.find(w => w.id === sel[0]);
+  const w2 = workouts.find(w => w.id === sel[1]);
+  if (!w1 || !w2) return;
+
+  const [wa, wb] = new Date(w1.createdAt) <= new Date(w2.createdAt) ? [w1,w2] : [w2,w1];
+
+  const BLOCCO_LABELS = {mobilita:'Mobilità',warmup:'Warm Up',core:'Core',fase1:'Fase 1',fase2:'Fase 2',fase3:'Fase 3',workout:'Workout',release:'Release',attivazione:'Attivazione'};
+
+  const renderCol = (w) => {
+    const date = new Date(w.createdAt).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});
+    const blocchi = w.blocchi || [];
+    const bHtml = blocchi.map(b => {
+      const label = BLOCCO_LABELS[b.tipo] || b.tipo;
+      const exHtml = b.esercizi.map(ex => {
+        const kg = ex.kg ? `<span style="color:var(--accent);font-weight:700;">${ex.kg}kg</span>` : '';
+        return `<div style="padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">
+          <span style="font-weight:600;">${ex.nome}</span>
+          <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);"> ${ex.serie||''}×${ex.reps||''} ${kg} ${ex.pausa?'p.'+ex.pausa:''}</span>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:10px;">
+        <div style="font-family:'DM Mono';font-size:9px;color:var(--accent2);text-transform:uppercase;margin-bottom:4px;">${label}</div>
+        ${exHtml}
+      </div>`;
+    }).join('');
+
+    // Delta dolori
+    let painHtml = '';
+    if (w.tipoSeduta === 'dolori' && w.painStart?.length) {
+      const startMap = Object.fromEntries(w.painStart.map(p=>[p.label,p.intensity]));
+      const endMap   = Object.fromEntries((w.painEnd||[]).map(p=>[p.label,p.intensity]));
+      const rows = Object.keys(startMap).map(z => {
+        const s = startMap[z], e = endMap[z] ?? s;
+        const d = e - s;
+        const col = d < 0 ? 'var(--green)' : d > 0 ? 'var(--red)' : 'var(--text3)';
+        return `<div style="font-family:'DM Mono';font-size:10px;padding:2px 0;"><span style="color:var(--text2);">${z}</span> <span style="color:${col};">${s}→${e} (${d>=0?'+':''}${d})</span></div>`;
+      }).join('');
+      painHtml = `<div style="margin-top:10px;padding:8px 10px;background:rgba(255,71,87,0.05);border-radius:6px;border:1px solid rgba(255,71,87,0.15);">
+        <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;">Dolori seduta</div>
+        ${rows}
+      </div>`;
+    }
+
+    return `<div style="flex:1;min-width:0;padding:12px 14px;background:var(--surface2);border-radius:8px;">
+      <div style="font-family:'DM Mono';font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">${date}</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;">${w.name}</div>
+      ${bHtml}
+      ${painHtml}
+    </div>`;
+  };
+
+  const container = document.getElementById(`confronto-result-${clientId}`);
+  if (!container) return;
+  container.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:14px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-family:'DM Mono';font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;">⚖️ Confronto sedute</div>
+        <button onclick="this.closest('[style]').remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;">✕</button>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        ${renderCol(wa)}
+        <div style="display:flex;align-items:center;font-size:20px;color:var(--text3);padding:0 4px;">vs</div>
+        ${renderCol(wb)}
+      </div>
+    </div>`;
+  container.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 function deleteWorkout(id) {
