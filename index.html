@@ -2053,6 +2053,10 @@ body { font-size: 15px; }
       <span class="icon">⚡</span>
       <span>Pianifica Seduta</span>
     </button>
+    <button class="nav-item" onclick="showPage('stats')">
+      <span class="icon">📈</span>
+      <span>Statistiche</span>
+    </button>
   </div>
 
   <div class="sidebar-footer">
@@ -2088,6 +2092,34 @@ body { font-size: 15px; }
     <div id="agenda-content"></div>
   </div>
 
+  <!-- ===== STATISTICHE ===== -->
+  <div class="page" id="page-stats">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Analisi</div>
+        <div class="page-title-big">Statistiche Sedute</div>
+      </div>
+    </div>
+    <!-- Filtro cliente + navigazione periodo -->
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:24px;">
+      <select id="stats-client-filter" class="form-input" style="width:220px;margin:0;" onchange="renderStats()">
+        <option value="">Tutti i clienti</option>
+      </select>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-secondary btn-sm" id="stats-btn-week" onclick="setStatsView('week')">Settimana</button>
+        <button class="btn btn-secondary btn-sm" id="stats-btn-month" onclick="setStatsView('month')">Mese</button>
+        <button class="btn btn-secondary btn-sm" id="stats-btn-3m" onclick="setStatsView('3m')">3 Mesi</button>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-secondary btn-sm" onclick="statsNav(-1)">← Prec</button>
+        <button class="btn btn-secondary btn-sm" onclick="statsNav(0)">Oggi</button>
+        <button class="btn btn-secondary btn-sm" onclick="statsNav(1)">Succ →</button>
+      </div>
+      <div id="stats-period-label" style="font-family:'DM Mono';font-size:11px;color:var(--accent);"></div>
+    </div>
+    <div id="stats-content"></div>
+  </div>
+
   <!-- ===== DASHBOARD ===== -->
   <div class="page active" id="page-dashboard">
     <div class="page-header">
@@ -2111,29 +2143,43 @@ body { font-size: 15px; }
         <div class="stat-label">Percorsi in Scadenza</div>
       </div>
     </div>
-    <div class="grid-3" style="margin-bottom: 24px;">
-      <div class="stat-box" style="cursor:pointer;border-color:rgba(71,200,255,0.3);" onclick="">
-        <div class="stat-value" id="dash-nonvisti" style="color:var(--accent2);">0</div>
-        <div class="stat-label">Non Visti (14+ giorni)</div>
+    <!-- Riga 2: sedute settimana + clienti dolore oggi + compleanni -->
+    <div class="grid-3" style="margin-bottom:24px;">
+      <div class="stat-box" style="border-color:rgba(232,255,71,0.3);">
+        <div style="display:flex;align-items:flex-end;gap:12px;">
+          <div>
+            <div class="stat-value" id="dash-sed-week" style="color:var(--accent);">0</div>
+            <div class="stat-label">Sedute questa settimana</div>
+          </div>
+          <div style="padding-bottom:8px;font-family:'DM Mono';font-size:11px;color:var(--text3);">
+            vs <span id="dash-sed-lastweek" style="color:var(--text2);">0</span> sett. scorsa
+          </div>
+        </div>
       </div>
-      <div class="stat-box" style="grid-column:span 2;">
-        <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Prossima azione</div>
-        <div id="dash-next-action" style="font-size:13px;color:var(--text2);"></div>
+      <div class="stat-box" style="border-color:rgba(255,71,87,0.3);">
+        <div class="stat-value" id="dash-pain-today" style="color:var(--red);">0</div>
+        <div class="stat-label">Clienti con dolore oggi</div>
+      </div>
+      <div class="stat-box" style="border-color:rgba(255,212,71,0.3);">
+        <div class="stat-value" id="dash-bday-count" style="color:var(--yellow);">0</div>
+        <div class="stat-label">🎂 Compleanni (7 giorni)</div>
+        <div id="dash-bday-names" style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-top:4px;"></div>
       </div>
     </div>
 
+    <!-- Riga 3: zone dolore frequenti + alerts -->
     <div class="grid-2" style="margin-bottom:24px;">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">💢 Zone Dolore più Frequenti</div>
+        </div>
+        <div id="dash-pain-zones"></div>
+      </div>
       <div class="card">
         <div class="section-header">
           <div class="section-title">⚠️ Attenzione Richiesta</div>
         </div>
         <div id="dash-alerts"></div>
-      </div>
-      <div class="card">
-        <div class="section-header">
-          <div class="section-title">📊 Step Percorso Fit</div>
-        </div>
-        <div id="dash-steps"></div>
       </div>
     </div>
 
@@ -3133,7 +3179,7 @@ function showPage(pageId) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pg = document.getElementById('page-' + pageId);
   if (pg) pg.classList.add('active');
-  const navMap = { dashboard: 0, clients: 1, workouts: 2, catalog: 3, agenda: 4, tests: 5, percorso: 6, seduta: 7 };
+  const navMap = { dashboard: 0, clients: 1, workouts: 2, catalog: 3, agenda: 4, tests: 5, percorso: 6, seduta: 7, stats: 8 };
   const navItems = document.querySelectorAll('.nav-item');
   if (navMap[pageId] !== undefined && navItems[navMap[pageId]]) navItems[navMap[pageId]].classList.add('active');
   if (pageId === 'dashboard') renderDashboard();
@@ -3144,6 +3190,7 @@ function showPage(pageId) {
   if (pageId === 'tests') renderTests();
   if (pageId === 'percorso') { populatePercorsoSelect && populatePercorsoSelect(); renderPercorso && renderPercorso(); }
   if (pageId === 'seduta') { populateSedutaSelect && populateSedutaSelect(); renderSedutaSetup && renderSedutaSetup(); }
+  if (pageId === 'stats') { populateStatsFilter(); renderStats(); }
 }
 
 // ===================================================
@@ -7429,6 +7476,249 @@ function saveQuickTemplate(clientId) {
   </div>`;
 }
 
+// ===================================================
+// STATISTICHE SEDUTE
+// ===================================================
+let _statsView   = 'month'; // 'week' | 'month' | '3m'
+let _statsOffset = 0;       // 0 = corrente, -1 = prec, ecc.
+
+function populateStatsFilter() {
+  const sel = document.getElementById('stats-client-filter');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Tutti i clienti</option>' +
+    clients.map(c => `<option value="${c.id}" ${c.id==cur?'selected':''}>${c.nome} ${c.cognome}</option>`).join('');
+}
+
+function setStatsView(v) {
+  _statsView = v;
+  _statsOffset = 0;
+  renderStats();
+}
+
+function statsNav(dir) {
+  if (dir === 0) { _statsOffset = 0; }
+  else { _statsOffset += dir; }
+  renderStats();
+}
+
+function _statsPeriodBounds() {
+  const now = new Date();
+  if (_statsView === 'week') {
+    const mon = new Date(now); mon.setHours(0,0,0,0);
+    // Go to Monday of current week, then apply offset
+    mon.setDate(mon.getDate() - ((mon.getDay()+6)%7) + _statsOffset*7);
+    const sun = new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
+    return { start: mon, end: sun, prevStart: new Date(mon.getTime()-7*86400000), prevEnd: new Date(mon) };
+  } else if (_statsView === 'month') {
+    const y = now.getFullYear(), m = now.getMonth() + _statsOffset;
+    const start = new Date(y, m, 1);
+    const end   = new Date(y, m+1, 0, 23, 59, 59, 999);
+    const prevStart = new Date(y, m-1, 1);
+    const prevEnd   = new Date(y, m, 0, 23, 59, 59, 999);
+    return { start, end, prevStart, prevEnd };
+  } else { // 3m
+    const now3 = new Date(); now3.setHours(23,59,59,999);
+    const end = new Date(now3.getFullYear(), now3.getMonth() + _statsOffset*3 + 1, 0, 23,59,59,999);
+    const start = new Date(end.getFullYear(), end.getMonth()-2, 1);
+    const prevEnd   = new Date(start.getTime()-1);
+    const prevStart = new Date(prevEnd.getFullYear(), prevEnd.getMonth()-2, 1);
+    return { start, end, prevStart, prevEnd };
+  }
+}
+
+function _statsPeriodLabel(bounds) {
+  const fmt = d => d.toLocaleDateString('it-IT',{day:'numeric',month:'short',year:'numeric'});
+  const fmtM = d => d.toLocaleDateString('it-IT',{month:'long',year:'numeric'});
+  if (_statsView === 'week') return `Settimana ${fmt(bounds.start)} — ${fmt(bounds.end)}`;
+  if (_statsView === 'month') return fmtM(bounds.start);
+  return `${fmt(bounds.start)} — ${fmt(bounds.end)}`;
+}
+
+function renderStats() {
+  const container = document.getElementById('stats-content');
+  if (!container) return;
+  const clientId = document.getElementById('stats-client-filter')?.value || '';
+  const bounds = _statsPeriodBounds();
+  const labelEl = document.getElementById('stats-period-label');
+  if (labelEl) labelEl.textContent = _statsPeriodLabel(bounds);
+
+  // Update active button style
+  ['week','month','3m'].forEach(v => {
+    const btn = document.getElementById(`stats-btn-${v}`);
+    if (btn) {
+      btn.style.background = v === _statsView ? 'var(--accent)' : 'var(--surface2)';
+      btn.style.color = v === _statsView ? 'var(--bg)' : 'var(--text2)';
+      btn.style.borderColor = v === _statsView ? 'var(--accent)' : 'var(--border)';
+    }
+  });
+
+  // Filter workouts
+  const filterW = w => {
+    if (w.categoria !== 'seduta') return false;
+    if (clientId && w.clientId != clientId) return false;
+    return true;
+  };
+
+  const allSedute = workouts.filter(filterW);
+  const curSedute = allSedute.filter(w => {
+    const d = new Date(w.createdAt);
+    return d >= bounds.start && d <= bounds.end;
+  });
+  const prevSedute = allSedute.filter(w => {
+    const d = new Date(w.createdAt);
+    return d >= bounds.prevStart && d < bounds.prevEnd;
+  });
+
+  // Sedute saltate nel periodo
+  const skippedCur = _countSkipped(bounds.start, bounds.end, clientId);
+  const skippedPrev = _countSkipped(bounds.prevStart, bounds.prevEnd, clientId);
+
+  const diff = curSedute.length - prevSedute.length;
+  const diffColor = diff > 0 ? 'var(--green)' : diff < 0 ? 'var(--red)' : 'var(--text3)';
+  const diffLabel = diff > 0 ? `↑ +${diff}` : diff < 0 ? `↓ ${diff}` : '→ uguale';
+
+  // Per cliente: sedute nel periodo
+  const byClient = {};
+  curSedute.forEach(w => {
+    const c = clients.find(cl=>cl.id===w.clientId);
+    const name = c ? `${c.nome} ${c.cognome}` : `#${w.clientId}`;
+    if (!byClient[name]) byClient[name] = { sedute:0, pain:0 };
+    byClient[name].sedute++;
+    if (w.tipoSeduta==='dolori' && w.painStart?.length) byClient[name].pain++;
+  });
+
+  // Per giorno della settimana (o per settimana se mese/3m)
+  const periodData = _buildPeriodBars(curSedute, bounds);
+
+  // Sedute con dolori %
+  const painCount = curSedute.filter(w=>w.tipoSeduta==='dolori'&&w.painStart?.length).length;
+  const painPct = curSedute.length ? Math.round(painCount/curSedute.length*100) : 0;
+
+  // Render
+
+  // KPI row
+  let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
+    <div class="stat-box">
+      <div class="stat-value" style="color:var(--accent);">${curSedute.length}</div>
+      <div class="stat-label">Sedute effettuate</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" style="color:${diffColor};font-size:24px;">${diffLabel}</div>
+      <div class="stat-label">vs periodo prec. (${prevSedute.length})</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" style="color:var(--red);">${skippedCur}</div>
+      <div class="stat-label">Sedute saltate</div>
+      ${skippedPrev > 0 ? `<div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-top:4px;">prec: ${skippedPrev}</div>` : ''}
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" style="color:var(--yellow);">${painPct}%</div>
+      <div class="stat-label">Sedute con dolori</div>
+      <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-top:4px;">${painCount} su ${curSedute.length}</div>
+    </div>
+  </div>`;
+
+  // Bar chart periodo
+  html += `<div class="card" style="margin-bottom:20px;">
+    <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px;">${periodData.label}</div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:80px;">
+      ${periodData.bars.map(b => {
+        const h = periodData.max > 0 ? Math.max(4, Math.round(b.val/periodData.max*72)) : 4;
+        const isNow = b.isCurrent;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="font-family:'DM Mono';font-size:9px;color:${b.val>0?'var(--text2)':'var(--text3)'};">${b.val||''}</div>
+          <div style="width:100%;height:${h}px;background:${isNow?'var(--accent)':'var(--surface2)'};border:1px solid ${isNow?'var(--accent)':'var(--border)'};border-radius:3px 3px 0 0;" title="${b.label}: ${b.val} sedute"></div>
+          <div style="font-family:'DM Mono';font-size:8px;color:${isNow?'var(--accent)':'var(--text3)'};text-align:center;line-height:1.2;">${b.label}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // Per cliente table
+  const clientRows = Object.entries(byClient).sort((a,b)=>b[1].sedute-a[1].sedute);
+  if (clientRows.length > 0) {
+    html += `<div class="card" style="margin-bottom:20px;">
+      <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">Sedute per cliente</div>
+      ${clientRows.map(([name, data]) => {
+        const pct = curSedute.length ? Math.round(data.sedute/curSedute.length*100) : 0;
+        return `<div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:600;">${name}</span>
+            <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${data.sedute} sed. ${data.pain>0?'· <span style="color:var(--red);">💢 '+data.pain+'</span>':''}</span>
+          </div>
+          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;"></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } else {
+    html += `<div class="card" style="margin-bottom:20px;text-align:center;padding:32px;color:var(--text3);">Nessuna seduta nel periodo selezionato</div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function _countSkipped(start, end, clientId) {
+  let count = 0;
+  const startD = new Date(start); startD.setHours(0,0,0,0);
+  const endD   = new Date(end);   endD.setHours(23,59,59,999);
+  for (let d = new Date(startD); d <= endD; d.setDate(d.getDate()+1)) {
+    const dayStr = d.toISOString().split('T')[0];
+    const dayName = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][d.getDay()];
+    clients.forEach(c => {
+      if (clientId && c.id != clientId) return;
+      if (!c.schedule?.some(s => s.giorno===dayName)) return;
+      if (isFixedSlotSkipped(c.id, dayStr)) count++;
+    });
+  }
+  return count;
+}
+
+function _buildPeriodBars(sedute, bounds) {
+  if (_statsView === 'week') {
+    const days = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+    const today = new Date(); today.setHours(0,0,0,0);
+    const bars = days.map((label, i) => {
+      const d = new Date(bounds.start); d.setDate(bounds.start.getDate()+i);
+      const dayStr = d.toISOString().split('T')[0];
+      const val = sedute.filter(w=>w.createdAt?.split('T')[0]===dayStr).length;
+      const isCurrent = d.getTime()===today.getTime();
+      return { label, val, isCurrent };
+    });
+    return { label: 'Sedute per giorno', bars, max: Math.max(...bars.map(b=>b.val), 1) };
+  } else if (_statsView === 'month') {
+    // Per settimana del mese
+    const bars = [];
+    const d = new Date(bounds.start);
+    let wk = 1;
+    while (d <= bounds.end) {
+      const wkStart = new Date(d);
+      const wkEnd   = new Date(d); wkEnd.setDate(d.getDate()+6); if (wkEnd > bounds.end) wkEnd.setTime(bounds.end.getTime());
+      const val = sedute.filter(w => { const wd=new Date(w.createdAt); return wd>=wkStart&&wd<=wkEnd; }).length;
+      const today = new Date(); today.setHours(0,0,0,0);
+      const isCurrent = today>=wkStart && today<=wkEnd;
+      bars.push({ label: `Sett ${wk}`, val, isCurrent });
+      d.setDate(d.getDate()+7); wk++;
+    }
+    return { label: 'Sedute per settimana', bars, max: Math.max(...bars.map(b=>b.val), 1) };
+  } else {
+    // 3 mesi: per mese
+    const bars = [];
+    for (let i=0; i<3; i++) {
+      const ms = new Date(bounds.start.getFullYear(), bounds.start.getMonth()+i, 1);
+      const me = new Date(bounds.start.getFullYear(), bounds.start.getMonth()+i+1, 0, 23,59,59,999);
+      const val = sedute.filter(w=>{ const wd=new Date(w.createdAt); return wd>=ms&&wd<=me; }).length;
+      const today = new Date();
+      const isCurrent = today.getFullYear()===ms.getFullYear() && today.getMonth()===ms.getMonth();
+      const label = ms.toLocaleDateString('it-IT',{month:'short'});
+      bars.push({ label, val, isCurrent });
+    }
+    return { label: 'Sedute per mese', bars, max: Math.max(...bars.map(b=>b.val), 1) };
+  }
+}
+
 function renderDashboard() {
   updateClientCount();
   const prtCount = clients.filter(c => c.prt && c.prt !== 'no').length;
@@ -7441,72 +7731,113 @@ function renderDashboard() {
   });
   document.getElementById('dash-scadenze').textContent = scadentiPresto.length;
 
-  // "Non visti" — clienti con abbonamento attivo ma nessuna nota negli ultimi 14 giorni
   const now = Date.now();
-  const nonVisti = clients.filter(c => {
-    const dLeft = abbDaysLeft(c);
-    if (dLeft === null || dLeft < 0) return false; // no abb or expired
-    const notes = JSON.parse(localStorage.getItem(`session_notes_${c.id}`) || '[]');
-    if (notes.length === 0) return true; // never noted
-    const lastNoteDate = new Date(notes[0].date).getTime();
-    return (now - lastNoteDate) > 14 * 24 * 60 * 60 * 1000;
-  });
-  const nonVistiEl = document.getElementById('dash-nonvisti');
-  if (nonVistiEl) nonVistiEl.textContent = nonVisti.length;
 
-  // ALERTS — scadenze + non visti
+  // ── 1. SEDUTE QUESTA SETTIMANA vs SCORSA ─────────────────────────────────
+  const weekStart = new Date(); weekStart.setHours(0,0,0,0);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay()+6)%7)); // lunedì
+  const lastWeekStart = new Date(weekStart); lastWeekStart.setDate(lastWeekStart.getDate()-7);
+  const lastWeekEnd   = new Date(weekStart);
+
+  const sedWeek     = workouts.filter(w => w.categoria==='seduta' && new Date(w.createdAt) >= weekStart).length;
+  const sedLastWeek = workouts.filter(w => w.categoria==='seduta' && new Date(w.createdAt) >= lastWeekStart && new Date(w.createdAt) < lastWeekEnd).length;
+  const sedWeekEl = document.getElementById('dash-sed-week');
+  const sedLastWeekEl = document.getElementById('dash-sed-lastweek');
+  if (sedWeekEl) sedWeekEl.textContent = sedWeek;
+  if (sedLastWeekEl) {
+    const diff = sedWeek - sedLastWeek;
+    sedLastWeekEl.textContent = sedLastWeek;
+    sedLastWeekEl.style.color = diff > 0 ? 'var(--green)' : diff < 0 ? 'var(--red)' : 'var(--text2)';
+  }
+
+  // ── 2. CLIENTI CON DOLORE OGGI ───────────────────────────────────────────
+  const todayStr2 = new Date().toISOString().split('T')[0];
+  const todayName2 = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][new Date().getDay()];
+  const todayClientIds = new Set([
+    ...clients.filter(c => c.schedule?.some(s => s.giorno===todayName2)).map(c=>c.id),
+    ...getManualSessions().filter(s=>s.date===todayStr2).map(s=>parseInt(s.clientId))
+  ]);
+  const painTodayCount = [...todayClientIds].filter(cid => {
+    const c = clients.find(cl=>cl.id===cid);
+    if (!c) return false;
+    const hasChronic = c.painPoints?.some(p=>p.stato!=='risolto');
+    const hasSedutaPain = workouts.some(w=>w.clientId===cid && w.categoria==='seduta' && w.createdAt?.split('T')[0]===todayStr2 && w.painStart?.length);
+    const hasNotePain = getSessionNotes(cid).some(n=>n.date===todayStr2 && n.tipo==='dolori' && n.painStart?.length);
+    return hasChronic || hasSedutaPain || hasNotePain;
+  }).length;
+  const painTodayEl = document.getElementById('dash-pain-today');
+  if (painTodayEl) painTodayEl.textContent = painTodayCount;
+
+  // ── 3. COMPLEANNI ────────────────────────────────────────────────────────
+  const bdayList = clients
+    .map(c => ({ c, days: birthdayDaysLeft(c) }))
+    .filter(({days}) => days !== null && days >= 0 && days <= 7)
+    .sort((a,b) => a.days - b.days);
+  const bdayCountEl = document.getElementById('dash-bday-count');
+  const bdayNamesEl = document.getElementById('dash-bday-names');
+  if (bdayCountEl) bdayCountEl.textContent = bdayList.length;
+  if (bdayNamesEl) bdayNamesEl.innerHTML = bdayList.length
+    ? bdayList.map(({c,days}) => `<span style="display:block;margin-top:2px;">${c.nome} ${c.cognome} ${days===0?'— oggi! 🎉':'— tra '+days+'gg'}</span>`).join('')
+    : '';
+
+  // ── 4. ZONE DOLORE PIÙ FREQUENTI ─────────────────────────────────────────
+  const zoneFreq = {};
+  workouts.filter(w => w.categoria==='seduta' && w.painStart?.length).forEach(w => {
+    w.painStart.forEach(p => { zoneFreq[p.label] = (zoneFreq[p.label]||0) + 1; });
+  });
+  const painZonesEl = document.getElementById('dash-pain-zones');
+  if (painZonesEl) {
+    const sorted = Object.entries(zoneFreq).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    if (sorted.length === 0) {
+      painZonesEl.innerHTML = `<div style="font-size:13px;color:var(--text3);">Nessuna seduta con dolori registrata</div>`;
+    } else {
+      const maxCount = sorted[0][1];
+      painZonesEl.innerHTML = sorted.map(([zone, count]) => {
+        const pct = Math.round(count/maxCount*100);
+        const nClienti = new Set(workouts.filter(w=>w.categoria==='seduta'&&w.painStart?.some(p=>p.label===zone)).map(w=>w.clientId)).size;
+        return `<div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:12px;font-weight:600;">${zone}</span>
+            <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${count} sed. · ${nClienti} client${nClienti===1?'e':'i'}</span>
+          </div>
+          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:var(--red);border-radius:2px;opacity:0.7;"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ALERTS — solo scadenze abbonamenti
   const alerts = document.getElementById('dash-alerts');
   const alertItems = [];
   clients.forEach(c => {
     const d = abbDaysLeft(c);
     if (d === null) return;
-    if (d < 0) alertItems.push({ type:'expired', client:c, days:d, reason: 'scaduto' });
-    else if (d <= 7) alertItems.push({ type:'critical', client:c, days:d, reason: 'scadenza' });
-    else if (d <= 30) alertItems.push({ type:'warn', client:c, days:d, reason: 'scadenza' });
-  });
-  // Add "non visti da 14gg" alerts
-  nonVisti.forEach(c => {
-    if (!alertItems.find(a => a.client.id === c.id)) {
-      const notes = JSON.parse(localStorage.getItem(`session_notes_${c.id}`) || '[]');
-      const daysSince = notes.length > 0
-        ? Math.round((now - new Date(notes[0].date).getTime()) / (1000*60*60*24))
-        : null;
-      alertItems.push({ type:'absent', client:c, days: daysSince, reason: 'assente' });
-    }
+    if (d < 0) alertItems.push({ type:'expired', client:c, days:d });
+    else if (d <= 7) alertItems.push({ type:'critical', client:c, days:d });
+    else if (d <= 30) alertItems.push({ type:'warn', client:c, days:d });
   });
 
-  if (alertItems.length === 0) {
+  if (alerts && alertItems.length === 0) {
     alerts.innerHTML = `<div style="font-size:13px;color:var(--text3);">Nessuna segnalazione ✓</div>`;
-  } else {
+  } else if (alerts) {
     alerts.innerHTML = alertItems.sort((a,b) => {
-      const order = { expired:0, critical:1, absent:2, warn:3 };
+      const order = { expired:0, critical:1, warn:2 };
       return (order[a.type]||9) - (order[b.type]||9);
     }).map(a => {
-      const icon = a.type === 'expired' ? '⛔' : a.type === 'critical' ? '🔴' : a.type === 'absent' ? '👁' : '🟡';
-      let txt;
-      if (a.type === 'absent') txt = a.days ? `Non visto da ${a.days}gg` : 'Nessuna nota seduta';
-      else txt = a.days < 0 ? `Scaduto da ${Math.abs(a.days)}gg` : a.days === 0 ? 'Scade oggi' : `Scade in ${a.days}gg`;
-      const txtColor = a.type === 'absent' ? 'var(--accent2)' : a.type === 'expired' || a.type === 'critical' ? 'var(--red)' : 'var(--yellow)';
+      const icon = a.type === 'expired' ? '⛔' : a.type === 'critical' ? '🔴' : '🟡';
+      const txt = a.days < 0 ? `Scaduto da ${Math.abs(a.days)}gg` : a.days === 0 ? 'Scade oggi' : `Scade in ${a.days}gg`;
+      const txtColor = a.type === 'expired' || a.type === 'critical' ? 'var(--red)' : 'var(--yellow)';
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail(${a.client.id})">
         <span style="font-size:16px;">${icon}</span>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:600;">${a.client.nome} ${a.client.cognome}</div>
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${a.type === 'absent' ? 'Abbonamento attivo' : ABB_LABELS[a.client.abbTipo] || ''}</div>
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${ABB_LABELS[a.client.abbTipo] || ''}</div>
         </div>
         <span style="font-family:'DM Mono';font-size:10px;color:${txtColor};">${txt}</span>
       </div>`;
     }).join('');
-  }
-
-  // NEXT ACTION suggestion
-  const nextActionEl = document.getElementById('dash-next-action');
-  if (nextActionEl) {
-    const urgent = alertItems.find(a => a.type === 'critical' || a.type === 'expired');
-    const absent = alertItems.find(a => a.type === 'absent');
-    if (urgent) nextActionEl.innerHTML = `Contatta <b>${urgent.client.nome} ${urgent.client.cognome}</b> — percorso ${urgent.type === 'expired' ? 'scaduto' : 'in scadenza imminente'}`;
-    else if (absent) nextActionEl.innerHTML = `Ricontatta <b>${absent.client.nome} ${absent.client.cognome}</b> — ${absent.days ? absent.days+'gg senza seduta' : 'nessuna nota seduta registrata'}`;
-    else if (clients.length > 0) nextActionEl.innerHTML = `<span style="color:var(--text3);">Tutto in ordine ✓</span>`;
-    else nextActionEl.innerHTML = `<span style="color:var(--text3);">Aggiungi il primo cliente per iniziare</span>`;
   }
 
   // STEP PERCORSO
@@ -7522,9 +7853,9 @@ function renderDashboard() {
     const label = maxStep === 0 ? 'Step 1 — Piede' : PERCORSO_CHECKLIST[Math.min(maxStep, PERCORSO_CHECKLIST.length-1)]?.label || `Step ${maxStep}`;
     stepCounts[label] = (stepCounts[label] || 0) + 1;
   });
-  if (Object.keys(stepCounts).length === 0) {
+  if (stepEl && Object.keys(stepCounts).length === 0) {
     stepEl.innerHTML = `<div style="font-size:13px;color:var(--text3);">Nessun cliente con percorso avviato</div>`;
-  } else {
+  } else if (stepEl) {
     stepEl.innerHTML = Object.entries(stepCounts).sort((a,b) => b[1]-a[1]).map(([label, n]) => `
       <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);">
         <div style="flex:1;font-size:12px;">${label}</div>
@@ -7535,9 +7866,9 @@ function renderDashboard() {
   // RECENT CLIENTS — with last-seen
   const recent = document.getElementById('dash-recent-clients');
   const last5 = [...clients].reverse().slice(0,5);
-  if (last5.length === 0) {
+  if (recent && last5.length === 0) {
     recent.innerHTML = `<div style="font-size:13px;color:var(--text3);">Nessun cliente ancora</div>`;
-  } else {
+  } else if (recent) {
     recent.innerHTML = last5.map(c => {
       const dLeft = abbDaysLeft(c);
       const abbBadge = dLeft !== null
