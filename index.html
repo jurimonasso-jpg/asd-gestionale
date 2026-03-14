@@ -3457,9 +3457,6 @@ function openClientDetail(clientId) {
     </div>
 
     <div id="dt-note" class="tab-content">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
-        <button class="btn btn-primary btn-sm" onclick="openSessionNote(${client.id})">+ Nota Post-Seduta</button>
-      </div>
       ${renderSessionStats(client.id)}
       ${renderSessionNotes(client.id)}
     </div>
@@ -6469,9 +6466,9 @@ function renderAgendaDay() {
 
           // Action buttons — big touch targets
           (!skipped ? (
-            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
               '<button onclick="openClientDetail(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">👤 Scheda</button>' +
-              '<button onclick="openSessionNote(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">📝 Nota</button>' +
+              
               '<button onclick="newSedutaBuilderForClient(' + c.id + ',\'' + dayStr + '\')" style="padding:10px 0;border-radius:8px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">⚡ Seduta</button>' +
             '</div>'
           ) : '') +
@@ -6630,8 +6627,7 @@ function renderAgenda() {
           <div onclick="openClientDetail(${c.id})" style="cursor:pointer;font-size:12px;font-weight:700;margin-bottom:${manual && session.note ? '3px' : '6px'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.nome} ${c.cognome}</div>
           ${manual && session.note ? `<div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${session.note}</div>` : ''}
           <div style="display:flex;gap:4px;">
-            <button onclick="openSessionNote(${c.id})" style="flex:1;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:'DM Mono';">📝 Nota</button>
-            <button onclick="newSedutaBuilderForClient(${c.id},'${dayStr}')" style="flex:1;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:'DM Mono';">⚡ Seduta</button>
+            <button onclick="newSedutaBuilderForClient(${c.id},'${dayStr}')" style="width:100%;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:'DM Mono';">⚡ Seduta</button>
           </div>
         </div>`;
       });
@@ -6695,7 +6691,6 @@ function renderAgenda() {
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" onclick="openClientDetail(${c.id})">👤 Scheda</button>
-            <button class="btn btn-secondary btn-sm" onclick="openSessionNote(${c.id})">📝 Nota</button>
             <button class="btn btn-primary btn-sm" onclick="newSedutaBuilderForClient(${c.id},'${todayStr}')">⚡ Seduta</button>
           </div>
         </div>
