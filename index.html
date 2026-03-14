@@ -8126,6 +8126,12 @@ function openExistingSeduta(workout, clientId) {
     if (el) el.dataset.modified = '1';
   });
 
+  // Imposta il radio JS (innerHTML non garantisce .checked = true)
+  const radioNorm = document.querySelector('input[name="sb-tipo"][value="normale"]');
+  const radioDol  = document.querySelector('input[name="sb-tipo"][value="dolori"]');
+  if (tipoSeduta === 'dolori' && radioDol)  { radioDol.checked  = true; sbTipoChanged('dolori'); }
+  else if (radioNorm)                        { radioNorm.checked = true; sbTipoChanged('normale'); }
+
   renderSedutaBuilderBlocchi();
   content.scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -8289,8 +8295,23 @@ function saveSedutaBuilder() {
   const notes = document.getElementById('seduta-builder-notes')?.value || '';
   const tipoSeduta = document.querySelector('input[name="sb-tipo"]:checked')?.value || 'normale';
 
-  const painStartArr = Object.entries(_wPainStart).map(([l,i])=>({label:l,intensity:i}));
-  const painEndArr   = Object.entries(_sbPainEnd).map(([l,i])=>({label:l,intensity:i}));
+  // Leggi i valori direttamente dal DOM — source of truth assoluta
+  const _domReadChart = (containerId) => {
+    const result = [];
+    document.querySelectorAll(`#${containerId} .snz-wrap`).forEach(wrap => {
+      const cb = wrap.querySelector('input[type=checkbox]');
+      if (!cb?.checked) return;
+      const label = wrap.querySelector('.snz-label')?.textContent?.trim();
+      if (!label) return;
+      const slider = wrap.querySelector('input[type=range]');
+      result.push({ label, intensity: slider ? parseInt(slider.value) : 5 });
+    });
+    return result;
+  };
+  const domStart = _domReadChart('sb-chart-start');
+  const domEnd   = _domReadChart('sb-chart-end');
+  const painStartArr = domStart.length ? domStart : Object.entries(_wPainStart).map(([l,i])=>({label:l,intensity:i}));
+  const painEndArr   = domEnd.length   ? domEnd   : Object.entries(_sbPainEnd).map(([l,i])=>({label:l,intensity:i}));
   const finalPainEnd = painEndArr.length ? painEndArr : [...painStartArr];
 
   // Leggi data dal campo visibile nel builder
