@@ -3418,7 +3418,7 @@ function openClientDetail(clientId) {
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
             ${client.painPoints?.map(p => {
               const intVal = p.intensity || 5;
-              const stato  = p.stato || 'attivo'; // attivo | miglioramento | risolto
+              const stato  = p.stato || 'attivo';
               const color  = stato === 'risolto' ? 'var(--text3)' : intVal >= 8 ? 'var(--red)' : intVal >= 5 ? 'var(--yellow)' : 'var(--accent2)';
               const borderColor = stato === 'risolto' ? 'var(--border)' : 'rgba(255,71,87,0.3)';
               const bgColor     = stato === 'risolto' ? 'var(--surface2)' : 'rgba(255,71,87,0.07)';
@@ -3452,8 +3452,8 @@ function openClientDetail(clientId) {
           ${client.painIntensity ? `<div style="margin-bottom:8px;font-size:13px;">Intensità media: <b style="color:var(--red);">${client.painIntensity}/10</b>${client.painWhen ? ` · <span style="color:var(--text2);">${client.painWhen}</span>` : ''}</div>` : ''}
           ${client.painDesc ? `<div style="font-family:'Lora';font-size:13px;color:var(--text2);line-height:1.6;">${client.painDesc}</div>` : ''}
         </div>
-        ${renderPainHistory(client.id)}
-      ` : '<div class="empty-state"><div class="icon">✅</div><p>Nessun dolore segnalato</p></div>'}
+      ` : '<div class="empty-state"><div class="icon">✅</div><p>Nessun dolore cronico segnalato</p></div>'}
+      ${renderPainHistory(client.id)}
     </div>
 
     <div id="dt-note" class="tab-content">
