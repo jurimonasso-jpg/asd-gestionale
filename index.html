@@ -3941,14 +3941,15 @@ const SN_ZONE_SECTIONS = [
   { label: 'Gamba / Piede',        zones: ['Tibia Dx','Tibia Sx','Polpaccio Sx','Polpaccio Dx','Caviglia Dx','Caviglia Sx','Piede Dx','Piede Sx'] },
 ];
 
-function _buildSnChart(side, painObj, preselected) {
-  const preSet = new Set(preselected || []);
+function _buildSnChart(side, painObj, preselected, chronicZones) {
+  const preSet     = new Set(preselected  || []);
+  const chronicSet = new Set(chronicZones || []);
   const uid = `snc-${side}`;
 
   const zoneHtml = (z) => {
     const zk = z.replace(/'/g, "\\'");
     const isChecked = painObj[z] !== undefined || preSet.has(z);
-    const isChronic = preSet.has(z);
+    const isChronic = chronicSet.has(z);
     const intVal = painObj[z] !== undefined ? painObj[z] : 5;
     return `
       <div class="snz-wrap" data-zone-name="${z.toLowerCase()}">
@@ -4432,8 +4433,9 @@ function _openUnifiedNote(clientId, workoutId, forceNoteId, prefillPain) {
   lbl.textContent = c ? c.nome + ' ' + c.cognome : '';
 
   // 7. Costruisci chart PRIMA di mostrare sezioni
-  document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preI, preSel);
-  document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', preEndI, preEndSel);
+  const chronicLabels = (c?.painPoints||[]).map(p=>p.label);
+  document.getElementById('sn-chart-start').innerHTML = _buildSnChart('start', preI, preSel, chronicLabels);
+  document.getElementById('sn-chart-end').innerHTML   = _buildSnChart('end', preEndI, preEndSel, chronicLabels);
   _snUpdateSummary('start');
   _snUpdateSummary('end');
   document.getElementById('sn-delta-preview').style.display = 'none';
@@ -4671,7 +4673,6 @@ function renderSessionNotes(clientId) {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           ${tipoBadge}
           ${n.mood ? `<span style="font-size:12px;">${moodIcon[n.mood] || ''} ${n.mood}</span>` : ''}
-          <button onclick="editSessionNote(${clientId}, ${n.id})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;">✏️</button>
           <button onclick="deleteSessionNote(${clientId}, ${n.id})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;">🗑</button>
         </div>
       </div>
@@ -4990,7 +4991,8 @@ function openNewWorkoutModal(clientId = null, prefillPain = null) {
   // Build chart
   _wPainStart = {};
   preselected.forEach(l => { _wPainStart[l] = preIntensities[l] || 5; });
-  document.getElementById('w-chart-start').innerHTML = _buildSnChart('w', preIntensities, preselected);
+  const _wChronicLabels = clients.find(cl=>cl.id==clientId)?.painPoints?.map(p=>p.label)||[];
+  document.getElementById('w-chart-start').innerHTML = _buildSnChart('w', preIntensities, preselected, _wChronicLabels);
   _wUpdateSummary();
 
   // If prefilled with actual pain, auto-switch to "dolori"
@@ -5801,8 +5803,7 @@ function renderWorkoutCard(w, showClient = false) {
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         ${w.tipoSeduta === 'dolori' && w.painStart?.length
-          ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:11px;" onclick="event.stopPropagation();openOrEditNoteForWorkout(${w.clientId}, ${w.id})">📝 Completa nota</button>
-             <span style="background:rgba(255,71,87,0.12);color:var(--red);padding:3px 8px;border-radius:20px;font-family:'DM Mono';font-size:9px;">💢 dolori</span>`
+          ? `<span style="background:rgba(255,71,87,0.12);color:var(--red);padding:3px 8px;border-radius:20px;font-family:'DM Mono';font-size:9px;">💢 dolori</span>`
           : ''
         }
         <button class="btn btn-secondary" style="padding:5px 10px;font-size:11px;" onclick="event.stopPropagation();editWorkout(${w.id})">✏️</button>
@@ -8220,11 +8221,9 @@ function newSedutaBuilder(prefillDate) {
       </div>
     </div>`;
 
-  // Init charts
-  const c = clients.find(cl => cl.id == clientId);
-  const preselected = c?.painPoints?.map(p => p.label) || [];
+  // Init charts — parte vuoto, nessuna zona pre-selezionata
   _sbPainEnd = {};
-  document.getElementById('sb-chart-start').innerHTML = _buildSnChart('sb', {}, preselected);
+  document.getElementById('sb-chart-start').innerHTML = _buildSnChart('sb', {}, []);
   document.getElementById('sb-chart-end').innerHTML   = _buildSnChart('sbend', {}, []);
   renderSedutaBuilderBlocchi();
   content.scrollIntoView({ behavior:'smooth', block:'start' });
