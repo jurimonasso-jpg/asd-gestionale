@@ -6472,7 +6472,7 @@ function renderAgendaDay() {
             '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">' +
               '<button onclick="openClientDetail(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">👤 Scheda</button>' +
               '<button onclick="openSessionNote(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">📝 Nota</button>' +
-              '<button onclick="newSedutaBuilderForClient(' + c.id + ')" style="padding:10px 0;border-radius:8px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">⚡ Seduta</button>' +
+              '<button onclick="newSedutaBuilderForClient(' + c.id + ',\'' + dayStr + '\')" style="padding:10px 0;border-radius:8px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:sans-serif;font-weight:600;font-size:13px;">⚡ Seduta</button>' +
             '</div>'
           ) : '') +
         '</div>' +
@@ -6631,7 +6631,7 @@ function renderAgenda() {
           ${manual && session.note ? `<div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${session.note}</div>` : ''}
           <div style="display:flex;gap:4px;">
             <button onclick="openSessionNote(${c.id})" style="flex:1;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-family:'DM Mono';">📝 Nota</button>
-            <button onclick="newSedutaBuilderForClient(${c.id})" style="flex:1;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:'DM Mono';">⚡ Seduta</button>
+            <button onclick="newSedutaBuilderForClient(${c.id},'${dayStr}')" style="flex:1;font-size:11px;padding:4px 0;border-radius:5px;border:1px solid var(--accent);background:rgba(232,255,71,0.1);color:var(--accent);cursor:pointer;font-family:'DM Mono';">⚡ Seduta</button>
           </div>
         </div>`;
       });
@@ -6696,7 +6696,7 @@ function renderAgenda() {
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" onclick="openClientDetail(${c.id})">👤 Scheda</button>
             <button class="btn btn-secondary btn-sm" onclick="openSessionNote(${c.id})">📝 Nota</button>
-            <button class="btn btn-primary btn-sm" onclick="newSedutaBuilderForClient(${c.id})">⚡ Seduta</button>
+            <button class="btn btn-primary btn-sm" onclick="newSedutaBuilderForClient(${c.id},'${todayStr}')">⚡ Seduta</button>
           </div>
         </div>
       </div>`;
@@ -8047,35 +8047,123 @@ function _openBuilderNote(clientId) {
 }
 
 // Apre il builder seduta da agenda con cliente pre-selezionato
-function newSedutaBuilderForClient(clientId) {
-  showPage('seduta');
-  // Set the client select
-  setTimeout(() => {
-    const sel = document.getElementById('seduta-client-select');
-    if (sel) {
-      sel.value = clientId;
-      newSedutaBuilder();
-    }
-  }, 80);
-}
+function openExistingSeduta(workout, clientId) {
+  // Mostra la seduta esistente (editabile) nel pannello seduta
+  const c = clients.find(cl => cl.id == clientId);
+  if (!c) return;
+  const dateLabel = workout.createdAt
+    ? new Date(workout.createdAt).toLocaleDateString('it-IT', {weekday:'short', day:'numeric', month:'long'})
+    : '—';
+  const tipoLabel = workout.tipoSeduta === 'dolori' ? '💢 Con dolori' : '✅ Normale';
 
-function newSedutaBuilder() {
-  const clientId = document.getElementById('seduta-client-select').value;
-  if (!clientId) { alert('Seleziona prima un cliente!'); return; }
-  const client = clients.find(c => c.id == clientId);
-  if (!client) return;
+  // Delta dolori
+  let deltaHtml = '';
+  if (workout.tipoSeduta === 'dolori' && workout.painStart?.length) {
+    const startMap = Object.fromEntries((workout.painStart||[]).map(p=>[p.label,p.intensity]));
+    const endMap   = Object.fromEntries((workout.painEnd  ||[]).map(p=>[p.label,p.intensity]));
+    const allZones = [...new Set([...Object.keys(startMap),...Object.keys(endMap)])];
+    let totalDelta = 0;
+    const rows = allZones.map(z => {
+      const s = startMap[z], e = endMap[z];
+      if (s !== undefined && e !== undefined) {
+        const d = e - s; totalDelta += d;
+        if (d < 0) return `<span style="color:var(--green);font-family:'DM Mono';font-size:11px;">↓ ${z}: ${s}→${e} (${d})</span>`;
+        if (d > 0) return `<span style="color:var(--red);font-family:'DM Mono';font-size:11px;">↑ ${z}: ${s}→${e} (+${d})</span>`;
+        return `<span style="color:var(--text3);font-family:'DM Mono';font-size:11px;">→ ${z}: ${s} (stabile)</span>`;
+      }
+      return `<span style="color:var(--text3);font-family:'DM Mono';font-size:11px;">${z}: ${s ?? e}/10</span>`;
+    });
+    const deltaLabel = totalDelta < 0 ? `<b style="color:var(--green);">↓ Migliorato (${totalDelta})</b>`
+      : totalDelta > 0 ? `<b style="color:var(--red);">↑ Peggiorato (+${totalDelta})</b>`
+      : `<b style="color:var(--text2);">→ Invariato</b>`;
+    deltaHtml = `<div style="margin:12px 0;padding:10px 14px;background:rgba(71,255,160,0.05);border:1px solid rgba(71,255,160,0.2);border-radius:8px;">
+      <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;">Delta dolori</div>
+      <div style="margin-bottom:6px;">${deltaLabel}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${rows.join('')}</div>
+    </div>`;
+  }
 
-  // Use the same schedaBlocchi system as workout modal
-  schedaBlocchi = [];
-  _wPainStart = {};
+  // Blocchi
+  let blocchiHtml = '';
+  const blocchi = workout.blocchi || workout.blocks || [];
+  const BLOCCO_LABELS = {mobilita:'Mobilità',warmup:'Warm Up',core:'Core',fase1:'Fase 1',fase2:'Fase 2',fase3:'Fase 3',workout:'Workout',release:'Release',attivazione:'Attivazione'};
+  const BLOCCO_COLORS = {mobilita:'var(--accent2)',warmup:'var(--yellow)',core:'var(--green)',fase1:'var(--accent)',fase2:'#ff8c47',fase3:'#c847ff',workout:'var(--accent)',release:'var(--red)',attivazione:'var(--green)'};
+  blocchi.forEach(b => {
+    const label = BLOCCO_LABELS[b.tipo||b.id] || b.label || b.tipo || '';
+    const color = BLOCCO_COLORS[b.tipo||b.id] || 'var(--accent)';
+    const exs = (b.esercizi || b.exs || []).filter(e => e.nome || typeof e === 'string');
+    const rows = exs.map(e => {
+      if (typeof e === 'string') return `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);">${e}</div>`;
+      const parts = [e.nome];
+      if (e.serie || e.reps) parts.push(`${e.serie||''}×${e.reps||''}`);
+      if (e.kg) parts.push(`${e.kg}kg`);
+      return `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);font-weight:600;">${parts.join(' <span style=\'color:var(--text3)\'>·</span> ')}</div>`;
+    }).join('');
+    blocchiHtml += `<div style="background:var(--surface2);border:1px solid var(--border);border-top:2px solid ${color};border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;">
+      <div style="font-family:'DM Mono';font-size:9px;color:${color};text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">${label}</div>
+      ${rows || '<div style="font-size:11px;color:var(--text3);">—</div>'}
+      ${b.note ? `<div style="font-family:'DM Mono';font-size:10px;color:var(--yellow);margin-top:4px;">${b.note}</div>` : ''}
+    </div>`;
+  });
 
   const content = document.getElementById('seduta-content');
   content.innerHTML = `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:12px;">
-      <!-- Header: nome cliente + toggle normale/dolori + nome seduta -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;">Seduta salvata · ${dateLabel}</div>
+          <div style="font-size:18px;font-weight:800;">${c.nome} ${c.cognome}</div>
+          <div style="font-family:'DM Mono';font-size:11px;color:var(--text3);margin-top:2px;">${workout.name || ''} · ${tipoLabel}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="newSedutaBuilder('${workout.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0]}')">✏️ Nuova per stessa data</button>
+      </div>
+      ${deltaHtml}
+      <div style="margin-top:8px;">${blocchiHtml || '<div style="color:var(--text3);font-size:13px;">Nessun blocco registrato.</div>'}</div>
+      ${workout.notes ? `<div style="margin-top:10px;padding:10px 14px;background:var(--surface);border-radius:8px;font-family:'DM Mono';font-size:11px;color:var(--text2);">📝 ${workout.notes}</div>` : ''}
+    </div>`;
+  content.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function newSedutaBuilderForClient(clientId, dateStr) {
+  showPage('seduta');
+  setTimeout(() => {
+    const sel = document.getElementById('seduta-client-select');
+    if (sel) {
+      sel.value = clientId;
+      const targetDate = dateStr || new Date().toISOString().split('T')[0];
+      const existing = workouts.find(w =>
+        w.clientId == clientId &&
+        w.categoria === 'seduta' &&
+        w.createdAt?.split('T')[0] === targetDate
+      );
+      if (existing) {
+        openExistingSeduta(existing, clientId);
+      } else {
+        newSedutaBuilder(targetDate);
+      }
+    }
+  }, 80);
+}
+
+function newSedutaBuilder(prefillDate) {
+  const clientId = document.getElementById('seduta-client-select').value;
+  if (!clientId) { document.getElementById('seduta-content').innerHTML = '<div style="padding:20px;color:var(--red);font-family:\'DM Mono\';font-size:13px;">⚠️ Seleziona prima un cliente.</div>'; return; }
+  const client = clients.find(c => c.id == clientId);
+  if (!client) return;
+
+  schedaBlocchi = [];
+  _wPainStart = {};
+
+  const today = new Date().toISOString().split('T')[0];
+  const initDate = prefillDate || today;
+
+  const content = document.getElementById('seduta-content');
+  content.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:12px;">
+      <!-- Header: nome cliente + toggle normale/dolori + nome seduta + data -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
         <div>
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">Seduta · ${new Date().toLocaleDateString('it-IT')}</div>
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;">Nuova Seduta</div>
           <div style="font-size:18px;font-weight:800;">${client.nome} ${client.cognome}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -8086,6 +8174,7 @@ function newSedutaBuilder() {
             <input type="radio" name="sb-tipo" value="dolori" style="display:none;" onchange="sbTipoChanged('dolori')">💢 Con dolori
           </label>
           <input class="form-input" type="text" id="seduta-builder-name" placeholder="Nome seduta" style="width:150px;margin:0;">
+          <input class="form-input" type="date" id="seduta-builder-date" value="${initDate}" style="width:140px;margin:0;" title="Data seduta">
         </div>
       </div>
 
@@ -8200,10 +8289,15 @@ function saveSedutaBuilder() {
   const painEndArr   = Object.entries(_sbPainEnd).map(([l,i])=>({label:l,intensity:i}));
   const finalPainEnd = painEndArr.length ? painEndArr : [...painStartArr];
 
+  // Leggi data dal campo visibile nel builder
+  const dateFieldVal = document.getElementById('seduta-builder-date')?.value;
+  const sedutaDate = dateFieldVal || new Date().toISOString().split('T')[0];
+  const sedutaCreatedAt = sedutaDate + 'T' + new Date().toTimeString().slice(0,8);
+
   const workout = {
     id: Date.now(),
     clientId: parseInt(clientId),
-    name: name || ('Seduta ' + new Date().toLocaleDateString('it-IT')),
+    name: name || ('Seduta ' + new Date(sedutaDate).toLocaleDateString('it-IT')),
     type: 'Seduta palestra',
     meso: '',
     blocchi: JSON.parse(JSON.stringify(schedaBlocchi)),
@@ -8212,7 +8306,7 @@ function saveSedutaBuilder() {
     painStart: tipoSeduta === 'dolori' ? painStartArr : [],
     painEnd:   tipoSeduta === 'dolori' ? finalPainEnd : [],
     categoria: 'seduta',
-    createdAt: new Date().toISOString()
+    createdAt: sedutaCreatedAt
   };
 
   workouts.push(workout);
@@ -8292,7 +8386,6 @@ function saveSedutaBuilder() {
       <div style="font-family:'DM Mono';font-size:11px;color:var(--text3);margin-bottom:12px;">Archiviata nel tab ⚡ Sedute del cliente${notes.trim() ? ' · Nota salvata automaticamente' : ''}</div>
       ${deltaHtml}
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-        <button class="btn btn-secondary" onclick="openOrEditNoteForWorkout(${_savedCid}, ${_savedWid})">🟢 Dolori fine + Nota</button>
         <button class="btn btn-primary" onclick="newSedutaBuilder()">+ Nuova Seduta</button>
       </div>
     </div>`;
