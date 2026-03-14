@@ -5056,24 +5056,7 @@ function snSetInt(side, zone, val) {
   }
 }
 
-function snToggleZone(side, zone, labelEl) {
-  const actuallyChecked = !labelEl.classList.contains('sn-checked');
-  labelEl.classList.toggle('sn-checked', actuallyChecked);
-  const intEl = document.getElementById(`sn-int-${side}-${CSS.escape(zone)}`);
-  if (intEl) intEl.classList.toggle('visible', actuallyChecked);
 
-  if (side === 'w') {
-    if (actuallyChecked) _wPainStart[zone] = _wPainStart[zone] || 5;
-    else delete _wPainStart[zone];
-    _wUpdateSummary();
-  } else {
-    const painObj = side === 'start' ? _snPainStart : _snPainEnd;
-    if (actuallyChecked) painObj[zone] = painObj[zone] || 5;
-    else delete painObj[zone];
-    _snUpdateSummary(side);
-    _snUpdateDelta();
-  }
-}
 
 function _wUpdateSummary() {
   const zones = Object.keys(_wPainStart);
