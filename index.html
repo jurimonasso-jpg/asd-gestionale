@@ -7583,9 +7583,16 @@ function renderStats() {
   curSedute.forEach(w => {
     const c = clients.find(cl=>cl.id===w.clientId);
     const name = c ? `${c.nome} ${c.cognome}` : `#${w.clientId}`;
-    if (!byClient[name]) byClient[name] = { sedute:0, pain:0 };
+    if (!byClient[name]) byClient[name] = { id: w.clientId, sedute:0, pain:0 };
     byClient[name].sedute++;
     if (w.tipoSeduta==='dolori' && w.painStart?.length) byClient[name].pain++;
+  });
+  // Aggiungi clienti che hanno solo lezioni saltate (nessuna seduta effettuata)
+  Object.entries(skippedCur.byClient).forEach(([cid, sk]) => {
+    const c = clients.find(cl=>cl.id==cid);
+    if (!c) return;
+    const name = `${c.nome} ${c.cognome}`;
+    if (!byClient[name]) byClient[name] = { id: parseInt(cid), sedute:0, pain:0 };
   });
 
   // Per giorno della settimana (o per settimana se mese/3m)
@@ -7607,10 +7614,16 @@ function renderStats() {
       <div class="stat-value" style="color:${diffColor};font-size:24px;">${diffLabel}</div>
       <div class="stat-label">vs periodo prec. (${prevSedute.length})</div>
     </div>
-    <div class="stat-box">
-      <div class="stat-value" style="color:var(--red);">${skippedCur}</div>
+    <div class="stat-box" style="grid-column:span 1;">
+      <div class="stat-value" style="color:var(--red);">${skippedCur.total}</div>
       <div class="stat-label">Sedute saltate</div>
-      ${skippedPrev > 0 ? `<div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-top:4px;">prec: ${skippedPrev}</div>` : ''}
+      <div style="font-family:'DM Mono';font-size:9px;margin-top:6px;display:flex;flex-direction:column;gap:2px;">
+        ${skippedCur.client>0?`<span style="color:var(--red);">❌ sua: ${skippedCur.client}</span>`:''}
+        ${skippedCur.me>0?`<span style="color:var(--yellow);">❌❌ mia: ${skippedCur.me}</span>`:''}
+        ${skippedCur.fest>0?`<span style="color:var(--accent2);">🎉 fest.: ${skippedCur.fest}</span>`:''}
+        ${skippedCur.total===0?`<span style="color:var(--text3);">nessuna</span>`:''}
+        ${skippedPrev.total>0?`<span style="color:var(--text3);margin-top:2px;">prec: ${skippedPrev.total}</span>`:''}
+      </div>
     </div>
     <div class="stat-box">
       <div class="stat-value" style="color:var(--yellow);">${painPct}%</div>
@@ -7642,14 +7655,23 @@ function renderStats() {
       <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">Sedute per cliente</div>
       ${clientRows.map(([name, data]) => {
         const pct = curSedute.length ? Math.round(data.sedute/curSedute.length*100) : 0;
-        return `<div style="margin-bottom:10px;">
+        const sk = skippedCur.byClient[data.id] || {};
+        const skTotal = (sk.client||0)+(sk.me||0)+(sk.fest||0);
+        const skHtml = skTotal > 0
+          ? `<div style="font-family:'DM Mono';font-size:9px;margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;">
+              ${sk.client>0?`<span style="color:var(--red);">❌ sua: ${sk.client}</span>`:''}
+              ${sk.me>0?`<span style="color:var(--yellow);">❌❌ mia: ${sk.me}</span>`:''}
+              ${sk.fest>0?`<span style="color:var(--accent2);">🎉 fest.: ${sk.fest}</span>`:''}
+             </div>` : '';
+        return `<div style="margin-bottom:12px;">
           <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
             <span style="font-size:13px;font-weight:600;">${name}</span>
-            <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${data.sedute} sed. ${data.pain>0?'· <span style="color:var(--red);">💢 '+data.pain+'</span>':''}</span>
+            <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${data.sedute} sed.${data.pain>0?' · <span style="color:var(--red);">💢 '+data.pain+'</span>':''}</span>
           </div>
-          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
+          <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:3px;">
             <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;"></div>
           </div>
+          ${skHtml}
         </div>`;
       }).join('')}
     </div>`;
@@ -7661,19 +7683,31 @@ function renderStats() {
 }
 
 function _countSkipped(start, end, clientId) {
-  let count = 0;
+  // Returns { client:N, me:N, fest:N, total:N, byClient:{id:{client,me,fest}} }
+  const result = { client:0, me:0, fest:0, total:0, byClient:{} };
   const startD = new Date(start); startD.setHours(0,0,0,0);
   const endD   = new Date(end);   endD.setHours(23,59,59,999);
   for (let d = new Date(startD); d <= endD; d.setDate(d.getDate()+1)) {
-    const dayStr = d.toISOString().split('T')[0];
+    const dayStr = d.getFullYear() + '-' +
+      String(d.getMonth()+1).padStart(2,'0') + '-' +
+      String(d.getDate()).padStart(2,'0');
     const dayName = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][d.getDay()];
     clients.forEach(c => {
       if (clientId && c.id != clientId) return;
       if (!c.schedule?.some(s => s.giorno===dayName)) return;
-      if (isFixedSlotSkipped(c.id, dayStr)) count++;
+      const reason = getFixedSlotSkipReason(c.id, dayStr);
+      if (!reason) return;
+      result.total++;
+      if (reason === 'client') result.client++;
+      else if (reason === 'me') result.me++;
+      else result.fest++;
+      if (!result.byClient[c.id]) result.byClient[c.id] = { client:0, me:0, fest:0 };
+      if (reason === 'client') result.byClient[c.id].client++;
+      else if (reason === 'me') result.byClient[c.id].me++;
+      else result.byClient[c.id].fest++;
     });
   }
-  return count;
+  return result;
 }
 
 function _buildPeriodBars(sedute, bounds) {
@@ -7682,7 +7716,7 @@ function _buildPeriodBars(sedute, bounds) {
     const today = new Date(); today.setHours(0,0,0,0);
     const bars = days.map((label, i) => {
       const d = new Date(bounds.start); d.setDate(bounds.start.getDate()+i);
-      const dayStr = d.toISOString().split('T')[0];
+      const dayStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
       const val = sedute.filter(w=>w.createdAt?.split('T')[0]===dayStr).length;
       const isCurrent = d.getTime()===today.getTime();
       return { label, val, isCurrent };
