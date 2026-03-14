@@ -5126,48 +5126,23 @@ function renderBloccoEditor(b, i) {
   const isLista = b.tipo === 'mobilita';
 
   let configHtml = '';
-  if (isRound || isFase) {
-    const pauseOptions = isFase ? `
+  if (b.tipo === 'workout') {
+    // Solo workout mantiene round + pausa + note
+    configHtml = `<div class="round-config">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="round-config-label">Round</span>
+        <input class="round-config-input" type="text" value="${b.rounds||'3'}" placeholder="3" oninput="schedaBlocchi[${i}].rounds=this.value">
+      </div>
       <div style="display:flex;align-items:center;gap:6px;">
         <span class="round-config-label">Pausa</span>
         <select class="round-config-input" style="width:auto;padding:4px 6px;" onchange="schedaBlocchi[${i}].pausaMode=this.value">
           <option value="no_pausa_fine" ${b.pausaMode==='no_pausa_fine'?'selected':''}>No pausa — pausa 1' fine</option>
           <option value="pausa_tra" ${b.pausaMode==='pausa_tra'?'selected':''}>Pausa 1' tra esercizi</option>
         </select>
-      </div>` : '';
-    configHtml = `<div class="round-config">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span class="round-config-label">Round</span>
-        <input class="round-config-input" type="text" value="${b.rounds}" placeholder="3" oninput="schedaBlocchi[${i}].rounds=this.value">
       </div>
-      ${pauseOptions}
       <div style="display:flex;align-items:center;gap:6px;flex:1;">
         <span class="round-config-label">Note</span>
         <input class="round-config-input" style="width:100%;flex:1;" type="text" value="${b.note}" placeholder="Es. no pausa tra esercizi" oninput="schedaBlocchi[${i}].note=this.value">
-      </div>
-    </div>`;
-  } else if (isInterval) {
-    configHtml = `<div class="round-config">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span class="round-config-label">Round</span>
-        <input class="round-config-input" type="text" value="${b.rounds||'4'}" placeholder="4" oninput="schedaBlocchi[${i}].rounds=this.value">
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span class="round-config-label">On</span>
-        <input class="round-config-input" type="text" value="${b.intervalOn}" placeholder="40&quot;" oninput="schedaBlocchi[${i}].intervalOn=this.value">
-        <span class="round-config-label">Off</span>
-        <input class="round-config-input" type="text" value="${b.intervalOff}" placeholder="20&quot;" oninput="schedaBlocchi[${i}].intervalOff=this.value">
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;flex:1;">
-        <span class="round-config-label">Note</span>
-        <input class="round-config-input" style="width:100%;flex:1;" type="text" value="${b.note}" placeholder="" oninput="schedaBlocchi[${i}].note=this.value">
-      </div>
-    </div>`;
-  } else if (isLista) {
-    configHtml = `<div class="round-config">
-      <div style="display:flex;align-items:center;gap:6px;flex:1;">
-        <span class="round-config-label">Note</span>
-        <input class="round-config-input" style="width:100%;flex:1;" type="text" value="${b.note}" placeholder="Es. scegli 3/4 esercizi che preferisci" oninput="schedaBlocchi[${i}].note=this.value">
       </div>
     </div>`;
   }
