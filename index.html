@@ -2105,10 +2105,12 @@ body { font-size: 15px; }
       <select id="stats-client-filter" class="form-input" style="width:220px;margin:0;" onchange="renderStats()">
         <option value="">Tutti i clienti</option>
       </select>
-      <div style="display:flex;gap:6px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" id="stats-btn-week" onclick="setStatsView('week')">Settimana</button>
         <button class="btn btn-secondary btn-sm" id="stats-btn-month" onclick="setStatsView('month')">Mese</button>
         <button class="btn btn-secondary btn-sm" id="stats-btn-3m" onclick="setStatsView('3m')">3 Mesi</button>
+        <button class="btn btn-secondary btn-sm" id="stats-btn-6m" onclick="setStatsView('6m')">6 Mesi</button>
+        <button class="btn btn-secondary btn-sm" id="stats-btn-1y" onclick="setStatsView('1y')">1 Anno</button>
       </div>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-secondary btn-sm" onclick="statsNav(-1)">← Prec</button>
@@ -2213,6 +2215,20 @@ body { font-size: 15px; }
     <div class="search-bar">
       <span class="search-icon">🔍</span>
       <input type="text" placeholder="Cerca cliente per nome..." id="client-search" oninput="filterClients()">
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;">Ordina:</span>
+        <button id="sort-btn-nome" onclick="setClientSort('nome')" style="padding:4px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;border-radius:20px;cursor:pointer;">Nome</button>
+        <button id="sort-btn-sedute" onclick="setClientSort('sedute')" style="padding:4px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;border-radius:20px;cursor:pointer;">Sedute</button>
+        <button id="sort-btn-recente" onclick="setClientSort('recente')" style="padding:4px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;border-radius:20px;cursor:pointer;">Ultima seduta</button>
+        <button id="sort-btn-percorso" onclick="setClientSort('percorso')" style="padding:4px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;border-radius:20px;cursor:pointer;">Percorso</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2);">
+        <input type="checkbox" id="show-ex-clienti" onchange="filterClients()" style="accent-color:var(--accent);">
+        Mostra ex clienti
+      </label>
     </div>
 
     <div class="client-grid" id="client-grid"></div>
@@ -3330,11 +3346,73 @@ const PERCORSO_CHECKLIST = [
   { id: "swing",    label: "💥 Swing & Metabolico",        items: ["Swing (KB)","Thruster (KB)","Box Jump","Squat Jump","Burpee","Wall Ball"] }
 ];
 
+let clientSortMode = 'nome';
+
+function setClientSort(mode) {
+  clientSortMode = mode;
+  // Update button styles
+  ['nome','sedute','recente','percorso'].forEach(m => {
+    const btn = document.getElementById('sort-btn-' + m);
+    if (!btn) return;
+    btn.style.background = m === mode ? 'var(--accent)' : 'var(--surface2)';
+    btn.style.color = m === mode ? '#000' : 'var(--text2)';
+    btn.style.borderColor = m === mode ? 'var(--accent)' : 'var(--border)';
+  });
+  filterClients();
+}
+
 function renderClients(filter = '') {
   const grid = document.getElementById('client-grid');
-  const filtered = clients.filter(c =>
+  const showEx = document.getElementById('show-ex-clienti')?.checked || false;
+  let filtered = clients.filter(c =>
     (c.nome + ' ' + c.cognome).toLowerCase().includes(filter.toLowerCase())
   );
+  if (!showEx) filtered = filtered.filter(c => !c.exCliente);
+
+  // Count sessions per client
+  const allWorkouts = JSON.parse(localStorage.getItem('asd_workouts') || '[]');
+  const seduteMap = {};
+  allWorkouts.filter(w => w.category === 'seduta').forEach(w => {
+    seduteMap[w.clientId] = (seduteMap[w.clientId] || 0) + 1;
+  });
+  const manualSessions = JSON.parse(localStorage.getItem('asd_manual_sessions') || '[]');
+  manualSessions.forEach(s => {
+    seduteMap[s.clientId] = (seduteMap[s.clientId] || 0) + 1;
+  });
+
+  // Last session date per client
+  const lastSessionMap = {};
+  allWorkouts.filter(w => w.category === 'seduta' && w.date).forEach(w => {
+    if (!lastSessionMap[w.clientId] || w.date > lastSessionMap[w.clientId]) lastSessionMap[w.clientId] = w.date;
+  });
+  manualSessions.filter(s => s.date).forEach(s => {
+    if (!lastSessionMap[s.clientId] || s.date > lastSessionMap[s.clientId]) lastSessionMap[s.clientId] = s.date;
+  });
+
+  // Sort
+  filtered.sort((a, b) => {
+    if (clientSortMode === 'nome') return (a.cognome + a.nome).localeCompare(b.cognome + b.nome);
+    if (clientSortMode === 'sedute') return (seduteMap[b.id] || 0) - (seduteMap[a.id] || 0);
+    if (clientSortMode === 'recente') {
+      const da = lastSessionMap[a.id] || '0000';
+      const db = lastSessionMap[b.id] || '0000';
+      return db.localeCompare(da);
+    }
+    if (clientSortMode === 'percorso') {
+      const checksA = JSON.parse(localStorage.getItem(`percorso_check_${a.id}`) || '{}');
+      const checksB = JSON.parse(localStorage.getItem(`percorso_check_${b.id}`) || '{}');
+      let totA = 0, chkA = 0, totB = 0, chkB = 0;
+      PERCORSO_CHECKLIST.forEach(sec => {
+        totA += sec.items.length; totB += sec.items.length;
+        sec.items.forEach(item => {
+          if (checksA[`${sec.id}_${item}`]) chkA++;
+          if (checksB[`${sec.id}_${item}`]) chkB++;
+        });
+      });
+      return (chkB / (totB || 1)) - (chkA / (totA || 1));
+    }
+    return 0;
+  });
 
   if (filtered.length === 0) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
@@ -3376,12 +3454,19 @@ function renderClients(filter = '') {
       ? 'Step 1 — ' + PERCORSO_CHECKLIST[0].label
       : `Step ${currentStepIdx + 1} — ${PERCORSO_CHECKLIST[currentStepIdx]?.label || ''}`;
 
+    const nSedute = seduteMap[c.id] || 0;
+    const lastDate = lastSessionMap[c.id] ? new Date(lastSessionMap[c.id]).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit'}) : '—';
+
     return `<div class="client-card" onclick="openClientDetail(${c.id})" style="${c.exCliente ? 'opacity:0.5;' : ''}">
       <div class="client-avatar">${initials}</div>
       <div class="client-name">${c.nome} ${c.cognome}</div>
       <div class="client-meta">${age !== '—' ? age + ' anni · ' : ''}${c.goal || 'Obiettivo non impostato'}</div>
       <div class="client-tags">${tags.join('')}</div>
-      <div style="margin-top:8px;">
+      <div style="display:flex;gap:12px;margin-top:6px;margin-bottom:4px;">
+        <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">🏋️ <strong style="color:var(--text1);">${nSedute}</strong> sed.</span>
+        <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">📅 <strong style="color:var(--text1);">${lastDate}</strong></span>
+      </div>
+      <div style="margin-top:4px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
           <span style="font-family:'DM Mono';font-size:9px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%;">${stepLabel}</span>
           <span style="font-family:'DM Mono';font-size:9px;color:var(--accent);font-weight:700;">${pct}%</span>
@@ -3397,6 +3482,7 @@ function renderClients(filter = '') {
 function filterClients() {
   renderClients(document.getElementById('client-search').value);
 }
+
 
 function openClientDetail(clientId) {
   const client = clients.find(c => c.id === clientId);
@@ -7517,6 +7603,19 @@ function _statsPeriodBounds() {
     const prevStart = new Date(y, m-1, 1);
     const prevEnd   = new Date(y, m, 0, 23, 59, 59, 999);
     return { start, end, prevStart, prevEnd };
+  } else if (_statsView === '6m') {
+    const end = new Date(now.getFullYear(), now.getMonth() + _statsOffset*6 + 1, 0, 23,59,59,999);
+    const start = new Date(end.getFullYear(), end.getMonth()-5, 1);
+    const prevEnd   = new Date(start.getTime()-1);
+    const prevStart = new Date(prevEnd.getFullYear(), prevEnd.getMonth()-5, 1);
+    return { start, end, prevStart, prevEnd };
+  } else if (_statsView === '1y') {
+    const y = now.getFullYear() + _statsOffset;
+    const start = new Date(y, 0, 1);
+    const end   = new Date(y, 11, 31, 23,59,59,999);
+    const prevStart = new Date(y-1, 0, 1);
+    const prevEnd   = new Date(y-1, 11, 31, 23,59,59,999);
+    return { start, end, prevStart, prevEnd };
   } else { // 3m
     const now3 = new Date(); now3.setHours(23,59,59,999);
     const end = new Date(now3.getFullYear(), now3.getMonth() + _statsOffset*3 + 1, 0, 23,59,59,999);
@@ -7544,7 +7643,7 @@ function renderStats() {
   if (labelEl) labelEl.textContent = _statsPeriodLabel(bounds);
 
   // Update active button style
-  ['week','month','3m'].forEach(v => {
+  ['week','month','3m','6m','1y'].forEach(v => {
     const btn = document.getElementById(`stats-btn-${v}`);
     if (btn) {
       btn.style.background = v === _statsView ? 'var(--accent)' : 'var(--surface2)';
