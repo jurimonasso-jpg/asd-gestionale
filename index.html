@@ -3370,9 +3370,8 @@ function renderClients(filter = '') {
   if (!showEx) filtered = filtered.filter(c => !c.exCliente);
 
   // Count sessions per client
-  const allWorkouts = JSON.parse(localStorage.getItem('asd_workouts') || '[]');
   const seduteMap = {};
-  allWorkouts.filter(w => w.category === 'seduta').forEach(w => {
+  workouts.filter(w => w.categoria === 'seduta' || w.category === 'seduta').forEach(w => {
     seduteMap[w.clientId] = (seduteMap[w.clientId] || 0) + 1;
   });
   const manualSessions = JSON.parse(localStorage.getItem('asd_manual_sessions') || '[]');
@@ -3382,8 +3381,9 @@ function renderClients(filter = '') {
 
   // Last session date per client
   const lastSessionMap = {};
-  allWorkouts.filter(w => w.category === 'seduta' && w.date).forEach(w => {
-    if (!lastSessionMap[w.clientId] || w.date > lastSessionMap[w.clientId]) lastSessionMap[w.clientId] = w.date;
+  workouts.filter(w => (w.categoria === 'seduta' || w.category === 'seduta') && w.createdAt).forEach(w => {
+    const d = w.createdAt.split('T')[0];
+    if (!lastSessionMap[w.clientId] || d > lastSessionMap[w.clientId]) lastSessionMap[w.clientId] = d;
   });
   manualSessions.filter(s => s.date).forEach(s => {
     if (!lastSessionMap[s.clientId] || s.date > lastSessionMap[s.clientId]) lastSessionMap[s.clientId] = s.date;
