@@ -2369,16 +2369,6 @@ body { font-size: 15px; }
           <input class="form-input" type="tel" id="c-phone" placeholder="+39 333...">
         </div>
       </div>
-      <div class="grid-2">
-        <div class="form-group">
-          <label class="form-label">Altezza (cm)</label>
-          <input class="form-input" type="number" id="c-height" placeholder="175">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Peso (kg)</label>
-          <input class="form-input" type="number" id="c-weight" placeholder="75">
-        </div>
-      </div>
       <div class="form-group">
         <label class="form-label">Profilo cliente</label>
         <select class="form-input" id="c-profilo">
@@ -2556,7 +2546,7 @@ body { font-size: 15px; }
       </div>
       <div style="margin-top:10px;">
         <label class="form-label">Dolore Cronico (PRT)?</label>
-        <select class="form-input" id="c-prt">
+        <select class="form-input" id="c-prt" onchange="(function(v){['prt-traits-group','stress-group','traumi-group'].forEach(id=>document.getElementById(id).style.display=v==='no'?'none':'block');})(this.value)">
           <option value="no">No</option>
           <option value="sospetto">Sospetto</option>
           <option value="confermato">Confermato</option>
@@ -2589,7 +2579,7 @@ body { font-size: 15px; }
         <label class="form-label">Sport praticati</label>
         <input class="form-input" type="text" id="c-sports" placeholder="Es. calcio, nuoto, ciclismo...">
       </div>
-      <div class="form-group">
+      <div class="form-group" id="prt-traits-group" style="display:none;">
         <label class="form-label">Tratti della personalità (rilevanti per PRT)</label>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;" id="personality-traits">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
@@ -2612,12 +2602,12 @@ body { font-size: 15px; }
           </label>
         </div>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="stress-group" style="display:none;">
         <label class="form-label">Stress attuale (1-10)</label>
         <input class="form-input" type="range" id="c-stress" min="1" max="10" value="5" oninput="document.getElementById('stress-val').textContent = this.value">
         <span id="stress-val" style="font-family:'DM Mono';font-size:12px;color:var(--accent);margin-left:8px;">5</span>
       </div>
-      <div class="form-group">
+      <div class="form-group" id="traumi-group" style="display:none;">
         <label class="form-label">Traumi/eventi significativi</label>
         <textarea class="form-input" id="c-traumi" placeholder="Traumi emotivi, eventi stressanti della vita..."></textarea>
       </div>
@@ -2625,6 +2615,15 @@ body { font-size: 15px; }
 
     <!-- TAB PERCORSO / ABBONAMENTO -->
     <div class="tab-content" id="tab-abbonamento">
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px 14px;background:rgba(255,71,87,0.07);border:1px solid rgba(255,71,87,0.2);border-radius:var(--radius);">
+          <input type="checkbox" id="c-ex-cliente" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--red);">🚪 Non più cliente</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Il cliente ha smesso di allenarsi</div>
+          </div>
+        </label>
+      </div>
       <div class="form-group">
         <label class="form-label">Tipo percorso</label>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -3218,8 +3217,6 @@ function openNewClientModal() {
     if (el) el.value = '';
   });
   document.getElementById('c-dob').value = '';
-  document.getElementById('c-height').value = '';
-  document.getElementById('c-weight').value = '';
   document.getElementById('c-profilo').value = 'dolore_adulto';
   document.getElementById('c-goal').value = '';
   document.getElementById('c-notes').value = '';
@@ -3228,6 +3225,7 @@ function openNewClientModal() {
   document.getElementById('pain-int-val').textContent = '5';
   document.getElementById('c-pain-when').value = 'movimento';
   document.getElementById('c-prt').value = 'no';
+  ['prt-traits-group','stress-group','traumi-group'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('c-stress').value = '5';
   document.getElementById('stress-val').textContent = '5';
   document.querySelectorAll('#personality-traits input').forEach(cb => cb.checked = false);
@@ -3236,6 +3234,7 @@ function openNewClientModal() {
   if (noneRadio) noneRadio.checked = true;
   document.getElementById('c-abb-start').value = '';
   document.getElementById('c-session-start').value = '';
+  document.getElementById('c-ex-cliente').checked = false;
   loadProrogheToForm([]);
   updateAbbonamentoPreview();
   renderScheduleSlots([]);
@@ -3255,8 +3254,6 @@ function saveClient() {
     nome, cognome,
     dob: document.getElementById('c-dob').value,
     phone: document.getElementById('c-phone').value,
-    height: document.getElementById('c-height').value,
-    weight: document.getElementById('c-weight').value,
     profilo: document.getElementById('c-profilo').value,
     goal: document.getElementById('c-goal').value,
     notes: document.getElementById('c-notes').value,
@@ -3276,6 +3273,7 @@ function saveClient() {
     abbTipo: document.querySelector('input[name="abb-tipo"]:checked')?.value || 'none',
     abbStart: document.getElementById('c-abb-start').value,
     abbProroghe: getProrogheFromForm(),
+    exCliente: document.getElementById('c-ex-cliente').checked,
     sessionStart: document.getElementById('c-session-start').value || null,
     schedule: getScheduleFromForm(),
     createdAt: editingClientId ? (clients.find(c=>c.id===editingClientId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
@@ -3351,6 +3349,7 @@ function renderClients(filter = '') {
     const age = c.dob ? Math.floor((Date.now() - new Date(c.dob)) / (365.25*24*3600*1000)) : '—';
     const initials = (c.nome[0] + c.cognome[0]).toUpperCase();
     const tags = [];
+    if (c.exCliente) tags.push('<span class="tag" style="background:rgba(150,150,150,0.15);color:#888;">🚪 Ex Cliente</span>');
     if (c.prt === 'confermato') tags.push('<span class="tag tag-prt">PRT</span>');
     if (c.painPoints?.length > 0) tags.push('<span class="tag tag-pain">Dolore</span>');
     const dLeft = abbDaysLeft(c);
@@ -3377,7 +3376,7 @@ function renderClients(filter = '') {
       ? 'Step 1 — ' + PERCORSO_CHECKLIST[0].label
       : `Step ${currentStepIdx + 1} — ${PERCORSO_CHECKLIST[currentStepIdx]?.label || ''}`;
 
-    return `<div class="client-card" onclick="openClientDetail(${c.id})">
+    return `<div class="client-card" onclick="openClientDetail(${c.id})" style="${c.exCliente ? 'opacity:0.5;' : ''}">
       <div class="client-avatar">${initials}</div>
       <div class="client-name">${c.nome} ${c.cognome}</div>
       <div class="client-meta">${age !== '—' ? age + ' anni · ' : ''}${c.goal || 'Obiettivo non impostato'}</div>
@@ -3590,8 +3589,6 @@ function editClient(id) {
   document.getElementById('c-cognome').value = c.cognome || '';
   document.getElementById('c-dob').value = c.dob || '';
   document.getElementById('c-phone').value = c.phone || '';
-  document.getElementById('c-height').value = c.height || '';
-  document.getElementById('c-weight').value = c.weight || '';
   document.getElementById('c-profilo').value = c.profilo || 'dolore_adulto';
   document.getElementById('c-goal').value = c.goal || '';
   document.getElementById('c-notes').value = c.notes || '';
@@ -3600,6 +3597,9 @@ function editClient(id) {
   document.getElementById('pain-int-val').textContent = c.painIntensity || 5;
   document.getElementById('c-pain-when').value = c.painWhen || 'movimento';
   document.getElementById('c-prt').value = c.prt || 'no';
+  const isPrt = (c.prt === 'sospetto' || c.prt === 'confermato');
+  ['prt-traits-group','stress-group','traumi-group'].forEach(id=>document.getElementById(id).style.display=isPrt?'block':'none');
+  document.getElementById('c-ex-cliente').checked = c.exCliente || false;
   document.getElementById('c-patologie').value = c.patologie || '';
   document.getElementById('c-farmaci').value = c.farmaci || '';
   document.getElementById('c-sports').value = c.sports || '';
