@@ -8735,7 +8735,7 @@ function renderPercorso() {
               <span style="color:var(--text3);font-size:12px;">▾</span>
             </div>
           </div>
-          <div style="display:none;padding:0 16px 14px;border-top:1px solid var(--border);">
+          <div class="pf-body" data-sec-id="${sec.id}" style="display:none;padding:0 16px 14px;border-top:1px solid var(--border);">
             ${sec.descrizione ? `<div style="font-family:'DM Mono';font-size:10px;color:var(--text3);line-height:1.6;padding:10px 0 12px;border-bottom:1px dashed var(--border);margin-bottom:12px;">${sec.descrizione}</div>` : ''}
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
               ${sec.items.map(item => {
@@ -8762,8 +8762,19 @@ function togglePercorsoCheck(clientId, secId, item, checked) {
   if (checked) checks[ck] = true;
   else delete checks[ck];
   localStorage.setItem(key, JSON.stringify(checks));
-  // Re-render to update progress bar (without losing open states)
+
+  // Ricorda quali pannelli sono aperti prima di re-renderizzare
+  const openPanels = new Set();
+  document.querySelectorAll('#percorso-content .pf-body').forEach(el => {
+    if (el.style.display !== 'none') openPanels.add(el.dataset.secId);
+  });
+
   renderPercorso();
+
+  // Riapre i pannelli che erano aperti
+  document.querySelectorAll('#percorso-content .pf-body').forEach(el => {
+    if (openPanels.has(el.dataset.secId)) el.style.display = 'block';
+  });
 }
 
 function resetPercorso(clientId) {
