@@ -3103,69 +3103,69 @@ const TESTS_PROTOCOL = [
   {
     section: "🦶 Piede & Caviglia",
     tests: [
-      "Romberg (equilibrio piedi uniti)",
-      "Equilibrio su una gamba (ginocchio 90°)",
-      "Test caviglia a muro (pollice)",
-      "Controllo alluce / dita",
-      "Pronazione / eversione"
+      { name: "Romberg (equilibrio piedi uniti)", base: true },
+      { name: "Equilibrio su una gamba (ginocchio 90°)", base: true },
+      { name: "Test caviglia a muro (pollice)", base: false },
+      { name: "Controllo alluce / dita", base: true },
+      { name: "Pronazione / eversione", base: false }
     ]
   },
   {
     section: "🦴 Anca & Bacino",
     tests: [
-      "Frog Position (apertura anche)",
-      "Active Leg Raise (flessori anca)",
-      "Intrarotatori / Extrarotatori",
-      "Lunghezza psoas (Thomas Test)",
-      "Test TFL / Medio Gluteo",
-      "Test ponte a una gamba",
-      "Test bridge (attivazione glutei)"
+      { name: "Frog Position (apertura anche)", base: false },
+      { name: "Active Leg Raise (flessori anca)", base: false },
+      { name: "Intrarotatori / Extrarotatori", base: false },
+      { name: "Lunghezza psoas (Thomas Test)", base: false },
+      { name: "Test TFL / Medio Gluteo", base: false },
+      { name: "Test ponte a una gamba", base: false },
+      { name: "Test bridge (attivazione glutei)", base: true }
     ]
   },
   {
     section: "🔄 Colonna & Core",
     tests: [
-      "Bending Test",
-      "Cat Cow (mobilità lombare)",
-      "T-Spine in quadrupedia",
-      "Torsione busto",
-      "Plank (resistenza core)",
-      "Test attivazione core",
-      "Test respirazione diaframmatica"
+      { name: "Bending Test", base: true },
+      { name: "Cat Cow (mobilità lombare)", base: false },
+      { name: "T-Spine in quadrupedia", base: false },
+      { name: "Torsione busto", base: false },
+      { name: "Plank (resistenza core)", base: true },
+      { name: "Test attivazione core", base: false },
+      { name: "Test respirazione diaframmatica", base: false }
     ]
   },
   {
     section: "💪 Spalla & Scapola",
     tests: [
-      "Movimenti scapolari",
-      "Wall Shrug",
-      "Test mobilità spalle (seduto a muro)",
-      "Push Up (controllo scapole)",
-      "Test rotazione interna spalla",
-      "Test rotazione esterna (braccio alzato)",
-      "Test gran dorsale (sdraiato)"
+      { name: "Movimenti scapolari", base: true },
+      { name: "Wall Shrug", base: true },
+      { name: "Test mobilità spalle (seduto a muro)", base: true },
+      { name: "Push Up (controllo scapole)", base: true },
+      { name: "Test rotazione interna spalla", base: false },
+      { name: "Test rotazione esterna (braccio alzato)", base: false },
+      { name: "Test gran dorsale (sdraiato)", base: false }
     ]
   },
   {
     section: "🏋️ Movimenti Globali",
     tests: [
-      "Squat a corpo libero",
-      "Palm Up Wall Squat",
-      "SL Squat (single leg)",
-      "Romanian Deadlift",
-      "Push Up",
-      "Pull / Trazioni",
-      "Camminata (analisi)"
+      { name: "Squat a corpo libero", base: true },
+      { name: "Palm Up Wall Squat", base: true },
+      { name: "SL Squat (single leg)", base: false },
+      { name: "Romanian Deadlift", base: false },
+      { name: "Push Up", base: true },
+      { name: "Pull / Trazioni", base: false },
+      { name: "Camminata (analisi)", base: false }
     ]
   },
   {
     section: "📊 Postura Statica",
     tests: [
-      "Postura frontale",
-      "Postura laterale",
-      "Postura posteriore",
-      "Test carico in piedi",
-      "Test carico schiena da seduto"
+      { name: "Postura frontale", base: false },
+      { name: "Postura laterale", base: false },
+      { name: "Postura posteriore", base: false },
+      { name: "Test carico in piedi", base: false },
+      { name: "Test carico schiena da seduto", base: false }
     ]
   }
 ];
@@ -6237,34 +6237,92 @@ function renderTestContent() {
       </div>`
     : '';
 
-  content.innerHTML = headerInfo + TESTS_PROTOCOL.map((section, si) => `
-    <div class="test-section">
-      <div class="test-section-title">${section.section}</div>
-      ${section.tests.map((test, ti) => {
-        const key = `s${si}_t${ti}`;
-        const saved = testResults[clientId]?.[key];
-        const prev = prevSnapshot?.results?.[key];
-        let diffBadge = '';
-        if (prev && prev !== saved && saved) {
-          const improved = (prev === 'ko' && saved !== 'ko') || (prev === 'limit' && saved === 'ok');
-          const worsened = (prev === 'ok' && saved !== 'ok') || (prev !== 'ko' && saved === 'ko');
-          if (improved) diffBadge = `<span style="color:var(--green);font-size:10px;font-family:'DM Mono';">↑ migliorato</span>`;
-          if (worsened) diffBadge = `<span style="color:var(--red);font-size:10px;font-family:'DM Mono';">↓ peggiorato</span>`;
-        }
-        return `<div class="test-item">
-          <div class="test-item-name">${test} ${diffBadge}</div>
-          <div class="result-btns">
-            <button class="result-btn ${saved==='ok'?'ok':''}" onclick="setTestResult('${key}','ok',this)">✓ OK</button>
-            <button class="result-btn ${saved==='limit'?'limit':''}" onclick="setTestResult('${key}','limit',this)">⚠ LIMIT</button>
-            <button class="result-btn ${saved==='ko'?'ko':''}" onclick="setTestResult('${key}','ko',this)">✗ KO</button>
-          </div>
-          <input class="form-input" style="width:180px;height:32px;font-size:11px;" 
-            id="note_${key}" placeholder="Nota..." 
-            value="${testResults[clientId]?.['note_'+key] || ''}">
-        </div>`;
-      }).join('')}
+  // Helper to render a single test item
+  function renderTestItem(test, si, ti) {
+    const testName = typeof test === 'object' ? test.name : test;
+    const key = `s${si}_t${ti}`;
+    const saved = testResults[clientId]?.[key];
+    const prev = prevSnapshot?.results?.[key];
+    let diffBadge = '';
+    if (prev && prev !== saved && saved) {
+      const improved = (prev === 'ko' && saved !== 'ko') || (prev === 'limit' && saved === 'ok');
+      const worsened = (prev === 'ok' && saved !== 'ok') || (prev !== 'ko' && saved === 'ko');
+      if (improved) diffBadge = `<span style="color:var(--green);font-size:10px;font-family:'DM Mono';">↑ migliorato</span>`;
+      if (worsened) diffBadge = `<span style="color:var(--red);font-size:10px;font-family:'DM Mono';">↓ peggiorato</span>`;
+    }
+    return `<div class="test-item">
+      <div class="test-item-name">${testName} ${diffBadge}</div>
+      <div class="result-btns">
+        <button class="result-btn ${saved==='ok'?'ok':''}" onclick="setTestResult('${key}','ok',this)">✓ OK</button>
+        <button class="result-btn ${saved==='limit'?'limit':''}" onclick="setTestResult('${key}','limit',this)">⚠ LIMIT</button>
+        <button class="result-btn ${saved==='ko'?'ko':''}" onclick="setTestResult('${key}','ko',this)">✗ KO</button>
+      </div>
+      <input class="form-input" style="width:180px;height:32px;font-size:11px;" 
+        id="note_${key}" placeholder="Nota..." 
+        value="${testResults[clientId]?.['note_'+key] || ''}">
+    </div>`;
+  }
+
+  // Build base and advanced HTML separately
+  let baseHTML = '';
+  let advHTML = '';
+
+  TESTS_PROTOCOL.forEach((section, si) => {
+    const baseTests = section.tests.map((t, ti) => ({ t, ti })).filter(({ t }) => (typeof t === 'object' ? t.base : false));
+    const advTests  = section.tests.map((t, ti) => ({ t, ti })).filter(({ t }) => (typeof t === 'object' ? !t.base : true));
+
+    if (baseTests.length) {
+      baseHTML += `<div class="test-section">
+        <div class="test-section-title">${section.section}</div>
+        ${baseTests.map(({ t, ti }) => renderTestItem(t, si, ti)).join('')}
+      </div>`;
+    }
+    if (advTests.length) {
+      advHTML += `<div class="test-section">
+        <div class="test-section-title">${section.section}</div>
+        ${advTests.map(({ t, ti }) => renderTestItem(t, si, ti)).join('')}
+      </div>`;
+    }
+  });
+
+  const tabStyle = (active) => `
+    padding:8px 20px;border-radius:6px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.04em;transition:all 0.15s;
+    background:${active ? 'var(--accent)' : 'var(--surface2)'};
+    color:${active ? '#0e0f11' : 'var(--text2)'};
+    border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};
+  `;
+
+  content.innerHTML = headerInfo + `
+    <div style="display:flex;gap:8px;margin-bottom:20px;">
+      <button id="tab-base-btn" style="${tabStyle(true)}" onclick="switchTestTab('base')">🟢 Test Base</button>
+      <button id="tab-adv-btn"  style="${tabStyle(false)}" onclick="switchTestTab('advanced')">🔬 Test Avanzati</button>
     </div>
-  `).join('');
+    <div id="tests-tab-base">${baseHTML}</div>
+    <div id="tests-tab-advanced" style="display:none;">${advHTML}</div>
+  `;
+}
+
+function switchTestTab(tab) {
+  const baseDiv = document.getElementById('tests-tab-base');
+  const advDiv  = document.getElementById('tests-tab-advanced');
+  const baseBtn = document.getElementById('tab-base-btn');
+  const advBtn  = document.getElementById('tab-adv-btn');
+  if (!baseDiv || !advDiv) return;
+
+  const activeStyle  = `padding:8px 20px;border-radius:6px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.04em;transition:all 0.15s;background:var(--accent);color:#0e0f11;border:1px solid var(--accent);`;
+  const inactiveStyle = `padding:8px 20px;border-radius:6px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.04em;transition:all 0.15s;background:var(--surface2);color:var(--text2);border:1px solid var(--border);`;
+
+  if (tab === 'base') {
+    baseDiv.style.display = '';
+    advDiv.style.display  = 'none';
+    baseBtn.style.cssText = activeStyle;
+    advBtn.style.cssText  = inactiveStyle;
+  } else {
+    baseDiv.style.display = 'none';
+    advDiv.style.display  = '';
+    baseBtn.style.cssText = inactiveStyle;
+    advBtn.style.cssText  = activeStyle;
+  }
 }
 
 function setTestResult(key, result, btn) {
