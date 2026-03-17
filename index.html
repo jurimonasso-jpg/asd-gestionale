@@ -4519,6 +4519,43 @@ function openSessionNote(clientId, prefillPain) {
   const todayW    = _findLatestWorkoutForClient(clientId, today);
   _openUnifiedNote(clientId, todayW?.id || null, todayNote?.id || null, prefillPain || null);
 }
+// ── NOTE GUIDATA helpers — SEDUTA BUILDER ────────────────────
+let _sbMode = 'guided';
+function sbSetMode(mode) {
+  _sbMode = mode;
+  const gd = document.getElementById('sb-guided-mode');
+  const fr = document.getElementById('sb-free-mode');
+  if (!gd) return;
+  gd.style.display = mode === 'guided' ? '' : 'none';
+  fr.style.display  = mode === 'free'   ? '' : 'none';
+  const bg = document.getElementById('sb-mode-guided');
+  const fr2 = document.getElementById('sb-mode-free');
+  if (mode === 'guided') {
+    bg.style.cssText  += ';background:var(--accent);color:#000;border-color:var(--accent);';
+    fr2.style.cssText += ';background:transparent;color:var(--text2);border-color:var(--border);';
+  } else {
+    fr2.style.cssText += ';background:var(--accent);color:#000;border-color:var(--accent);';
+    bg.style.cssText  += ';background:transparent;color:var(--text2);border-color:var(--border);';
+  }
+}
+function sbGetGuidedText() {
+  const energia    = document.getElementById('sb-energia')?.value || '7';
+  const funzionato = document.getElementById('sb-funzionato')?.value?.trim() || '';
+  const rivedere   = document.getElementById('sb-rivedere')?.value?.trim() || '';
+  const prossima   = document.getElementById('sb-prossima')?.value?.trim() || '';
+  const tags = [...document.querySelectorAll('#sb-guided-mode input[type=checkbox]:checked')].map(c => c.value).join(' ');
+  const libere = document.getElementById('sb-note-libere')?.value?.trim() || '';
+  let parts = [];
+  parts.push('⚡ Energia: ' + energia + '/10');
+  if (funzionato) parts.push('✅ ' + funzionato);
+  if (rivedere)   parts.push('⚠️ ' + rivedere);
+  if (prossima)   parts.push('➡️ ' + prossima);
+  if (tags)       parts.push(tags);
+  if (libere)     parts.push('📝 ' + libere);
+  return parts.join(' | ');
+}
+// ─────────────────────────────────────────────────────────────
+
 // ── NOTE GUIDATA helpers ─────────────────────────────────────
 let _snMode = 'guided';
 function snSetMode(mode) {
@@ -9044,9 +9081,59 @@ function openExistingSeduta(workout, clientId) {
         <div id="sb-chart-end"></div>
       </div>
 
-      <div class="form-group" style="margin-bottom:14px;">
-        <label class="form-label">📝 Note seduta</label>
-        <textarea class="form-input" id="seduta-builder-notes" placeholder="Indicazioni, osservazioni..." style="min-height:60px;">${(workout.notes||'').replace(/</g,'&lt;')}</textarea>
+      <!-- 4. Note seduta guidata -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <label class="form-label" style="margin:0;">📝 Note seduta</label>
+          <div style="margin-left:auto;display:flex;gap:5px;">
+            <button onclick="sbSetMode('guided')" id="sb-mode-guided" style="font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--accent);background:var(--accent);color:#000;cursor:pointer;font-weight:700;">Guidata</button>
+            <button onclick="sbSetMode('free')" id="sb-mode-free" style="font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;">Libera</button>
+          </div>
+        </div>
+        <!-- Libera -->
+        <div id="sb-free-mode" style="display:none;">
+          <textarea class="form-input" id="seduta-builder-notes" placeholder="Indicazioni, osservazioni..." style="min-height:60px;"></textarea>
+        </div>
+        <!-- Guidata -->
+        <div id="sb-guided-mode">
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:5px;letter-spacing:0.04em;">⚡ ENERGIA PRE-SEDUTA</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="range" id="sb-energia" min="1" max="10" value="7" oninput="document.getElementById('sb-energia-val').textContent=this.value" style="flex:1;accent-color:var(--accent);">
+              <span id="sb-energia-val" style="font-family:'DM Mono';font-size:13px;font-weight:700;color:var(--accent);min-width:16px;">7</span><span style="font-size:11px;color:var(--text3);">/ 10</span>
+            </div>
+          </div>
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px;letter-spacing:0.04em;">✅ COSA HA FUNZIONATO</div>
+            <textarea class="form-input" id="sb-funzionato" placeholder="Es: stacco da terra 65kg pulito, buona attivazione core..." style="min-height:44px;margin:0;font-size:12px;"></textarea>
+          </div>
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:4px;letter-spacing:0.04em;">⚠️ DA RIVEDERE / COMPENSAZIONI</div>
+            <textarea class="form-input" id="sb-rivedere" placeholder="Es: ginocchio dx in valgo sullo squat..." style="min-height:44px;margin:0;font-size:12px;"></textarea>
+          </div>
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px;letter-spacing:0.04em;">➡️ NOTE PER LA PROSSIMA</div>
+            <textarea class="form-input" id="sb-prossima" placeholder="Es: più mobilità anca, evitare overhead press..." style="min-height:44px;margin:0;font-size:12px;"></textarea>
+          </div>
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;letter-spacing:0.04em;">🏷️ TAG RAPIDI</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">
+              <label class="sn-tag-label"><input type="checkbox" value="#progresso"> #progresso</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#plateau"> #plateau</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#compensazione"> #compensazione</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#tecnica-ok"> #tecnica-ok</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#tecnica-da-lavorare"> #tecnica-da-lavorare</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#motivazione-alta"> #motivazione-alta</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#motivazione-bassa"> #motivazione-bassa</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#regressione"> #regressione</label>
+            </div>
+          </div>
+          <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px;letter-spacing:0.04em;">📝 NOTE LIBERE</div>
+            <textarea class="form-input" id="sb-note-libere" placeholder="Qualsiasi altra osservazione..." style="min-height:44px;margin:0;font-size:12px;"></textarea>
+          </div>
+          <textarea id="seduta-builder-notes" style="display:none;">${(workout.notes||''). replace(/</g,'&lt;')}</textarea>
+        </div>
       </div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -9157,10 +9244,59 @@ function newSedutaBuilder(prefillDate) {
         <div id="sb-chart-end"></div>
       </div>
 
-      <!-- 4. Note seduta -->
-      <div class="form-group" style="margin-bottom:14px;">
-        <label class="form-label">📝 Note seduta</label>
-        <textarea class="form-input" id="seduta-builder-notes" placeholder="Indicazioni, osservazioni..." style="min-height:60px;"></textarea>
+      <!-- 4. Note seduta guidata -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <label class="form-label" style="margin:0;">📝 Note seduta</label>
+          <div style="margin-left:auto;display:flex;gap:5px;">
+            <button onclick="sbSetMode('guided')" id="sb-mode-guided" style="font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--accent);background:var(--accent);color:#000;cursor:pointer;font-weight:700;">Guidata</button>
+            <button onclick="sbSetMode('free')" id="sb-mode-free" style="font-size:10px;padding:2px 8px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;">Libera</button>
+          </div>
+        </div>
+        <!-- Libera -->
+        <div id="sb-free-mode" style="display:none;">
+          <textarea class="form-input" id="seduta-builder-notes" placeholder="Indicazioni, osservazioni..." style="min-height:60px;"></textarea>
+        </div>
+        <!-- Guidata -->
+        <div id="sb-guided-mode">
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:5px;letter-spacing:0.04em;">⚡ ENERGIA PRE-SEDUTA</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <input type="range" id="sb-energia" min="1" max="10" value="7" oninput="document.getElementById('sb-energia-val').textContent=this.value" style="flex:1;accent-color:var(--accent);">
+              <span id="sb-energia-val" style="font-family:'DM Mono';font-size:13px;font-weight:700;color:var(--accent);min-width:16px;">7</span><span style="font-size:11px;color:var(--text3);">/ 10</span>
+            </div>
+          </div>
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px;letter-spacing:0.04em;">✅ COSA HA FUNZIONATO</div>
+            <textarea class="form-input" id="sb-funzionato" placeholder="Es: stacco da terra 65kg pulito, buona attivazione core..." style="min-height:44px;margin:0;font-size:12px;"></textarea>
+          </div>
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:4px;letter-spacing:0.04em;">⚠️ DA RIVEDERE / COMPENSAZIONI</div>
+            <textarea class="form-input" id="sb-rivedere" placeholder="Es: ginocchio dx in valgo sullo squat..." style="min-height:44px;margin:0;font-size:12px;"></textarea>
+          </div>
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:4px;letter-spacing:0.04em;">➡️ NOTE PER LA PROSSIMA</div>
+            <textarea class="form-input" id="sb-prossima" placeholder="Es: più mobilità anca, evitare overhead press..." style="min-height:44px;margin:0;font-size:12px;"></textarea>
+          </div>
+          <div style="margin-bottom:6px;padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:6px;letter-spacing:0.04em;">🏷️ TAG RAPIDI</div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;">
+              <label class="sn-tag-label"><input type="checkbox" value="#progresso"> #progresso</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#plateau"> #plateau</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#compensazione"> #compensazione</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#tecnica-ok"> #tecnica-ok</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#tecnica-da-lavorare"> #tecnica-da-lavorare</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#motivazione-alta"> #motivazione-alta</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#motivazione-bassa"> #motivazione-bassa</label>
+              <label class="sn-tag-label"><input type="checkbox" value="#regressione"> #regressione</label>
+            </div>
+          </div>
+          <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px;letter-spacing:0.04em;">📝 NOTE LIBERE</div>
+            <textarea class="form-input" id="sb-note-libere" placeholder="Qualsiasi altra osservazione..." style="min-height:44px;margin:0;font-size:12px;"></textarea>
+          </div>
+          <textarea id="seduta-builder-notes" style="display:none;"></textarea>
+        </div>
       </div>
 
       <!-- 5. Bottoni -->
@@ -9235,7 +9371,7 @@ function saveSedutaBuilder() {
   if (!clientId) return;
   const nameEl = document.getElementById('seduta-builder-name');
   const name = nameEl ? nameEl.value.trim() : '';
-  const notes = document.getElementById('seduta-builder-notes')?.value || '';
+  const notes = (typeof _sbMode !== 'undefined' && _sbMode === 'guided') ? sbGetGuidedText() : (document.getElementById('seduta-builder-notes')?.value || '');
   const tipoSeduta = document.querySelector('input[name="sb-tipo"]:checked')?.value || 'normale';
 
   // Leggi i valori direttamente dal DOM — source of truth assoluta
