@@ -9199,6 +9199,26 @@ function newSedutaBuilder(prefillDate) {
   const today = new Date().toISOString().split('T')[0];
   const initDate = prefillDate || today;
 
+  // Cerca note "prossima seduta" dall'ultima nota salvata
+  const _lastNotes = getSessionNotes(clientId);
+  let _prossimaNote = '';
+  for (const n of _lastNotes) {
+    if (n.text && n.text.includes('➡️')) {
+      const parts = n.text.split(' | ');
+      const prossimaChunk = parts.find(p => p.startsWith('➡️'));
+      if (prossimaChunk) { _prossimaNote = prossimaChunk.replace('➡️ ', '').trim(); break; }
+    }
+  }
+  const _prossimaBanner = _prossimaNote
+    ? `<div style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+        <span style="font-size:16px;flex-shrink:0;">💡</span>
+        <div>
+          <div style="font-family:'DM Mono';font-size:9px;color:#ffc800;letter-spacing:0.08em;margin-bottom:3px;">DALLA SEDUTA PRECEDENTE</div>
+          <div style="font-size:13px;color:var(--text1);line-height:1.5;">${_prossimaNote}</div>
+        </div>
+      </div>`
+    : '';
+
   const content = document.getElementById('seduta-content');
   content.innerHTML = `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:12px;">
@@ -9220,6 +9240,7 @@ function newSedutaBuilder(prefillDate) {
         </div>
       </div>
 
+      ${_prossimaBanner}
       <!-- 1. Dolori INIZIO — solo se dolori -->
       <div id="sb-dolori-section" style="display:none;background:var(--surface);border:1px solid rgba(255,71,87,0.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;">
         <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;">🔴 Dolori inizio seduta</div>
