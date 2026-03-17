@@ -2008,6 +2008,111 @@ body { font-size: 15px; }
 #drive-sync-bar .ds-btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 #drive-sync-bar .ds-btn.primary:hover { opacity: 0.85; }
 </style>
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD1fVEprn5HmDyIqWcfwQ7HIFUI5yrlr3Y",
+  authDomain: "gestionale-pt.firebaseapp.com",
+  projectId: "gestionale-pt",
+  storageBucket: "gestionale-pt.firebasestorage.app",
+  messagingSenderId: "627277031910",
+  appId: "1:627277031910:web:b5dfb113e0de13f53e0e27"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const SYNC_KEYS_FIXED = [
+  'asd_clients','asd_workouts','asd_custom_exercises',
+  'asd_manual_sessions','asd_sessions_archive',
+  'asd_notes','asd_tests',
+];
+
+function getAllLocalData() {
+  const payload = { _savedAt: new Date().toISOString() };
+  SYNC_KEYS_FIXED.forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v) payload[k] = v;
+  });
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && (
+      k.startsWith('asd_ex_history_') ||
+      k.startsWith('percorso_check_') ||
+      k.startsWith('session_notes_') ||
+      k.startsWith('fixed_skip_')
+    )) payload[k] = localStorage.getItem(k);
+  }
+  return payload;
+}
+
+window.fbSaveToCloud = async function() {
+  const btn = document.getElementById('fb-save-btn');
+  const status = document.getElementById('ds-status');
+  btn.disabled = true;
+  status.textContent = '⏳ Salvataggio in corso...';
+  try {
+    const payload = getAllLocalData();
+    // Firestore ha limite 1MB per documento — splittiamo i dati dinamici
+    const staticData = {};
+    const dynamicData = {};
+    Object.entries(payload).forEach(([k, v]) => {
+      if (k === '_savedAt' ||
+          k.startsWith('asd_ex_history_') ||
+          k.startsWith('percorso_check_') ||
+          k.startsWith('session_notes_') ||
+          k.startsWith('fixed_skip_')) {
+        dynamicData[k] = v;
+      } else {
+        staticData[k] = v;
+      }
+    });
+    staticData._savedAt = payload._savedAt;
+    dynamicData._savedAt = payload._savedAt;
+    await setDoc(doc(db, 'gestionale', 'main'), staticData);
+    await setDoc(doc(db, 'gestionale', 'dynamic'), dynamicData);
+    const ora = new Date().toLocaleTimeString('it-IT');
+    status.textContent = '☁️ Cloud · salvato alle ' + ora;
+  } catch(err) {
+    status.textContent = '❌ Errore salvataggio: ' + err.message;
+  }
+  btn.disabled = false;
+};
+
+window.fbLoadFromCloud = async function() {
+  const btn = document.getElementById('fb-load-btn');
+  const status = document.getElementById('ds-status');
+  btn.disabled = true;
+  status.textContent = '⏳ Caricamento in corso...';
+  try {
+    const snapMain = await getDoc(doc(db, 'gestionale', 'main'));
+    const snapDyn  = await getDoc(doc(db, 'gestionale', 'dynamic'));
+    if (!snapMain.exists()) {
+      status.textContent = '⚠️ Nessun dato trovato nel cloud';
+      btn.disabled = false;
+      return;
+    }
+    const mainData = snapMain.data();
+    const dynData  = snapDyn.exists() ? snapDyn.data() : {};
+    const savedAt  = mainData._savedAt
+      ? new Date(mainData._savedAt).toLocaleString('it-IT')
+      : 'data sconosciuta';
+    const ok = confirm('Caricare i dati dal cloud?\nUltimo salvataggio: ' + savedAt + '\n\nI dati locali attuali verranno sovrascritti.');
+    if (!ok) { status.textContent = '💾 Dati salvati localmente'; btn.disabled = false; return; }
+    [...Object.entries(mainData), ...Object.entries(dynData)].forEach(([k, v]) => {
+      if (k !== '_savedAt' && v) localStorage.setItem(k, v);
+    });
+    status.textContent = '✓ Caricato dal cloud · ' + savedAt;
+    setTimeout(() => location.reload(), 800);
+  } catch(err) {
+    status.textContent = '❌ Errore caricamento: ' + err.message;
+  }
+  btn.disabled = false;
+};
+</script>
 </head>
 <body>
 <div class="app">
@@ -9849,7 +9954,9 @@ renderWorkouts();
 <!-- SYNC BAR -->
 <div id="drive-sync-bar">
   <span class="ds-status" id="ds-status">💾 Dati salvati localmente</span>
-  <button class="ds-btn primary" onclick="exportData()">⬇ Esporta</button>
+  <button class="ds-btn primary" id="fb-save-btn" onclick="fbSaveToCloud()">☁️ Salva cloud</button>
+  <button class="ds-btn" id="fb-load-btn" onclick="fbLoadFromCloud()">📥 Carica cloud</button>
+  <button class="ds-btn" onclick="exportData()">⬇ Esporta</button>
   <button class="ds-btn" onclick="document.getElementById('import-input').click()">⬆ Importa</button>
   <input type="file" id="import-input" accept=".json" style="display:none;" onchange="importData(this)">
 </div>
