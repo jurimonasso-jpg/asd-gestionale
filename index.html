@@ -1832,6 +1832,47 @@ textarea.form-input {
   .nav-item .icon { font-size: 20px; width: auto; }
   .nav-item span:not(.icon) { font-size: 9px; letter-spacing: 0; }
 
+  /* Sync popup mobile */
+  #sync-popup {
+    display: none;
+    position: fixed;
+    bottom: 64px;
+    right: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px;
+    z-index: 300;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 180px;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
+  }
+  #sync-popup.open { display: flex; }
+  #sync-popup .sp-btn {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #sync-popup .sp-btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  #sync-popup .sp-status {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--text3);
+    padding: 4px 6px;
+    text-align: center;
+  }
+
   .main {
     margin-left: 0;
     padding-bottom: 72px; /* space for tab bar */
@@ -1979,7 +2020,7 @@ body { font-size: 15px; }
   flex-wrap: wrap;
 }
 @media (max-width: 640px) {
-  #drive-sync-bar { bottom: 56px; padding: 8px 12px; gap: 8px; }
+  #drive-sync-bar { display: none !important; }
 }
 #drive-sync-bar .ds-status {
   font-family: 'DM Mono', monospace;
@@ -2165,6 +2206,10 @@ window.fbLoadFromCloud = async function() {
     <button class="nav-item" onclick="showPage('stats')">
       <span class="icon">📈</span>
       <span>Statistiche</span>
+    </button>
+    <button class="nav-item" onclick="toggleSyncPopup(event)" id="sync-nav-btn">
+      <span class="icon">💾</span>
+      <span>Dati</span>
     </button>
   </div>
 
@@ -9951,6 +9996,16 @@ renderWorkouts();
 
 </script>
 
+<!-- SYNC POPUP MOBILE -->
+<div id="sync-popup">
+  <div class="sp-status" id="sp-status">💾 Dati salvati localmente</div>
+  <button class="sp-btn primary" onclick="fbSaveToCloud(); closeSyncPopup()">☁️ Salva cloud</button>
+  <button class="sp-btn" onclick="fbLoadFromCloud(); closeSyncPopup()">📥 Carica cloud</button>
+  <button class="sp-btn" onclick="exportData(); closeSyncPopup()">⬇ Esporta JSON</button>
+  <button class="sp-btn" onclick="document.getElementById('import-input-mobile').click()">⬆ Importa JSON</button>
+  <input type="file" id="import-input-mobile" accept=".json" style="display:none;" onchange="importData(this); closeSyncPopup()">
+</div>
+
 <!-- SYNC BAR -->
 <div id="drive-sync-bar">
   <span class="ds-status" id="ds-status">💾 Dati salvati localmente</span>
@@ -10023,6 +10078,28 @@ function importData(input) {
   };
   reader.readAsText(file);
 }
+
+// ===================================================
+// SYNC POPUP MOBILE
+// ===================================================
+function toggleSyncPopup(e) {
+  if (e) e.stopPropagation();
+  const popup = document.getElementById('sync-popup');
+  popup.classList.toggle('open');
+  const mainStatus = document.getElementById('ds-status');
+  const popStatus = document.getElementById('sp-status');
+  if (mainStatus && popStatus) popStatus.textContent = mainStatus.textContent;
+}
+function closeSyncPopup() {
+  document.getElementById('sync-popup').classList.remove('open');
+}
+document.addEventListener('click', function(e) {
+  const popup = document.getElementById('sync-popup');
+  const btn = document.getElementById('sync-nav-btn');
+  if (popup && popup.classList.contains('open') && !popup.contains(e.target) && btn && !btn.contains(e.target)) {
+    popup.classList.remove('open');
+  }
+});
 </script>
 </body>
 </html>
