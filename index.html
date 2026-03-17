@@ -430,6 +430,10 @@ textarea.form-input {
 }
 .sn-pain-block-header:hover { background: var(--surface); }
 .sn-chevron { font-size: 10px; color: var(--text3); }
+.sn-tag-label { display:flex;align-items:center;gap:4px;font-size:11px;font-family:'DM Mono';color:var(--text2);cursor:pointer;padding:3px 8px;border-radius:20px;border:1px solid var(--border);transition:all 0.15s; }
+.sn-tag-label:hover { border-color:var(--accent);color:var(--accent); }
+.sn-tag-label input[type=checkbox] { display:none; }
+.sn-tag-label.active { background:var(--accent);color:#000;border-color:var(--accent);font-weight:700; }
 .sn-pain-block-body {
   padding: 12px 14px;
   background: var(--surface);
@@ -2721,11 +2725,59 @@ body { font-size: 15px; }
     </div>
 
     <!-- ② NOTE / ESERCIZI — sempre visibile -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
       <div style="width:22px;height:22px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#000;flex-shrink:0;" id="sn-step-note-num">2</div>
       <div style="font-size:13px;font-weight:700;">Note seduta</div>
+      <div style="margin-left:auto;display:flex;gap:6px;">
+        <button onclick="snSetMode('guided')" id="sn-mode-guided" style="font-size:10px;padding:3px 8px;border-radius:20px;border:1px solid var(--accent);background:var(--accent);color:#000;cursor:pointer;font-weight:700;">Guidata</button>
+        <button onclick="snSetMode('free')" id="sn-mode-free" style="font-size:10px;padding:3px 8px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;">Libera</button>
+      </div>
     </div>
-    <textarea class="form-input" id="sn-text" placeholder="Es: ha faticato col bird dog, lombare molto tesa, ha dormito male ieri..." style="min-height:80px;margin-bottom:16px;"></textarea>
+    <!-- MODALITÀ LIBERA -->
+    <div id="sn-free-mode" style="display:none;margin-bottom:16px;">
+      <textarea class="form-input" id="sn-text" placeholder="Es: ha faticato col bird dog, lombare molto tesa, ha dormito male ieri..." style="min-height:100px;"></textarea>
+    </div>
+    <!-- MODALITÀ GUIDATA -->
+    <div id="sn-guided-mode" style="margin-bottom:16px;">
+      <div style="margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;letter-spacing:0.04em;">⚡ ENERGIA PRE-SEDUTA</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="range" id="sn-energia" min="1" max="10" value="7" oninput="document.getElementById('sn-energia-val').textContent=this.value" style="flex:1;accent-color:var(--accent);">
+          <span id="sn-energia-val" style="font-family:'DM Mono';font-size:13px;font-weight:700;color:var(--accent);min-width:16px;">7</span><span style="font-size:11px;color:var(--text3);">/ 10</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:5px;letter-spacing:0.04em;">✅ COSA HA FUNZIONATO</div>
+        <textarea class="form-input" id="sn-funzionato" placeholder="Es: stacco da terra 65kg pulito, buona attivazione core..." style="min-height:54px;margin:0;font-size:12px;"></textarea>
+      </div>
+      <div style="margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:5px;letter-spacing:0.04em;">⚠️ DA RIVEDERE / COMPENSAZIONI</div>
+        <textarea class="form-input" id="sn-rivedere" placeholder="Es: ginocchio dx in valgo sullo squat, push-up instabile..." style="min-height:54px;margin:0;font-size:12px;"></textarea>
+      </div>
+      <div style="margin-bottom:8px;padding:10px 12px;background:var(--surface2);border-radius:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:5px;letter-spacing:0.04em;">➡️ NOTE PER LA PROSSIMA</div>
+        <textarea class="form-input" id="sn-prossima" placeholder="Es: più mobilità anca, evitare overhead press, aumentare carico squat..." style="min-height:54px;margin:0;font-size:12px;"></textarea>
+      </div>
+      <div style="padding:10px 12px;background:var(--surface2);border-radius:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:7px;letter-spacing:0.04em;">🏷️ TAG RAPIDI</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <label class="sn-tag-label"><input type="checkbox" value="#progresso"> #progresso</label>
+          <label class="sn-tag-label"><input type="checkbox" value="#plateau"> #plateau</label>
+          <label class="sn-tag-label"><input type="checkbox" value="#compensazione"> #compensazione</label>
+          <label class="sn-tag-label"><input type="checkbox" value="#tecnica-ok"> #tecnica-ok</label>
+          <label class="sn-tag-label"><input type="checkbox" value="#tecnica-da-lavorare"> #tecnica-da-lavorare</label>
+          <label class="sn-tag-label"><input type="checkbox" value="#motivazione-alta"> #motivazione-alta</label>
+          <label class="sn-tag-label"><input type="checkbox" value="#motivazione-bassa"> #motivazione-bassa</label>
+          <label class="sn-tag-label"><input type="checkbox" value="#regressione"> #regressione</label>
+        </div>
+      </div>
+      <!-- Note libere aggiuntive -->
+      <div style="margin-top:8px;padding:10px 12px;background:var(--surface2);border-radius:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px;letter-spacing:0.04em;">📝 NOTE LIBERE</div>
+        <textarea class="form-input" id="sn-note-libere" placeholder="Qualsiasi altra osservazione..." style="min-height:54px;margin:0;font-size:12px;"></textarea>
+      </div>
+      <textarea id="sn-text" style="display:none;"></textarea>
+    </div>
 
     <!-- ③ DOLORI FINE — visibile solo se dolori attivi -->
     <div id="sn-dolori-fine-section" style="display:none;">
@@ -4467,11 +4519,57 @@ function openSessionNote(clientId, prefillPain) {
   const todayW    = _findLatestWorkoutForClient(clientId, today);
   _openUnifiedNote(clientId, todayW?.id || null, todayNote?.id || null, prefillPain || null);
 }
+// ── NOTE GUIDATA helpers ─────────────────────────────────────
+let _snMode = 'guided';
+function snSetMode(mode) {
+  _snMode = mode;
+  document.getElementById('sn-guided-mode').style.display = mode === 'guided' ? '' : 'none';
+  document.getElementById('sn-free-mode').style.display   = mode === 'free'   ? '' : 'none';
+  const bg = document.getElementById('sn-mode-guided');
+  const fr = document.getElementById('sn-mode-free');
+  if (mode === 'guided') {
+    bg.style.background = 'var(--accent)'; bg.style.color = '#000'; bg.style.borderColor = 'var(--accent)';
+    fr.style.background = 'transparent';   fr.style.color = 'var(--text2)'; fr.style.borderColor = 'var(--border)';
+  } else {
+    fr.style.background = 'var(--accent)'; fr.style.color = '#000'; fr.style.borderColor = 'var(--accent)';
+    bg.style.background = 'transparent';   bg.style.color = 'var(--text2)'; bg.style.borderColor = 'var(--border)';
+  }
+}
+function snGetGuidedText() {
+  const energia    = document.getElementById('sn-energia')?.value || '7';
+  const funzionato = document.getElementById('sn-funzionato')?.value?.trim() || '';
+  const rivedere   = document.getElementById('sn-rivedere')?.value?.trim() || '';
+  const prossima   = document.getElementById('sn-prossima')?.value?.trim() || '';
+  const tags = [...document.querySelectorAll('#sn-guided-mode input[type=checkbox]:checked')].map(c => c.value).join(' ');
+  let parts = [];
+  parts.push('⚡ Energia: ' + energia + '/10');
+  if (funzionato) parts.push('✅ ' + funzionato);
+  if (rivedere)   parts.push('⚠️ ' + rivedere);
+  if (prossima)   parts.push('➡️ ' + prossima);
+  if (tags)        parts.push(tags);
+  const libere = document.getElementById('sn-note-libere')?.value?.trim() || '';
+  if (libere) parts.push('📝 ' + libere);
+  return parts.join(' | ');
+}
+function snResetGuided() {
+  const e = document.getElementById('sn-energia'); if (e) { e.value = 7; document.getElementById('sn-energia-val').textContent = '7'; }
+  ['sn-funzionato','sn-rivedere','sn-prossima','sn-note-libere'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.querySelectorAll('#sn-guided-mode input[type=checkbox]').forEach(c => { c.checked = false; c.closest('label')?.classList.remove('active'); });
+}
+// Toggle active class on tag labels
+document.addEventListener('change', function(e) {
+  if (e.target.type === 'checkbox' && e.target.closest('.sn-tag-label')) {
+    e.target.closest('.sn-tag-label').classList.toggle('active', e.target.checked);
+  }
+});
+// ─────────────────────────────────────────────────────────────
+
 function saveSessionNote() {
   const date = document.getElementById('sn-date').value;
   const mood = document.getElementById('sn-mood').value;
-  const text = document.getElementById('sn-text').value.trim();
+  const text = _snMode === 'guided' ? snGetGuidedText() : (document.getElementById('sn-text').value.trim());
   const tipo = document.querySelector('input[name="sn-tipo"]:checked')?.value || 'normale';
+  const energia = _snMode === 'guided' ? parseInt(document.getElementById('sn-energia')?.value || 7) : null;
   if (!date) { alert('Inserisci la data'); return; }
 
   const painStart = Object.entries(_snPainStart).map(([label, intensity]) => ({ label, intensity }));
@@ -4490,7 +4588,7 @@ function saveSessionNote() {
     : notes.findIndex(n => n.date === date);
   const note = {
     id: existIdx >= 0 ? notes[existIdx].id : Date.now(),
-    date, mood, text, tipo,
+    date, mood, text, tipo, energia,
     pain: avgPain,
     painStart: tipo === 'dolori' ? painStart : [],
     painEnd:   tipo === 'dolori' ? painEnd   : []
@@ -4518,6 +4616,7 @@ function saveSessionNote() {
 
 
   _editingNoteId = null;
+  snResetGuided();
   closeModal('modal-session-note');
   openClientDetail(_sessionNoteClientId);
 }
@@ -4677,6 +4776,7 @@ function _openUnifiedNote(clientId, workoutId, forceNoteId, prefillPain) {
     statoBlock.style.display = 'none';
   }
 
+  snSetMode('guided');
   openModal('modal-session-note');
 }
 
@@ -4895,11 +4995,28 @@ function renderSessionNotes(clientId) {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           ${tipoBadge}
           ${n.mood ? `<span style="font-size:12px;">${moodIcon[n.mood] || ''} ${n.mood}</span>` : ''}
+          ${n.energia ? `<span style="font-family:'DM Mono';font-size:10px;background:rgba(255,200,0,0.1);color:#ffc800;padding:2px 7px;border-radius:20px;">⚡ ${n.energia}/10</span>` : ''}
           <button onclick="deleteSessionNote(${clientId}, ${n.id})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;">🗑</button>
         </div>
       </div>
       ${deltaBlock}
-      ${n.text ? `<div style="font-family:'Lora';font-size:13px;color:var(--text2);line-height:1.6;margin-top:8px;">${n.text}</div>` : ''}
+      ${n.text ? (() => {
+        // Se il testo contiene le pipe della modalità guidata, renderizzalo a blocchi
+        if (n.text.includes(' | ')) {
+          const parts = n.text.split(' | ');
+          const colorMap = { '⚡':'#ffc800', '✅':'var(--green)', '⚠️':'var(--red)', '➡️':'var(--accent)' };
+          const blocks = parts.map(p => {
+            const emoji = p.charAt(0) + p.charAt(1);
+            const col = colorMap[emoji] || 'var(--text2)';
+            if (p.startsWith('#') || p.includes('#')) {
+              return `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">${p.split(' ').map(t => t.startsWith('#') ? `<span style="font-family:'DM Mono';font-size:10px;padding:2px 7px;border-radius:20px;background:rgba(255,255,255,0.05);color:var(--accent);border:1px solid var(--border);">${t}</span>` : '').join('')}</div>`;
+            }
+            return `<div style="font-size:12px;color:${col};margin-top:5px;line-height:1.5;">${p}</div>`;
+          }).join('');
+          return `<div style="margin-top:8px;">${blocks}</div>`;
+        }
+        return `<div style="font-family:'Lora';font-size:13px;color:var(--text2);line-height:1.6;margin-top:8px;">${n.text}</div>`;
+      })() : ''}
     </div>`;
   }).join('');
 }
