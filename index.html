@@ -9178,6 +9178,40 @@ function openExistingSeduta(workout, clientId) {
     if (el) el.dataset.modified = '1';
   });
 
+  // Ripopola i campi nota guidata se le note sono in formato pipe
+  if (workout.notes && workout.notes.includes(' | ')) {
+    sbSetMode('guided');
+    const parts = workout.notes.split(' | ');
+    parts.forEach(p => {
+      if (p.startsWith('⚡ Energia: ')) {
+        const val = parseInt(p.replace('⚡ Energia: ', '').replace('/10','').trim());
+        const sl = document.getElementById('sb-energia');
+        const lbl = document.getElementById('sb-energia-val');
+        if (sl && !isNaN(val)) { sl.value = val; if (lbl) lbl.textContent = val; }
+      } else if (p.startsWith('✅ ')) {
+        const el = document.getElementById('sb-funzionato'); if (el) el.value = p.replace('✅ ','');
+      } else if (p.startsWith('⚠️ ')) {
+        const el = document.getElementById('sb-rivedere'); if (el) el.value = p.replace('⚠️ ','');
+      } else if (p.startsWith('➡️ ')) {
+        const el = document.getElementById('sb-prossima'); if (el) el.value = p.replace('➡️ ','');
+      } else if (p.startsWith('📝 ')) {
+        const el = document.getElementById('sb-note-libere'); if (el) el.value = p.replace('📝 ','');
+      } else if (p.includes('#')) {
+        // Ripristina tag
+        p.split(' ').filter(t => t.startsWith('#')).forEach(tag => {
+          const cb = document.querySelector(`#sb-guided-mode input[value="${tag}"]`);
+          if (cb) { cb.checked = true; cb.closest('label')?.classList.add('active'); }
+        });
+      }
+    });
+  } else if (workout.notes) {
+    // Nota in formato libero
+    sbSetMode('free');
+    const el = document.getElementById('seduta-builder-notes'); if (el) el.value = workout.notes;
+  } else {
+    sbSetMode('guided');
+  }
+
   // Imposta il radio JS (innerHTML non garantisce .checked = true)
   const radioNorm = document.querySelector('input[name="sb-tipo"][value="normale"]');
   const radioDol  = document.querySelector('input[name="sb-tipo"][value="dolori"]');
