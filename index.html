@@ -8,7 +8,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Outfit:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #f0f2f5;
@@ -18,9 +18,9 @@
   --accent: #e53935;
   --accent2: #1976d2;
   --accent3: #f57c00;
-  --text: #1a1d23;
-  --text2: #5a6278;
-  --text3: #9aa0b4;
+  --text: #111318;
+  --text2: #3d4358;
+  --text3: #6b7280;
   --green: #2e7d32;
   --green-bg: #e8f5e9;
   --red: #c62828;
@@ -39,8 +39,10 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   background: var(--bg);
+  background-image: radial-gradient(circle, #d0d4db 1px, transparent 1px);
+  background-size: 24px 24px;
   color: var(--text);
   min-height: 100vh;
   overflow-x: hidden;
@@ -85,7 +87,8 @@ body {
   line-height: 1.2;
   margin-top: 4px;
   color: var(--text);
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.01em;
 }
 
 .sidebar-logo h1 span { color: var(--accent); }
@@ -119,7 +122,7 @@ body {
   background: none;
   width: 100%;
   text-align: left;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
 }
 
 .nav-item:hover { background: var(--surface2); color: var(--text); }
@@ -143,7 +146,8 @@ body {
   font-weight: 800;
   color: var(--accent);
   display: block;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
 }
 
 /* ===== MAIN CONTENT ===== */
@@ -173,8 +177,9 @@ body {
   font-size: 30px;
   font-weight: 800;
   line-height: 1.1;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   color: var(--text);
+  letter-spacing: -0.02em;
 }
 
 /* ===== BUTTONS ===== */
@@ -183,7 +188,7 @@ body {
   border-radius: var(--radius-sm);
   border: none;
   cursor: pointer;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 13px;
   transition: all 0.15s;
@@ -286,7 +291,7 @@ body {
   font-weight: 800;
   color: var(--accent);
   margin-bottom: 12px;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   border: 2px solid rgba(229,57,53,0.15);
 }
 
@@ -345,7 +350,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 10px 14px;
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 14px;
   color: var(--text);
   outline: none;
@@ -476,7 +481,7 @@ textarea.form-input {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 12px;
   padding: 7px 12px;
   outline: none;
@@ -924,7 +929,7 @@ textarea.form-input {
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--text2);
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
@@ -952,7 +957,8 @@ textarea.form-input {
   font-weight: 800;
   line-height: 1;
   color: var(--accent);
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .stat-label {
@@ -983,7 +989,7 @@ textarea.form-input {
   background: none;
   border: none;
   color: var(--text);
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 14px;
   padding: 12px 0;
   outline: none;
@@ -1418,7 +1424,7 @@ textarea.form-input {
   border-radius: var(--radius-sm);
   padding: 10px 14px;
   color: var(--text);
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 13px;
   outline: none;
   margin-bottom: 10px;
@@ -1531,7 +1537,7 @@ textarea.form-input {
 }
 
 .ai-result h3 {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 13px;
   font-weight: 700;
   color: var(--accent);
@@ -1541,7 +1547,7 @@ textarea.form-input {
 }
 
 .ai-result h4 {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 12px;
   font-weight: 700;
   color: var(--accent2);
@@ -1550,7 +1556,7 @@ textarea.form-input {
 
 .ai-result ul { padding-left: 16px; margin: 6px 0; }
 .ai-result li { margin-bottom: 4px; }
-.ai-result strong { color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; }
+.ai-result strong { color: var(--text); font-family: 'Outfit', sans-serif; }
 .ai-result em { color: var(--yellow); font-style: normal; }
 
 .ai-result .phase-block {
@@ -1900,7 +1906,7 @@ textarea.form-input {
   }
   #sync-popup.open { display: flex; }
   #sync-popup .sp-btn {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Outfit', sans-serif;
     font-weight: 700;
     font-size: 12px;
     padding: 10px 14px;
@@ -1993,9 +1999,9 @@ textarea.form-input {
 
 /* ===== GLOBAL FONT SIZE UPGRADES ===== */
 /* Base text larger everywhere */
-body { font-size: 15px; }
+body { font-size: 15px; font-family: 'Outfit', sans-serif; }
 
-.nav-item { font-size: 14px; }
+.nav-item { font-size: 14px; font-family: 'Outfit', sans-serif; }
 
 .page-title { font-size: 11px; }
 .page-title-big { font-size: 34px; }
@@ -2051,9 +2057,113 @@ body { font-size: 15px; }
 .session-block-title { font-size: 14px !important; }
 .session-block-meta { font-size: 11px !important; }
 
-/* Agenda */
-.agenda-client-name { font-size: 14px !important; }
-.agenda-time { font-size: 13px !important; }
+/* ===== MICRO-ANIMAZIONI ===== */
+
+/* Card press effect */
+.client-card:active {
+  transform: scale(0.97);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.1s;
+}
+
+/* Bottone primary press */
+.btn-primary:active {
+  transform: scale(0.96) translateY(0);
+  box-shadow: 0 1px 4px rgba(229,57,53,0.2);
+}
+
+/* Nav item hover slide */
+.nav-item {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Card hover lift più fluida */
+.card {
+  transition: box-shadow 0.2s cubic-bezier(0.4,0,0.2,1), border-color 0.2s;
+}
+
+/* Percorso step hover */
+.percorso-step {
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+.percorso-step:not(.locked):hover {
+  transform: translateX(4px);
+  box-shadow: var(--shadow);
+}
+
+/* Filter btn pop */
+.filter-btn {
+  transition: all 0.15s cubic-bezier(0.34,1.56,0.64,1);
+}
+.filter-btn:active { transform: scale(0.93); }
+
+/* Modal slide-up già presente — aggiungo fade */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.modal-overlay.open {
+  animation: fadeIn 0.18s ease;
+}
+
+/* Agenda day card hover */
+.agenda-day-card {
+  transition: all 0.18s cubic-bezier(0.4,0,0.2,1);
+}
+.agenda-day-slot:hover .agenda-day-card {
+  box-shadow: var(--shadow);
+  border-color: var(--accent);
+}
+
+/* Exercise item pop */
+.exercise-item {
+  transition: all 0.15s cubic-bezier(0.34,1.56,0.64,1);
+}
+.exercise-item:active { transform: scale(0.96); }
+
+/* Scheda block hover */
+.scheda-block-header {
+  transition: background 0.15s;
+}
+
+/* Stat box hover */
+.stat-box {
+  transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+.stat-box:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+/* Tag hover */
+.tag {
+  transition: opacity 0.15s;
+}
+
+/* Bottone secondario */
+.btn-secondary:active { transform: scale(0.97); }
+
+/* Sn-zone-cb pop */
+.sn-zone-cb {
+  transition: all 0.12s cubic-bezier(0.34,1.56,0.64,1);
+}
+.sn-zone-cb.sn-checked {
+  transform: scale(1.04);
+}
+
+/* pain-cb checked */
+.pain-cb {
+  transition: all 0.15s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Page transition — quando si cambia pagina */
+.page.active {
+  animation: pageIn 0.2s ease;
+}
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 </style>
 <style>
 /* ── SYNC BAR ── */
@@ -2084,7 +2194,7 @@ body { font-size: 15px; }
   text-overflow: ellipsis;
 }
 #drive-sync-bar .ds-btn {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 11px;
   padding: 7px 14px;
@@ -7017,7 +7127,7 @@ function openArchiveFixedModal(clientId, dayStr, orario, label) {
     var reason = item[0], color = item[1], bg = item[2], lbl = item[3];
     return '<button onclick="confirmSkipFixed(' + clientId + ',\'' + dayStr + '\',\'' + orario + '\',\'' + reason + '\')" ' +
       'style="padding:12px 16px;border-radius:8px;border:1px solid ' + color + ';background:' + bg + ';color:' + color + ';' +
-      'cursor:pointer;font-family:\'Syne\',sans-serif;font-weight:700;font-size:14px;text-align:left;">' + lbl + '</button>';
+      'cursor:pointer;font-family:sans-serif;font-weight:700;font-size:14px;text-align:left;">' + lbl + '</button>';
   }).join('');
   overlay.innerHTML =
     '<div class="modal" style="max-width:360px;">' +
