@@ -6165,15 +6165,15 @@ function renderEsercizioEditor(ex, bi, ei) {
   const params = `<div class="fase-ex-params">
     <div class="param-block">
       <span class="param-label">Serie</span>
-      <input class="param-input serie" type="text" inputmode="numeric" value="${ex.serie||''}" placeholder="3" oninput="updateEsercizio(${bi},${ei},'serie',this.value)">
+      <input class="param-input serie" type="text" value="${ex.serie||''}" placeholder="3" oninput="updateEsercizio(${bi},${ei},'serie',this.value)">
     </div>
     <div class="param-block">
       <span class="param-label">Ripe</span>
-      <input class="param-input" type="text" inputmode="numeric" value="${ex.reps||''}" placeholder="10" oninput="updateEsercizio(${bi},${ei},'reps',this.value)">
+      <input class="param-input" type="text" value="${ex.reps||''}" placeholder="10" oninput="updateEsercizio(${bi},${ei},'reps',this.value)">
     </div>
     <div class="param-block">
       <span class="param-label">Kg</span>
-      <input class="param-input kg" type="text" inputmode="decimal" value="${ex.kg||''}" placeholder="—" oninput="updateEsercizio(${bi},${ei},'kg',this.value)">
+      <input class="param-input kg" type="text" value="${ex.kg||''}" placeholder="—" oninput="updateEsercizio(${bi},${ei},'kg',this.value)">
     </div>
     <div class="param-block">
       <span class="param-label">Pausa</span>
