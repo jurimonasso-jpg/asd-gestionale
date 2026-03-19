@@ -2351,8 +2351,42 @@ body { font-size: 15px; font-family: 'Outfit', sans-serif; }
 #drive-sync-bar .ds-btn:hover { border-color: var(--accent); color: var(--accent); }
 #drive-sync-bar .ds-btn.primary { background: var(--accent); color: #ffffff; border-color: var(--accent); box-shadow: 0 2px 8px rgba(229,57,53,0.25); }
 #drive-sync-bar .ds-btn.primary:hover { opacity: 0.85; }
+/* ===== SAVE TOAST ===== */
+#save-toast {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow);
+  z-index: 9999;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text2);
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+#save-toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+#save-toast .toast-icon { font-size: 14px; }
+#save-toast .toast-cloud {
+  font-size: 10px;
+  color: var(--accent2);
+  font-weight: 700;
+}
+@media (max-width: 640px) {
+  #save-toast { top: auto; bottom: 76px; right: 12px; }
+}
 </style>
-<!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
@@ -2420,6 +2454,7 @@ window.fbSaveToCloud = async function() {
     await setDoc(doc(db, 'gestionale', 'dynamic'), dynamicData);
     const ora = new Date().toLocaleTimeString('it-IT');
     status.textContent = '☁️ Cloud · salvato alle ' + ora;
+    if (window._showSaveToast) _showSaveToast(true);
   } catch(err) {
     status.textContent = '❌ Errore salvataggio: ' + err.message;
   }
@@ -3700,6 +3735,21 @@ function save() {
   localStorage.setItem('asd_workouts', JSON.stringify(workouts));
   localStorage.setItem('asd_notes', JSON.stringify(quickNotes));
   localStorage.setItem('asd_tests', JSON.stringify(testResults));
+  _showSaveToast(false);
+}
+
+let _toastTimer = null;
+function _showSaveToast(isCloud) {
+  const toast = document.getElementById('save-toast');
+  const textEl = document.getElementById('save-toast-text');
+  const cloudEl = document.getElementById('save-toast-cloud');
+  if (!toast) return;
+  const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  textEl.textContent = `Salvato · ${time}`;
+  cloudEl.style.display = isCloud ? '' : 'none';
+  toast.classList.add('visible');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => toast.classList.remove('visible'), 2200);
 }
 
 // NAVIGATION — overridden below by full version
@@ -3822,6 +3872,27 @@ function saveClient() {
       return new Date().toISOString().split('T')[0]; // newly added today
     })()
   };
+
+  // ── Storico rinnovi: se abbonamento cambia, archivia il vecchio ─────────
+  const existingClient = editingClientId ? clients.find(c => c.id === editingClientId) : null;
+  let abbRinnovi = existingClient?.abbRinnovi ? [...existingClient.abbRinnovi] : [];
+
+  if (existingClient &&
+      existingClient.abbTipo && existingClient.abbTipo !== 'none' &&
+      existingClient.abbStart &&
+      (existingClient.abbTipo !== client.abbTipo || existingClient.abbStart !== client.abbStart)) {
+    // Il vecchio abbonamento va in archivio
+    const vecchiaScad = abbScadenza(existingClient);
+    abbRinnovi.unshift({
+      tipo:    existingClient.abbTipo,
+      start:   existingClient.abbStart,
+      scad:    vecchiaScad ? vecchiaScad.toISOString().split('T')[0] : null,
+      proroghe: existingClient.abbProroghe || [],
+      archivedAt: new Date().toISOString().split('T')[0]
+    });
+  }
+  client.abbRinnovi = abbRinnovi;
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (editingClientId) {
     const idx = clients.findIndex(c => c.id === editingClientId);
@@ -4463,6 +4534,7 @@ function renderAbbonamentoDetail(client) {
   const scad = abbScadenza(client);
   const daysLeft = abbDaysLeft(client);
   const fmt = d => d.toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' });
+  const fmtShort = d => new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
   const start = new Date(client.abbStart);
   let statusCls = daysLeft > 30 ? 'abb-status-ok' : daysLeft > 0 ? 'abb-status-warn' : 'abb-status-expired';
   let statusTxt = daysLeft > 0 ? `${daysLeft} giorni rimanenti` : `Scaduto da ${Math.abs(daysLeft)} giorni`;
@@ -4475,6 +4547,33 @@ function renderAbbonamentoDetail(client) {
         ${p.data ? `<span style="color:var(--text3);">dal ${new Date(p.data).toLocaleDateString('it-IT')}</span>` : ''}
       </div>`).join('')
     : `<div style="font-size:12px;color:var(--text3);">Nessuna proroga utilizzata</div>`;
+
+  // ── Storico rinnovi ──────────────────────────────────────────────────────
+  const rinnovi = client.abbRinnovi || [];
+  const rinnoviHtml = rinnovi.length > 0
+    ? `<div class="card" style="margin-top:14px;">
+        <div class="section-title" style="margin-bottom:12px;">📋 Storico Rinnovi (${rinnovi.length})</div>
+        ${rinnovi.map((r, i) => {
+          const rStart = r.start ? fmtShort(r.start) : '—';
+          const rScad  = r.scad  ? fmtShort(r.scad)  : '—';
+          const rLabel = ABB_LABELS[r.tipo] || r.tipo;
+          const rProroghe = (r.proroghe || []).reduce((s, p) => s + parseInt(p.giorni || 0), 0);
+          const oggi = new Date().toISOString().split('T')[0];
+          const scaduto = r.scad && r.scad < oggi;
+          return `<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'DM Mono';font-size:10px;color:var(--text3);flex-shrink:0;font-weight:700;">${rinnovi.length - i}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:700;margin-bottom:3px;">${rLabel}</div>
+              <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);">
+                ${rStart} → ${rScad}
+                ${rProroghe > 0 ? `<span style="color:var(--accent2);margin-left:6px;">+${rProroghe}gg proroga</span>` : ''}
+              </div>
+            </div>
+            <span style="font-family:'DM Mono';font-size:9px;padding:2px 8px;border-radius:20px;background:${scaduto ? 'var(--surface2)' : 'var(--green-bg)'};color:${scaduto ? 'var(--text3)' : 'var(--green)'};flex-shrink:0;">${scaduto ? 'concluso' : 'attivo'}</span>
+          </div>`;
+        }).join('')}
+      </div>`
+    : '';
 
   return `
     <div class="card" style="margin-bottom:14px;">
@@ -4490,6 +4589,7 @@ function renderAbbonamentoDetail(client) {
       <div class="section-title" style="margin-bottom:10px;">Proroghe (${proroghe.length}/2 usate)</div>
       ${prorogheHtml}
     </div>
+    ${rinnoviHtml}
   `;
 }
 
@@ -10527,6 +10627,13 @@ renderWorkouts();
   <button class="sp-btn" onclick="exportData(); closeSyncPopup()">⬇ Esporta JSON</button>
   <button class="sp-btn" onclick="document.getElementById('import-input-mobile').click()">⬆ Importa JSON</button>
   <input type="file" id="import-input-mobile" accept=".json" style="display:none;" onchange="importData(this); closeSyncPopup()">
+</div>
+
+<!-- SAVE TOAST -->
+<div id="save-toast">
+  <span class="toast-icon">💾</span>
+  <span id="save-toast-text">Salvato localmente</span>
+  <span class="toast-cloud" id="save-toast-cloud" style="display:none;">· ☁️ cloud</span>
 </div>
 
 <!-- SYNC BAR -->
