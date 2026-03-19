@@ -1343,57 +1343,159 @@ textarea.form-input {
 .add-ex-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Scheda view card */
+/* ===== WORKOUT CARD — restyled ===== */
 .scheda-view-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+.scheda-view-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 .scheda-view-header {
-  padding: 14px 18px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
   user-select: none;
+  background: var(--surface);
+  transition: background 0.15s;
 }
 .scheda-view-header:hover { background: var(--surface2); }
-.scheda-view-title { font-size: 16px; font-weight: 700; }
-.scheda-view-meta { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 3px; }
-.scheda-view-body { padding: 16px 18px; display: none; }
+.scheda-view-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.scheda-view-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 4px;
+  letter-spacing: 0.04em;
+}
+.scheda-view-body { padding: 18px 20px; display: none; }
 .scheda-view-body.open { display: block; }
 
-/* Esercizio in view */
-.scheda-ex-view {
-  padding: 10px 12px;
-  background: var(--surface2);
-  border-radius: 8px;
-  margin-bottom: 8px;
-  border-left: 3px solid var(--border);
+/* Blocco header dentro la card */
+.blocco-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
+.blocco-header-icon { font-size: 15px; }
+.blocco-header-label {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text2);
+}
+.blocco-header-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--text3);
+  margin-left: auto;
+}
+
+/* Esercizio in view — restyled */
+.scheda-ex-view {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface2);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  border-left: 3px solid var(--border);
+  transition: border-color 0.15s, background 0.15s;
+}
+.scheda-ex-view:hover { background: #eef0f4; }
 .scheda-ex-view.meccanico { border-left-color: var(--blue); }
 .scheda-ex-view.metabolico { border-left-color: var(--accent); }
 .scheda-ex-view.preatt { border-left-color: #00838f; }
-.scheda-ex-view-name { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
-.scheda-ex-view-detail { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text2); }
+
+.scheda-ex-view-body { flex: 1; min-width: 0; }
+.scheda-ex-view-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scheda-ex-view-detail {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+/* Pillole numeriche: serie × reps · kg */
+.ex-pills {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.ex-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 38px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.ex-pill-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 1px;
+}
+.ex-pill-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.ex-pill-val.accent { color: var(--accent); }
+.ex-pill-val.blue   { color: var(--accent2); }
+
+/* Progressione settimanale */
 .w1w4-display {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .w-cell {
   text-align: center;
-  padding: 4px;
-  background: var(--surface2);
-  border-radius: 4px;
+  padding: 5px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
   font-family: 'DM Mono', monospace;
   font-size: 9px;
 }
 .w-cell-label { color: var(--text3); font-size: 8px; margin-bottom: 2px; }
-.w-cell-val { color: var(--accent); font-size: 11px; font-weight: 700; }
+.w-cell-val { color: var(--accent); font-size: 13px; font-weight: 700; }
 
 /* Mini ex picker overlay */
 .ex-picker-overlay {
@@ -2388,11 +2490,13 @@ window.fbLoadFromCloud = async function() {
 
   <!-- ===== AGENDA SETTIMANALE ===== -->
   <div class="page" id="page-agenda">
-    <div class="page-header">
-      <div>
+    <div style="margin-bottom:20px;">
+      <!-- Riga 1: titolo -->
+      <div style="margin-bottom:14px;">
         <div class="page-title" id="agenda-view-label">Settimana</div>
         <div class="page-title-big" id="agenda-date-title">Agenda</div>
       </div>
+      <!-- Riga 2: controlli navigazione -->
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <!-- View toggle — hidden on mobile (auto-switches) -->
         <div id="agenda-view-toggle" style="display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;">
@@ -2498,6 +2602,14 @@ window.fbLoadFromCloud = async function() {
         </div>
         <div id="dash-alerts"></div>
       </div>
+    </div>
+
+    <!-- Riga 4: promemoria note per clienti di oggi -->
+    <div class="card" id="dash-promemoria-card" style="margin-bottom:24px;display:none;">
+      <div class="section-header">
+        <div class="section-title">💡 Note per la Prossima — Clienti di Oggi</div>
+      </div>
+      <div id="dash-promemoria"></div>
     </div>
 
     <div class="grid-2">
@@ -6440,72 +6552,108 @@ function renderWorkouts() {
 
 function renderWorkoutCard(w, showClient = false) {
   const client = clients.find(c => c.id == w.clientId);
-  const date = new Date(w.createdAt).toLocaleDateString('it-IT');
+  const date = new Date(w.createdAt).toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' });
   const blocchi = w.blocchi || [];
-
   const bodyId = `wcard-body-${w.id}`;
 
   const blocchiHtml = blocchi.map(b => {
     const meta = BLOCCO_META[b.tipo] || { label: b.tipo, badge:'', icon:'📌' };
     const isFase = ['fase1','fase2','fase3'].includes(b.tipo);
+
     const esHtml = b.esercizi.map(ex => {
       const hasProgression = isFase && ex.prog && ex.prog.some(p => p.reps || p.kg);
-      let progHtml = '';
-      if (hasProgression) {
-        progHtml = `<div class="w1w4-display">
-          ${ex.prog.map((p,wi) => `<div class="w-cell">
-            <div class="w-cell-label">W${wi+1}</div>
-            <div class="w-cell-val">${p.reps||'—'}</div>
-            ${p.kg ? `<div style="font-family:'DM Mono';font-size:8px;color:var(--text3);">${p.kg} kg</div>` : ''}
-          </div>`).join('')}
-        </div>`;
-      }
+
+      // Pillole numeriche
+      const pillSerie = ex.serie
+        ? `<div class="ex-pill">
+            <div class="ex-pill-label">serie</div>
+            <div class="ex-pill-val blue">${ex.serie}</div>
+           </div>` : '';
+      const pillReps = ex.reps
+        ? `<div class="ex-pill">
+            <div class="ex-pill-label">reps</div>
+            <div class="ex-pill-val">${ex.reps}</div>
+           </div>` : '';
+      const pillKg = ex.kg
+        ? `<div class="ex-pill">
+            <div class="ex-pill-label">kg</div>
+            <div class="ex-pill-val accent">${ex.kg}</div>
+           </div>` : '';
+      const pillPausa = ex.pausa
+        ? `<div class="ex-pill">
+            <div class="ex-pill-label">pausa</div>
+            <div class="ex-pill-val" style="font-size:12px;">${ex.pausa}</div>
+           </div>` : '';
+
+      const progHtml = hasProgression
+        ? `<div class="w1w4-display">
+            ${ex.prog.map((p,wi) => `<div class="w-cell">
+              <div class="w-cell-label">W${wi+1}</div>
+              <div class="w-cell-val">${p.reps||'—'}</div>
+              ${p.kg ? `<div style="font-size:8px;color:var(--text3);">${p.kg}kg</div>` : ''}
+            </div>`).join('')}
+           </div>` : '';
+
       const stimoloClass = ex.stimolo?.toLowerCase().includes('meccanico') ? 'meccanico' :
                             ex.stimolo?.toLowerCase().includes('metabolico') ? 'metabolico' :
                             ex.stimolo?.toLowerCase().includes('pre') ? 'preatt' : '';
-      const details = [ex.stimolo, ex.serie ? `${ex.serie} serie` : '', ex.reps, ex.pausa ? `pausa ${ex.pausa}` : '', ex.noteEx].filter(Boolean).join(' · ');
+
+      const detailParts = [ex.stimolo, ex.noteEx].filter(Boolean).join(' · ');
+
       return `<div class="scheda-ex-view ${stimoloClass}">
-        <div class="scheda-ex-view-name">${ex.nome}</div>
-        ${details ? `<div class="scheda-ex-view-detail">${details}</div>` : ''}
-        ${progHtml}
+        <div class="scheda-ex-view-body">
+          <div class="scheda-ex-view-name">${ex.nome}</div>
+          ${detailParts ? `<div class="scheda-ex-view-detail">${detailParts}</div>` : ''}
+          ${progHtml}
+        </div>
+        <div class="ex-pills">
+          ${pillSerie}${pillReps}${pillKg}${pillPausa}
+        </div>
       </div>`;
     }).join('');
 
-    const roundInfo = b.tipo === 'core' ? `${b.rounds||'4'} Round · ${b.intervalOn||40}" On ${b.intervalOff||20}" Off` :
-                       b.rounds ? `${b.rounds} Round` : '';
+    const roundInfo = b.tipo === 'core'
+      ? `${b.rounds||'4'}R · ${b.intervalOn||40}"on ${b.intervalOff||20}"off`
+      : b.rounds ? `${b.rounds} round` : '';
 
-    return `<div style="margin-bottom:12px;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <span style="font-size:13px;">${meta.icon}</span>
-        <span style="font-weight:700;font-size:13px;">${meta.label}</span>
-        ${roundInfo ? `<span style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${roundInfo}</span>` : ''}
-        ${b.note ? `<span style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${b.note}</span>` : ''}
+    return `<div style="margin-bottom:16px;">
+      <div class="blocco-header">
+        <span class="blocco-header-icon">${meta.icon}</span>
+        <span class="blocco-header-label">${meta.label}</span>
+        ${roundInfo ? `<span class="blocco-header-meta">${roundInfo}</span>` : ''}
+        ${b.note ? `<span class="blocco-header-meta" style="margin-left:${roundInfo?'6px':'auto'};">${b.note}</span>` : ''}
       </div>
       ${esHtml}
     </div>`;
   }).join('');
 
   const totalEx = blocchi.reduce((acc, b) => acc + (b.esercizi?.length || 0), 0);
+  const isSeduta = w.categoria === 'seduta';
 
-  return `<div class="scheda-view-card" style="margin-bottom:12px;">
+  return `<div class="scheda-view-card">
     <div class="scheda-view-header" onclick="document.getElementById('${bodyId}').classList.toggle('open');this.querySelector('.cv-chev').textContent=document.getElementById('${bodyId}').classList.contains('open')?'▾':'▸'">
-      <div>
-        ${showClient && client ? `<div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.1em;">${client.nome} ${client.cognome}</div>` : ''}
+      <div style="min-width:0;flex:1;">
+        ${showClient && client
+          ? `<div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.12em;">${client.nome} ${client.cognome}</div>`
+          : ''}
         <div class="scheda-view-title">${w.name}</div>
-        <div class="scheda-view-meta">${w.type}${w.meso ? ' · ' + w.meso : ''} · ${date} · ${totalEx} esercizi in ${blocchi.length} blocchi</div>
+        <div class="scheda-view-meta">
+          ${w.type}${w.meso ? ' · ' + w.meso : ''} · ${date} · ${totalEx} es. · ${blocchi.length} blocchi
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        ${w.tipoSeduta === 'dolori' && w.painStart?.length
-          ? `<span style="background:rgba(255,71,87,0.12);color:var(--red);padding:3px 8px;border-radius:20px;font-family:'DM Mono';font-size:9px;">💢 dolori</span>`
-          : ''
-        }
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        ${isSeduta && w.tipoSeduta === 'dolori' && w.painStart?.length
+          ? `<span style="background:rgba(255,71,87,0.1);color:var(--red);padding:3px 10px;border-radius:20px;font-family:'DM Mono';font-size:9px;font-weight:700;letter-spacing:0.06em;">💢 dolori</span>`
+          : ''}
         <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;" onclick="event.stopPropagation();deleteWorkout(${w.id})">🗑</button>
-        <span class="cv-chev" style="color:var(--text3);font-size:16px;">▸</span>
+        <span class="cv-chev" style="color:var(--text3);font-size:16px;width:16px;text-align:center;">▸</span>
       </div>
     </div>
     <div class="scheda-view-body" id="${bodyId}">
-      ${blocchiHtml || '<div style="color:var(--text3);font-size:13px;">Nessun blocco</div>'}
-      ${w.notes ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-family:'Lora';font-size:12px;color:var(--text3);line-height:1.7;">${w.notes}</div>` : ''}
+      ${blocchiHtml || '<div style="color:var(--text3);font-size:13px;padding:8px 0;">Nessun blocco</div>'}
+      ${w.notes
+        ? `<div style="margin-top:14px;padding:12px 14px;background:rgba(107,114,128,0.06);border-radius:8px;border-left:3px solid var(--border);font-family:'Lora',serif;font-size:12px;color:var(--text3);line-height:1.7;">${w.notes}</div>`
+        : ''}
     </div>
   </div>`;
 }
@@ -6626,10 +6774,10 @@ function confrontaSedute(clientId) {
   const container = document.getElementById(`confronto-result-${clientId}`);
   if (!container) return;
   container.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:14px;margin-bottom:16px;">
+    <div id="confronto-box-${clientId}" style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:14px;margin-bottom:16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <div style="font-family:'DM Mono';font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;">⚖️ Confronto sedute</div>
-        <button onclick="this.closest('[style]').remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;">✕</button>
+        <button onclick="closeConfronto(${clientId})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;">✕</button>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         ${renderCol(wa)}
@@ -6638,6 +6786,105 @@ function confrontaSedute(clientId) {
       </div>
     </div>`;
   container.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function toggleStoricoSedute(btn, clientId) {
+  const panel = document.getElementById(`storico-sedute-panel-${clientId}`);
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    btn.querySelector('span:last-child').textContent = '▸ espandi';
+  } else {
+    panel.style.display = '';
+    btn.querySelector('span:last-child').textContent = '▾ chiudi';
+    if (!panel.dataset.loaded) {
+      panel.dataset.loaded = '1';
+      panel.innerHTML = renderStoricoSedutePanel(clientId);
+    }
+  }
+}
+
+function renderStoricoSedutePanel(clientId) {
+  // Prendi le ultime 5 sedute del cliente (workouts con categoria seduta)
+  const seduteCliente = workouts
+    .filter(w => w.clientId == clientId && w.categoria === 'seduta')
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 5);
+
+  if (seduteCliente.length === 0) {
+    return `<div style="padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text3);">Nessuna seduta registrata per questo cliente.</div>`;
+  }
+
+  const BLOCCO_LABELS = {
+    mobilita:'Mobilità', warmup:'Warm Up', core:'Core',
+    fase1:'Fase 1', fase2:'Fase 2', fase3:'Fase 3',
+    workout:'Workout', release:'Release', attivazione:'Attivazione'
+  };
+
+  return seduteCliente.map((w, idx) => {
+    const date = new Date(w.createdAt).toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' });
+    const blocchi = w.blocchi || [];
+    const totalEx = blocchi.reduce((acc, b) => acc + (b.esercizi?.length || 0), 0);
+    const bodyId = `storico-body-${w.id}`;
+
+    // Estrai note strutturate se presenti
+    let noteHtml = '';
+    if (w.notes) {
+      const parts = w.notes.split(' | ');
+      const chunks = parts.map(p => {
+        if (p.startsWith('⚡')) return `<span style="color:var(--accent2);">${p}</span>`;
+        if (p.startsWith('✅')) return `<span style="color:var(--green);">${p}</span>`;
+        if (p.startsWith('⚠️')) return `<span style="color:var(--yellow);">${p}</span>`;
+        if (p.startsWith('➡️')) return `<span style="color:var(--accent);font-weight:700;">${p}</span>`;
+        if (p.startsWith('📝')) return `<span style="color:var(--text2);">${p}</span>`;
+        return `<span style="color:var(--text3);">${p}</span>`;
+      }).join('<br>');
+      noteHtml = `<div style="margin-top:8px;font-size:11px;line-height:1.6;padding:8px 10px;background:var(--surface);border-radius:6px;border-left:2px solid var(--accent);">${chunks}</div>`;
+    }
+
+    const esHtml = blocchi.map(b => {
+      const label = BLOCCO_LABELS[b.tipo] || b.tipo;
+      const exList = (b.esercizi || []).map(ex => {
+        const kg = ex.kg ? `<span style="color:var(--accent);font-weight:700;"> ${ex.kg}kg</span>` : '';
+        return `<span style="display:inline-block;margin-right:8px;font-size:11px;white-space:nowrap;">${ex.nome} <span style="font-family:'DM Mono';color:var(--text3);">${ex.serie||''}×${ex.reps||''}</span>${kg}</span>`;
+      }).join('');
+      return `<div style="margin-bottom:6px;">
+        <div style="font-family:'DM Mono';font-size:9px;color:var(--accent2);text-transform:uppercase;margin-bottom:3px;">${label}</div>
+        <div style="flex-wrap:wrap;display:flex;gap:2px;">${exList}</div>
+      </div>`;
+    }).join('');
+
+    return `
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:6px;background:var(--surface);">
+        <div onclick="document.getElementById('${bodyId}').style.display=document.getElementById('${bodyId}').style.display==='none'?'':'none'"
+          style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;background:${idx===0?'rgba(229,57,53,0.04)':'var(--surface)'};">
+          ${idx===0 ? '<span style="font-family:\'DM Mono\';font-size:8px;background:var(--accent);color:#fff;padding:1px 6px;border-radius:20px;flex-shrink:0;">ULTIMA</span>' : ''}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:700;">${w.name || 'Seduta'}</div>
+            <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${date} · ${totalEx} esercizi${w.tipoSeduta==='dolori'?' · 💢':''}</div>
+          </div>
+          <span style="font-size:13px;color:var(--text3);">▸</span>
+        </div>
+        <div id="${bodyId}" style="display:none;padding:10px 14px;border-top:1px solid var(--border);">
+          ${esHtml || '<div style="color:var(--text3);font-size:12px;">Nessun esercizio</div>'}
+          ${noteHtml}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function closeConfronto(clientId) {
+  const box = document.getElementById(`confronto-box-${clientId}`);
+  if (box) box.remove();
+  const sel = _compareSelected[clientId] || [];
+  sel.forEach(wId => {
+    const cb = document.getElementById(`cmp-${wId}`);
+    if (cb) cb.checked = false;
+  });
+  _compareSelected[clientId] = [];
+  const btn = document.getElementById(`btn-confronta-${clientId}`);
+  if (btn) btn.style.display = 'none';
 }
 
 function deleteWorkout(id) {
@@ -8616,6 +8863,49 @@ function renderDashboard() {
   }
 
   renderQuickNotes();
+
+  // ── 5. PROMEMORIA NOTE "PER LA PROSSIMA" — clienti di oggi ───────────────
+  const proCard = document.getElementById('dash-promemoria-card');
+  const proEl   = document.getElementById('dash-promemoria');
+  if (proCard && proEl) {
+    const todayClientsArr = [...todayClientIds]
+      .map(cid => clients.find(c => c.id === cid))
+      .filter(Boolean);
+
+    const proItems = [];
+    todayClientsArr.forEach(c => {
+      const notes = getSessionNotes(c.id);
+      for (const n of notes) {
+        if (n.text && n.text.includes('➡️')) {
+          const parts = n.text.split(' | ');
+          const chunk = parts.find(p => p.startsWith('➡️'));
+          if (chunk) {
+            const testo = chunk.replace('➡️', '').trim();
+            const dataStr = new Date(n.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+            proItems.push({ client: c, testo, dataStr });
+            break;
+          }
+        }
+      }
+    });
+
+    if (proItems.length === 0) {
+      proCard.style.display = 'none';
+    } else {
+      proCard.style.display = '';
+      proEl.innerHTML = proItems.map(({ client: c, testo, dataStr }) => `
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientDetail(${c.id})">
+          <div style="width:34px;height:34px;background:rgba(255,200,0,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#c8940a;flex-shrink:0;">
+            ${(c.nome[0] + c.cognome[0]).toUpperCase()}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;margin-bottom:2px;">${c.nome} ${c.cognome}</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.4;">${testo}</div>
+          </div>
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);flex-shrink:0;padding-top:2px;">${dataStr}</div>
+        </div>`).join('');
+    }
+  }
 }
 
 // ===================================================
@@ -9469,6 +9759,16 @@ function openExistingSeduta(workout, clientId) {
         </div>
       </div>
 
+      <!-- Storico ultime sedute -->
+      <div style="margin-bottom:14px;">
+        <button onclick="toggleStoricoSedute(this, ${clientId})"
+          style="display:flex;align-items:center;gap:8px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+          <span>📋 Storico ultime sedute</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3);">▸ espandi</span>
+        </button>
+        <div id="storico-sedute-panel-${clientId}" style="display:none;margin-top:4px;"></div>
+      </div>
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="_editingSedutaId=null;document.getElementById('seduta-content').innerHTML=''">Annulla</button>
         <button class="btn btn-primary" onclick="saveSedutaBuilder()">✓ Salva modifiche</button>
@@ -9685,6 +9985,16 @@ function newSedutaBuilder(prefillDate) {
           </div>
           <textarea id="seduta-builder-notes" style="display:none;"></textarea>
         </div>
+      </div>
+
+      <!-- 5b. Storico ultime sedute -->
+      <div style="margin-bottom:14px;">
+        <button onclick="toggleStoricoSedute(this, ${clientId})"
+          style="display:flex;align-items:center;gap:8px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+          <span>📋 Storico ultime sedute</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3);">▸ espandi</span>
+        </button>
+        <div id="storico-sedute-panel-${clientId}" style="display:none;margin-top:4px;"></div>
       </div>
 
       <!-- 5. Bottoni -->
