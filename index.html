@@ -2755,6 +2755,22 @@ window.fbLoadFromCloud = async function() {
       </div>
     </div>
 
+    <!-- Barra ricerca + filtri -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;align-items:center;">
+      <div class="search-bar" style="flex:1;min-width:200px;margin:0;">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="workouts-search" placeholder="Cerca per nome o cliente..." oninput="renderWorkouts()">
+      </div>
+      <select id="workouts-filter-tipo" class="form-input" style="width:150px;margin:0;" onchange="renderWorkouts()">
+        <option value="">Tutti i tipi</option>
+        <option value="seduta">⚡ Sedute</option>
+        <option value="scheda">🏠 Schede casa</option>
+      </select>
+      <select id="workouts-filter-client" class="form-input" style="width:180px;margin:0;" onchange="renderWorkouts()">
+        <option value="">Tutti i clienti</option>
+      </select>
+    </div>
+
     <div id="workouts-list"></div>
   </div>
 
@@ -6681,8 +6697,16 @@ function _syncAll(clientId, workoutId, forceTextUpdate) {
 
 function renderWorkouts() {
   const list = document.getElementById('workouts-list');
-  const schede = workouts.filter(w => (w.categoria||'scheda') === 'scheda');
-  const sedute = workouts.filter(w => w.categoria === 'seduta');
+
+  // Popola il select clienti (solo la prima volta o quando cambia)
+  const clientSel = document.getElementById('workouts-filter-client');
+  if (clientSel) {
+    const curVal = clientSel.value;
+    clientSel.innerHTML = '<option value="">Tutti i clienti</option>' +
+      [...clients].sort((a,b) => a.nome.localeCompare(b.nome))
+        .map(c => `<option value="${c.id}" ${c.id == curVal ? 'selected' : ''}>${c.nome} ${c.cognome}</option>`)
+        .join('');
+  }
 
   if (workouts.length === 0) {
     list.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>Nessuna scheda creata</p>
@@ -6690,15 +6714,59 @@ function renderWorkouts() {
     return;
   }
 
-  let html = '';
-  if (schede.length > 0) {
-    html += `<div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;margin-top:4px;">🏠 Schede per casa (${schede.length})</div>`;
-    html += schede.map(w => renderWorkoutCard(w, true)).join('');
+  // Leggi filtri
+  const query       = (document.getElementById('workouts-search')?.value || '').toLowerCase().trim();
+  const filterTipo  = document.getElementById('workouts-filter-tipo')?.value || '';
+  const filterClient= document.getElementById('workouts-filter-client')?.value || '';
+
+  // Ordina tutto per data decrescente (più recente in cima)
+  let filtered = [...workouts].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  // Applica filtro tipo
+  if (filterTipo) {
+    filtered = filtered.filter(w => (w.categoria || 'scheda') === filterTipo);
   }
-  if (sedute.length > 0) {
-    html += `<div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;margin-top:${schede.length?'20px':'4px'};">⚡ Sedute in palestra (${sedute.length})</div>`;
+
+  // Applica filtro cliente
+  if (filterClient) {
+    filtered = filtered.filter(w => w.clientId == filterClient);
+  }
+
+  // Applica ricerca testuale (nome scheda o nome cliente)
+  if (query) {
+    filtered = filtered.filter(w => {
+      const c = clients.find(cl => cl.id == w.clientId);
+      const clientName = c ? `${c.nome} ${c.cognome}`.toLowerCase() : '';
+      return (w.name || '').toLowerCase().includes(query) || clientName.includes(query);
+    });
+  }
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>Nessun risultato trovato</p></div>`;
+    return;
+  }
+
+  // Separa schede e sedute già filtrate/ordinate
+  const schede = filtered.filter(w => (w.categoria || 'scheda') === 'scheda');
+  const sedute  = filtered.filter(w => w.categoria === 'seduta');
+
+  // Se c'è un filtro tipo attivo mostra solo quella sezione senza label
+  const showBothSections = !filterTipo;
+
+  let html = '';
+  if (sedute.length > 0 && (filterTipo === 'seduta' || showBothSections)) {
+    if (showBothSections) {
+      html += `<div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;margin-top:4px;">⚡ Sedute in palestra (${sedute.length})</div>`;
+    }
     html += sedute.map(w => renderWorkoutCard(w, true)).join('');
   }
+  if (schede.length > 0 && (filterTipo === 'scheda' || showBothSections)) {
+    if (showBothSections) {
+      html += `<div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;margin-top:${sedute.length && showBothSections?'20px':'4px'};">🏠 Schede per casa (${schede.length})</div>`;
+    }
+    html += schede.map(w => renderWorkoutCard(w, true)).join('');
+  }
+
   list.innerHTML = html;
 }
 
