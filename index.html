@@ -1134,39 +1134,46 @@ textarea.form-input {
 }
 .remove-ex:hover { color: var(--red); }
 
-/* ===== SCHEDA BUILDER V2 ===== */
+/* ===== SCHEDA BUILDER V2 — restyled ===== */
 .scheda-block {
-  background: var(--surface2);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s;
 }
+.scheda-block:focus-within { box-shadow: var(--shadow); }
 .scheda-block-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 13px 16px;
+  background: var(--surface2);
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   user-select: none;
+  transition: background 0.15s;
 }
-.scheda-block-header:hover { background: var(--surface); }
+.scheda-block-header:hover { background: #ebedf1; }
 .scheda-block-title {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--text);
 }
 .scheda-block-badge {
   font-family: 'DM Mono', monospace;
   font-size: 9px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 20px;
   letter-spacing: 0.05em;
+  font-weight: 700;
 }
 .badge-mobilita { background: #e0f7fa; color: #00838f; border: 1px solid #b2ebf2; }
 .badge-warmup { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(230,81,0,0.2); }
@@ -1176,75 +1183,100 @@ textarea.form-input {
 .badge-fase3 { background: #f3e5f5; color: #6a1b9a; border: 1px solid #e1bee7; }
 .badge-workout { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
 
-.scheda-block-body { padding: 12px 14px; }
+.scheda-block-body { padding: 14px 16px; background: var(--surface); }
 
 /* Mobilità / Warm Up items */
 .mob-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 10px;
-  background: var(--surface);
+  padding: 9px 12px;
+  background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   margin-bottom: 6px;
   font-size: 12px;
   box-shadow: var(--shadow-sm);
 }
-.mob-item-name { font-weight: 600; flex: 1; }
+.mob-item-name { font-weight: 700; flex: 1; }
 .mob-item-param {
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--accent);
   margin-left: 12px;
   white-space: nowrap;
 }
 
-/* Exercise rows with W1-W4 progression */
+/* Exercise rows — restyled */
 .fase-ex-row {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: 10px;
+  padding: 12px 14px;
   margin-bottom: 8px;
   box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.fase-ex-row:focus-within {
+  border-color: rgba(229,57,53,0.3);
+  box-shadow: 0 0 0 3px rgba(229,57,53,0.06), var(--shadow-sm);
 }
 .fase-ex-name {
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  color: var(--text);
+  letter-spacing: -0.01em;
 }
 .fase-ex-params {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  align-items: stretch;
+  gap: 6px;
   flex-wrap: wrap;
+}
+
+/* Parametri come card verticali */
+.param-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  min-width: 56px;
 }
 .param-label {
   font-family: 'DM Mono', monospace;
-  font-size: 9px;
+  font-size: 8px;
   color: var(--text3);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  min-width: 36px;
+  letter-spacing: 0.1em;
+  font-weight: 700;
 }
 .param-input {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 7px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 4px;
   font-family: 'DM Mono', monospace;
-  font-size: 11px;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text);
   text-align: center;
-  width: 52px;
+  width: 100%;
   outline: none;
+  transition: border-color 0.15s, background 0.15s;
+  line-height: 1;
 }
-.param-input:focus { border-color: var(--accent); }
+.param-input:focus {
+  border-color: var(--accent);
+  background: #fff8f8;
+}
+.param-input.kg { color: var(--accent); }
+.param-input.serie { color: var(--accent2); }
 
 /* W1-W4 progression table */
 .progression-grid {
@@ -1295,13 +1327,12 @@ textarea.form-input {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 8px 12px;
-  background: var(--surface);
+  padding: 10px 14px;
+  background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   margin-bottom: 10px;
   flex-wrap: wrap;
-  box-shadow: var(--shadow-sm);
 }
 .round-config-label {
   font-family: 'DM Mono', monospace;
@@ -1311,16 +1342,18 @@ textarea.form-input {
   letter-spacing: 0.08em;
 }
 .round-config-input {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 8px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
   font-family: 'DM Mono', monospace;
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text);
-  width: 60px;
+  width: 64px;
   text-align: center;
   outline: none;
+  transition: border-color 0.15s;
 }
 .round-config-input:focus { border-color: var(--accent); }
 
@@ -1328,19 +1361,26 @@ textarea.form-input {
 .add-ex-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 11px 14px;
   background: none;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
+  border: 1.5px dashed var(--border);
+  border-radius: 8px;
   color: var(--text3);
   font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
   transition: all 0.15s;
+  font-family: 'Outfit', sans-serif;
 }
-.add-ex-btn:hover { border-color: var(--accent); color: var(--accent); }
+.add-ex-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(229,57,53,0.03);
+}
 
 /* Scheda view card */
 /* ===== WORKOUT CARD — restyled ===== */
@@ -6022,16 +6062,28 @@ function toggleBlocco(i) {
 }
 
 function renderEsercizioEditor(ex, bi, ei) {
-  const params = `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px;">
-    <div style="display:flex;align-items:center;gap:4px;"><span class="param-label">Serie</span><input class="param-input" type="text" value="${ex.serie||''}" placeholder="3" oninput="updateEsercizio(${bi},${ei},'serie',this.value)"></div>
-    <div style="display:flex;align-items:center;gap:4px;"><span class="param-label">Ripe</span><input class="param-input" type="text" value="${ex.reps||''}" placeholder="10" oninput="updateEsercizio(${bi},${ei},'reps',this.value)"></div>
-    <div style="display:flex;align-items:center;gap:4px;"><span class="param-label">Kg</span><input class="param-input" type="text" value="${ex.kg||''}" placeholder="—" oninput="updateEsercizio(${bi},${ei},'kg',this.value)"></div>
-    <div style="display:flex;align-items:center;gap:4px;"><span class="param-label">Pausa</span><input class="param-input" type="text" value="${ex.pausa||''}" placeholder="1'" oninput="updateEsercizio(${bi},${ei},'pausa',this.value)"></div>
+  const params = `<div class="fase-ex-params">
+    <div class="param-block">
+      <span class="param-label">Serie</span>
+      <input class="param-input serie" type="text" inputmode="numeric" value="${ex.serie||''}" placeholder="3" oninput="updateEsercizio(${bi},${ei},'serie',this.value)">
+    </div>
+    <div class="param-block">
+      <span class="param-label">Ripe</span>
+      <input class="param-input" type="text" inputmode="numeric" value="${ex.reps||''}" placeholder="10" oninput="updateEsercizio(${bi},${ei},'reps',this.value)">
+    </div>
+    <div class="param-block">
+      <span class="param-label">Kg</span>
+      <input class="param-input kg" type="text" inputmode="decimal" value="${ex.kg||''}" placeholder="—" oninput="updateEsercizio(${bi},${ei},'kg',this.value)">
+    </div>
+    <div class="param-block">
+      <span class="param-label">Pausa</span>
+      <input class="param-input" type="text" value="${ex.pausa||''}" placeholder="1'" oninput="updateEsercizio(${bi},${ei},'pausa',this.value)">
+    </div>
   </div>`;
 
   return `<div class="fase-ex-row" id="ex-${bi}-${ei}">
     <div class="fase-ex-name">
-      <span style="font-size:13px;">${ex.nome}</span>
+      <span>${ex.nome}</span>
       <button class="remove-ex" onclick="removeEsercizio(${bi},${ei})">×</button>
     </div>
     ${params}
