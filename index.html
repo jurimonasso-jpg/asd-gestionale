@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestionale PT — Allenati Senza Dolori</title>
-  <meta name="version" content="202603201600">
+  <meta name="version" content="202603201630">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -9831,13 +9831,10 @@ function renderPercorso() {
         const hasStarted = secChecked > 0;
         const isCritical = criticalSections.has(sec.id);
 
-        // Determina se è bloccata (tutte le precedenti devono essere fatte)
-        const prevDone = si === 0 || PERCORSO_CHECKLIST.slice(0, si).every((ps) => {
-          const done = ps.items.filter(item => checks[`${ps.id}_${item}`]).length;
-          return done === ps.items.length;
-        });
-        const isLocked = !prevDone && !hasStarted;
-        const isCurrent = !allDone && prevDone && !isLocked;
+        // Determina stato (tutto sbloccato)
+        const isLocked = false;
+        const firstIncomplete = PERCORSO_CHECKLIST.findIndex(ps => ps.items.filter(item => checks[`${ps.id}_${item}`]).length < ps.items.length);
+        const isCurrent = !allDone && si === firstIncomplete;
 
         // Colori e icone per stato
         const stateIcon = allDone ? '✅' : isLocked ? '🔒' : isCurrent ? '▶️' : '○';
