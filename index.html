@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestionale PT — Allenati Senza Dolori</title>
-  <meta name="version" content="202603131517">
+  <meta name="version" content="202603201200">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -942,6 +942,33 @@ textarea.form-input {
 
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+
+/* ===== PROFILO ACCORDION ===== */
+.profilo-accordion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.profilo-acc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  transition: background 0.15s;
+  user-select: none;
+}
+.profilo-acc-header:hover { background: var(--surface2); }
+.acc-open .profilo-acc-header { background: #fff7f7; border-bottom: 1px solid var(--border); color: var(--accent); }
+.acc-chevron { font-size: 12px; color: var(--text3); transition: transform 0.2s; }
+.profilo-acc-body { padding: 16px; background: var(--surface); }
 
 /* ===== STAT BOXES ===== */
 .stat-box {
@@ -4185,78 +4212,121 @@ function openClientDetail(clientId) {
     </div>
 
     <div class="tabs" id="detail-tabs">
-      <button class="tab-btn active" onclick="switchDetailTab('dt-info', this)">Info</button>
-      <button class="tab-btn" onclick="switchDetailTab('dt-pain', this)">Dolori</button>
+      <button class="tab-btn active" onclick="switchDetailTab('dt-profilo', this)">👤 Profilo</button>
       <button class="tab-btn" onclick="switchDetailTab('dt-schede', this)">🏠 Schede (${clientWorkouts.filter(w=>(w.categoria||'scheda')==='scheda').length})</button>
       <button class="tab-btn" onclick="switchDetailTab('dt-sedute', this)">⚡ Sedute (${clientWorkouts.filter(w=>w.categoria==='seduta').length})</button>
-      <button class="tab-btn" onclick="switchDetailTab('dt-anamnesi', this)">Anamnesi</button>
       <button class="tab-btn" onclick="switchDetailTab('dt-note', this)">📝 Note</button>
       <button class="tab-btn" onclick="switchDetailTab('dt-abb', this)">📅 Percorso</button>
     </div>
 
-    <div id="dt-info" class="tab-content active">
-      <div class="grid-2">
-        <div class="card">
-          <div class="section-title" style="margin-bottom:12px;">Dati Personali</div>
-          ${infoRow('Obiettivo', client.goal || '—')}
-          ${infoRow('Attività precedente', client.activityPrev || '—')}
-          ${infoRow('Sport praticati', client.sports || '—')}
-          ${infoRow('Stress attuale', client.stress + '/10')}
-          ${client.notes ? `<div style="margin-top:12px;font-family:'Lora';font-size:13px;color:var(--text2);line-height:1.6;">${client.notes}</div>` : ''}
+    <div id="dt-profilo" class="tab-content active">
+
+      <!-- SEZIONE: INFO -->
+      <div class="profilo-accordion" id="acc-info">
+        <div class="profilo-acc-header" onclick="toggleAccordion('acc-info')">
+          <span>👤 Anagrafica & Obiettivi</span>
+          <span class="acc-chevron">▾</span>
         </div>
-        <div class="card">
-          <div class="section-title" style="margin-bottom:12px;">Tratti Personalità (PRT)</div>
-          ${client.traits?.length > 0
-            ? client.traits.map(t => `<span class="tag" style="background:rgba(71,200,255,0.1);color:var(--accent2);display:inline-block;margin:3px;">${t}</span>`).join('')
-            : '<div style="color:var(--text3);font-size:12px;">Nessun tratto segnato</div>'
-          }
+        <div class="profilo-acc-body">
+          <div class="grid-2" style="gap:12px;">
+            <div class="card" style="margin-bottom:0;">
+              <div class="section-title" style="margin-bottom:12px;">Dati Personali</div>
+              ${infoRow('Obiettivo', client.goal || '—')}
+              ${infoRow('Attività precedente', client.activityPrev || '—')}
+              ${infoRow('Sport praticati', client.sports || '—')}
+              ${infoRow('Stress attuale', client.stress + '/10')}
+              ${client.notes ? `<div style="margin-top:12px;font-family:'Lora';font-size:13px;color:var(--text2);line-height:1.6;">${client.notes}</div>` : ''}
+            </div>
+            <div class="card" style="margin-bottom:0;">
+              <div class="section-title" style="margin-bottom:12px;">Tratti Personalità (PRT)</div>
+              ${client.traits?.length > 0
+                ? client.traits.map(t => `<span class="tag" style="background:rgba(71,200,255,0.1);color:var(--accent2);display:inline-block;margin:3px;">${t}</span>`).join('')
+                : '<div style="color:var(--text3);font-size:12px;">Nessun tratto segnato</div>'
+              }
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div id="dt-pain" class="tab-content">
-      ${client.painPoints?.length > 0 || client.painDesc ? `
-        <div class="card" style="margin-bottom:16px;">
-          <div class="section-title" style="margin-bottom:12px;">Zone Dolore</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-            ${client.painPoints?.map(p => {
-              const intVal = p.intensity || 5;
-              const stato  = p.stato || 'attivo';
-              const color  = stato === 'risolto' ? 'var(--text3)' : intVal >= 8 ? 'var(--red)' : intVal >= 5 ? 'var(--yellow)' : 'var(--accent2)';
-              const borderColor = stato === 'risolto' ? 'var(--border)' : 'rgba(255,71,87,0.3)';
-              const bgColor     = stato === 'risolto' ? 'var(--surface2)' : 'rgba(255,71,87,0.07)';
-              const statoBadge  = stato === 'risolto'
-                ? `<span style="background:rgba(71,255,160,0.1);color:var(--green);border:1px solid rgba(71,255,160,0.3);border-radius:10px;font-family:'DM Mono';font-size:8px;padding:1px 6px;">✅ risolto${p.dataRisoluzione ? ' '+p.dataRisoluzione : ''}</span>`
-                : stato === 'miglioramento'
-                ? `<span style="background:rgba(255,212,71,0.1);color:var(--yellow);border:1px solid rgba(255,212,71,0.3);border-radius:10px;font-family:'DM Mono';font-size:8px;padding:1px 6px;">🟡 in miglioramento</span>`
-                : '';
-              const durata = p.durataNum ? `${p.durataNum} ${p.durataPeriodo || ''}` : '';
-              const freq   = { continuo:'continuo', quotidiano:'quotidiano', plurisettimanale:'+ volte/sett', settimanale:'settimanale', occasionale:'occasionale' }[p.frequenza] || '';
-              const quando = Array.isArray(p.quando) && p.quando.length > 0 ? p.quando.join(', ') : '';
-              return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:8px;padding:8px 12px;min-width:140px;opacity:${stato==='risolto'?'0.65':'1'};">
-                <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:4px;">● ${p.label}</div>
-                ${statoBadge ? `<div style="margin-bottom:4px;">${statoBadge}</div>` : ''}
-                <div style="display:flex;flex-direction:column;gap:2px;">
-                  ${stato !== 'risolto' ? `<span style="font-family:'DM Mono';font-size:10px;">Intensità: <b style="color:${color};">${intVal}/10</b></span>` : ''}
-                  ${durata ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--text2);">Da: ${durata}</span>` : ''}
-                  ${freq   ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--text2);">Freq: ${freq}</span>` : ''}
-                  ${quando ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--text2);">Quando: ${quando}</span>` : ''}
-                  <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;">
-                    ${['attivo','miglioramento','risolto'].map(s => `
-                      <button onclick="setPainStato(${client.id},'${p.label}','${s}')"
-                        style="font-size:9px;padding:2px 7px;border-radius:10px;border:1px solid ${s===stato?'var(--accent)':'var(--border)'};background:${s===stato?'var(--accent)':'transparent'};color:${s===stato?'var(--bg)':'var(--text3)'};cursor:pointer;font-family:'DM Mono';">
-                        ${ s==='attivo' ? '🔴 Attivo' : s==='miglioramento' ? '🟡 Miglioramento' : '✅ Risolto' }
-                      </button>`).join('')}
-                  </div>
-                </div>
-              </div>`;
-            }).join('') || ''}
-          </div>
-          ${client.painIntensity ? `<div style="margin-bottom:8px;font-size:13px;">Intensità media: <b style="color:var(--red);">${client.painIntensity}/10</b>${client.painWhen ? ` · <span style="color:var(--text2);">${client.painWhen}</span>` : ''}</div>` : ''}
-          ${client.painDesc ? `<div style="font-family:'Lora';font-size:13px;color:var(--text2);line-height:1.6;">${client.painDesc}</div>` : ''}
+      <!-- SEZIONE: ANAMNESI -->
+      <div class="profilo-accordion" id="acc-anamnesi">
+        <div class="profilo-acc-header" onclick="toggleAccordion('acc-anamnesi')">
+          <span>🩺 Anamnesi</span>
+          <span class="acc-chevron">▾</span>
         </div>
-      ` : '<div class="empty-state"><div class="icon">✅</div><p>Nessun dolore cronico segnalato</p></div>'}
-      ${renderPainHistory(client.id)}
+        <div class="profilo-acc-body" style="display:none;">
+          <div class="card" style="margin-bottom:0;">
+            ${infoRow('Patologie / Interventi', client.patologie || '—')}
+            ${infoRow('Farmaci', client.farmaci || '—')}
+            ${infoRow('Traumi / eventi', client.traumi || '—')}
+          </div>
+        </div>
+      </div>
+
+      <!-- SEZIONE: DOLORI -->
+      <div class="profilo-accordion" id="acc-dolori">
+        <div class="profilo-acc-header" onclick="toggleAccordion('acc-dolori')">
+          <span>💢 Dolori${client.painPoints?.length > 0 ? ` <span style="background:var(--red-bg);color:var(--red);border-radius:10px;font-size:10px;padding:2px 8px;font-family:'DM Mono';">${client.painPoints.filter(p=>(p.stato||'attivo')!=='risolto').length} attivi</span>` : ''}</span>
+          <span class="acc-chevron">▾</span>
+        </div>
+        <div class="profilo-acc-body" style="display:none;">
+          ${client.painPoints?.length > 0 || client.painDesc ? `
+            <div class="card" style="margin-bottom:12px;">
+              <div class="section-title" style="margin-bottom:12px;">Zone Dolore</div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                ${client.painPoints?.map(p => {
+                  const intVal = p.intensity || 5;
+                  const stato  = p.stato || 'attivo';
+                  const color  = stato === 'risolto' ? 'var(--text3)' : intVal >= 8 ? 'var(--red)' : intVal >= 5 ? 'var(--yellow)' : 'var(--accent2)';
+                  const borderColor = stato === 'risolto' ? 'var(--border)' : 'rgba(255,71,87,0.3)';
+                  const bgColor     = stato === 'risolto' ? 'var(--surface2)' : 'rgba(255,71,87,0.07)';
+                  const statoBadge  = stato === 'risolto'
+                    ? `<span style="background:rgba(71,255,160,0.1);color:var(--green);border:1px solid rgba(71,255,160,0.3);border-radius:10px;font-family:'DM Mono';font-size:8px;padding:1px 6px;">✅ risolto${p.dataRisoluzione ? ' '+p.dataRisoluzione : ''}</span>`
+                    : stato === 'miglioramento'
+                    ? `<span style="background:rgba(255,212,71,0.1);color:var(--yellow);border:1px solid rgba(255,212,71,0.3);border-radius:10px;font-family:'DM Mono';font-size:8px;padding:1px 6px;">🟡 in miglioramento</span>`
+                    : '';
+                  const durata = p.durataNum ? `${p.durataNum} ${p.durataPeriodo || ''}` : '';
+                  const freq   = { continuo:'continuo', quotidiano:'quotidiano', plurisettimanale:'+ volte/sett', settimanale:'settimanale', occasionale:'occasionale' }[p.frequenza] || '';
+                  const quando = Array.isArray(p.quando) && p.quando.length > 0 ? p.quando.join(', ') : '';
+                  return `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:8px;padding:8px 12px;min-width:140px;opacity:${stato==='risolto'?'0.65':'1'};">
+                    <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:4px;">● ${p.label}</div>
+                    ${statoBadge ? `<div style="margin-bottom:4px;">${statoBadge}</div>` : ''}
+                    <div style="display:flex;flex-direction:column;gap:2px;">
+                      ${stato !== 'risolto' ? `<span style="font-family:'DM Mono';font-size:10px;">Intensità: <b style="color:${color};">${intVal}/10</b></span>` : ''}
+                      ${durata ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--text2);">Da: ${durata}</span>` : ''}
+                      ${freq   ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--text2);">Freq: ${freq}</span>` : ''}
+                      ${quando ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--text2);">Quando: ${quando}</span>` : ''}
+                      <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;">
+                        ${['attivo','miglioramento','risolto'].map(s => `
+                          <button onclick="setPainStato(${client.id},'${p.label}','${s}')"
+                            style="font-size:9px;padding:2px 7px;border-radius:10px;border:1px solid ${s===stato?'var(--accent)':'var(--border)'};background:${s===stato?'var(--accent)':'transparent'};color:${s===stato?'var(--bg)':'var(--text3)'};cursor:pointer;font-family:'DM Mono';">
+                            ${ s==='attivo' ? '🔴 Attivo' : s==='miglioramento' ? '🟡 Miglioramento' : '✅ Risolto' }
+                          </button>`).join('')}
+                      </div>
+                    </div>
+                  </div>`;
+                }).join('') || ''}
+              </div>
+              ${client.painIntensity ? `<div style="margin-bottom:8px;font-size:13px;">Intensità media: <b style="color:var(--red);">${client.painIntensity}/10</b>${client.painWhen ? ` · <span style="color:var(--text2);">${client.painWhen}</span>` : ''}</div>` : ''}
+              ${client.painDesc ? `<div style="font-family:'Lora';font-size:13px;color:var(--text2);line-height:1.6;">${client.painDesc}</div>` : ''}
+            </div>
+          ` : '<div class="empty-state"><div class="icon">✅</div><p>Nessun dolore cronico segnalato</p></div>'}
+          ${renderPainHistory(client.id)}
+        </div>
+      </div>
+
+      <!-- SEZIONE: TEST & VALUTAZIONE -->
+      <div class="profilo-accordion" id="acc-test">
+        <div class="profilo-acc-header" onclick="toggleAccordion('acc-test')">
+          <span>📊 Test & Valutazione</span>
+          <span class="acc-chevron">▾</span>
+        </div>
+        <div class="profilo-acc-body" style="display:none;">
+          ${renderTestComparison(client.id)}
+          ${renderPercorsoTestBridge(client.id)}
+        </div>
+      </div>
+
     </div>
 
     <div id="dt-note" class="tab-content">
@@ -4301,13 +4371,6 @@ function openClientDetail(clientId) {
       })()}
     </div>
 
-    <div id="dt-anamnesi" class="tab-content">
-      <div class="card">
-        ${infoRow('Patologie / Interventi', client.patologie || '—')}
-        ${infoRow('Farmaci', client.farmaci || '—')}
-        ${infoRow('Traumi / eventi', client.traumi || '—')}
-      </div>
-    </div>
   `;
 
   document.getElementById('client-detail-content').innerHTML = html;
@@ -4323,12 +4386,24 @@ function infoRow(label, value) {
 
 function switchDetailTab(tabId, btn) {
   document.querySelectorAll('#detail-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-  ['dt-info','dt-pain','dt-schede','dt-sedute','dt-anamnesi','dt-note','dt-abb'].forEach(id => {
+  ['dt-profilo','dt-schede','dt-sedute','dt-note','dt-abb'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
   btn.classList.add('active');
   document.getElementById(tabId).classList.add('active');
+}
+
+function toggleAccordion(id) {
+  const acc = document.getElementById(id);
+  if (!acc) return;
+  const body = acc.querySelector('.profilo-acc-body');
+  const chevron = acc.querySelector('.acc-chevron');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (chevron) chevron.textContent = isOpen ? '▾' : '▴';
+  acc.classList.toggle('acc-open', !isOpen);
 }
 
 function editClient(id) {
