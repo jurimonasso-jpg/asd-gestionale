@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestionale PT — Allenati Senza Dolori</title>
-  <meta name="version" content="202603201200">
+  <meta name="version" content="202603201600">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -918,27 +918,40 @@ textarea.form-input {
 /* ===== TABS ===== */
 .tabs {
   display: flex;
-  gap: 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 24px;
+  gap: 6px;
+  padding: 6px;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border: 1px solid var(--border);
 }
+.tabs::-webkit-scrollbar { display: none; }
 
 .tab-btn {
-  padding: 10px 20px;
-  background: none;
+  padding: 8px 16px;
+  background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text2);
+  border-radius: var(--radius-sm);
+  color: var(--text3);
   font-family: 'Outfit', sans-serif;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
-  margin-bottom: -1px;
+  white-space: nowrap;
   transition: all 0.15s;
+  flex-shrink: 0;
 }
 
-.tab-btn:hover { color: var(--text); }
-.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover { background: var(--surface); color: var(--text2); }
+.tab-btn.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  font-weight: 700;
+}
 
 .tab-content { display: none; }
 .tab-content.active { display: block; }
@@ -947,10 +960,16 @@ textarea.form-input {
 .profilo-accordion {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   overflow: hidden;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s;
+}
+.profilo-accordion.acc-open {
+  border-color: rgba(229,57,53,0.3);
+  box-shadow: 0 2px 12px rgba(229,57,53,0.08);
+  border-left: 3px solid var(--accent);
 }
 .profilo-acc-header {
   display: flex;
@@ -960,15 +979,16 @@ textarea.form-input {
   cursor: pointer;
   font-weight: 700;
   font-size: 14px;
-  color: var(--text);
+  color: var(--text2);
   background: var(--surface);
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
   user-select: none;
 }
 .profilo-acc-header:hover { background: var(--surface2); }
-.acc-open .profilo-acc-header { background: #fff7f7; border-bottom: 1px solid var(--border); color: var(--accent); }
-.acc-chevron { font-size: 12px; color: var(--text3); transition: transform 0.2s; }
-.profilo-acc-body { padding: 16px; background: var(--surface); }
+.acc-open .profilo-acc-header { color: var(--accent); }
+.acc-chevron { font-size: 11px; color: var(--text3); transition: transform 0.2s; }
+.acc-open .acc-chevron { transform: rotate(180deg); color: var(--accent); }
+.profilo-acc-body { padding: 16px 18px; background: var(--surface); border-top: 1px solid var(--border); }
 
 /* ===== STAT BOXES ===== */
 .stat-box {
@@ -1070,29 +1090,40 @@ textarea.form-input {
 
 .client-detail-header {
   display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 32px;
-  padding: 24px;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 20px;
   background: var(--surface);
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.client-detail-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), #ff7043);
 }
 
 .client-detail-avatar {
-  width: 64px;
-  height: 64px;
-  background: #fff0f0;
-  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #fff0f0, #ffe0e0);
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
   color: var(--accent);
   flex-shrink: 0;
   border: 2px solid rgba(229,57,53,0.2);
+  box-shadow: 0 2px 8px rgba(229,57,53,0.15);
 }
 
 .section-header {
@@ -1415,18 +1446,17 @@ textarea.form-input {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s, transform 0.15s;
+  transition: box-shadow 0.2s, border-color 0.2s;
 }
 .scheda-view-card:hover {
   box-shadow: var(--shadow);
-  transform: translateY(-1px);
+  border-color: rgba(229,57,53,0.2);
 }
 .scheda-view-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1434,22 +1464,27 @@ textarea.form-input {
   user-select: none;
   background: var(--surface);
   transition: background 0.15s;
+  gap: 12px;
 }
 .scheda-view-header:hover { background: var(--surface2); }
 .scheda-view-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--text);
+  line-height: 1.2;
 }
 .scheda-view-meta {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
   color: var(--text3);
-  margin-top: 4px;
-  letter-spacing: 0.04em;
+  margin-top: 5px;
+  letter-spacing: 0.03em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.scheda-view-body { padding: 18px 20px; display: none; }
+.scheda-view-body { padding: 16px 18px; display: none; border-top: 1px solid var(--border); }
 .scheda-view-body.open { display: block; }
 
 /* Blocco header dentro la card */
@@ -4193,21 +4228,27 @@ function openClientDetail(clientId) {
   let html = `
     <div class="client-detail-header">
       <div class="client-detail-avatar">${initials}</div>
-      <div style="flex:1">
-        <div style="font-size:24px;font-weight:800;">${client.nome} ${client.cognome}</div>
-        <div style="font-family:'DM Mono';font-size:11px;color:var(--text3);margin-top:4px;">
-          ${age !== '—' ? age + ' anni' : ''} ${client.height ? '· ' + client.height + 'cm' : ''} ${client.weight ? '· ' + client.weight + 'kg' : ''} ${client.phone ? '· ' + client.phone : ''}${bdayBadge}
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:20px;font-weight:800;letter-spacing:-0.02em;line-height:1.1;">${client.nome} ${client.cognome}${bdayBadge}</div>
+        <div style="font-family:'DM Mono';font-size:11px;color:var(--text3);margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+          ${age !== '—' ? `<span>🎂 ${age}a</span>` : ''}
+          ${client.height ? `<span>📏 ${client.height}cm</span>` : ''}
+          ${client.weight ? `<span>⚖️ ${client.weight}kg</span>` : ''}
+          ${client.phone ? `<span>📞 ${client.phone}</span>` : ''}
         </div>
-        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-          ${client.goal ? `<span class="tag" style="background:rgba(232,255,71,0.1);color:var(--accent);">🎯 ${client.goal}</span>` : ''}
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          ${client.goal ? `<span class="tag" style="background:rgba(229,57,53,0.08);color:var(--accent);border:1px solid rgba(229,57,53,0.2);">🎯 ${client.goal}</span>` : ''}
           ${client.prt !== 'no' ? `<span class="tag tag-prt">PRT ${client.prt}</span>` : ''}
-          ${client.painPoints?.length > 0 ? `<span class="tag tag-pain">⚡ ${client.painPoints.length} punti dolore</span>` : ''}
+          ${client.painPoints?.filter(p=>(p.stato||'attivo')!=='risolto').length > 0
+            ? `<span class="tag tag-pain">⚡ ${client.painPoints.filter(p=>(p.stato||'attivo')!=='risolto').length} dolori attivi</span>`
+            : `<span class="tag" style="background:var(--green-bg);color:var(--green);border:1px solid rgba(46,125,50,0.2);">✅ Nessun dolore</span>`
+          }
         </div>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-secondary btn-sm" onclick="openManualSessionModal(null, ${client.id})">📅 + Lezione</button>
-        <button class="btn btn-secondary btn-sm" onclick="editClient(${client.id})">✏️ Modifica</button>
-        <button class="btn btn-danger" onclick="deleteClient(${client.id})">🗑</button>
+        <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="openManualSessionModal(null, ${client.id})">📅 Lezione</button>
+          <button class="btn btn-secondary btn-sm" onclick="editClient(${client.id})">✏️ Modifica</button>
+          <button class="btn btn-danger" onclick="deleteClient(${client.id})">🗑</button>
+        </div>
       </div>
     </div>
 
@@ -4398,11 +4439,9 @@ function toggleAccordion(id) {
   const acc = document.getElementById(id);
   if (!acc) return;
   const body = acc.querySelector('.profilo-acc-body');
-  const chevron = acc.querySelector('.acc-chevron');
   if (!body) return;
   const isOpen = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : 'block';
-  if (chevron) chevron.textContent = isOpen ? '▾' : '▴';
   acc.classList.toggle('acc-open', !isOpen);
 }
 
@@ -4667,16 +4706,29 @@ function renderAbbonamentoDetail(client) {
     : '';
 
   return `
-    <div class="card" style="margin-bottom:14px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div class="section-title">${ABB_LABELS[client.abbTipo]}</div>
-        <span class="${statusCls}" style="font-size:13px;">${statusTxt}</span>
+    <div class="card" style="margin-bottom:14px;padding:0;overflow:hidden;">
+      <div style="padding:16px 20px;background:${daysLeft > 30 ? 'linear-gradient(135deg,#e8f5e9,#f1f8e9)' : daysLeft > 0 ? 'linear-gradient(135deg,#fff3e0,#fff8f0)' : 'linear-gradient(135deg,#ffebee,#fff0f0)'};border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="font-family:'DM Mono';font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text3);margin-bottom:4px;">Piano attivo</div>
+            <div style="font-size:17px;font-weight:800;letter-spacing:-0.01em;">${ABB_LABELS[client.abbTipo]}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:26px;font-weight:800;color:${daysLeft > 30 ? 'var(--green)' : daysLeft > 0 ? 'var(--yellow)' : 'var(--red)'};line-height:1;">${daysLeft > 0 ? daysLeft : '0'}</div>
+            <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">giorni rimanenti</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;height:5px;background:rgba(0,0,0,0.08);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${Math.max(0,Math.min(100, daysLeft > 0 ? (daysLeft / (client.abbTipo === 'mensile' ? 30 : client.abbTipo === 'trimestrale' ? 90 : client.abbTipo === 'semestrale' ? 180 : 365)) * 100 : 0))}%;background:${daysLeft > 30 ? 'var(--green)' : daysLeft > 0 ? 'var(--yellow)' : 'var(--red)'};border-radius:3px;transition:width 0.4s;"></div>
+        </div>
       </div>
-      ${infoRow('Inizio', fmt(start))}
-      ${infoRow('Scadenza', fmt(scad))}
-      ${proroghe.length > 0 ? infoRow('Proroga totale', `+${proroghe.reduce((s,p)=>s+parseInt(p.giorni||0),0)} giorni`) : ''}
+      <div style="padding:14px 20px;">
+        ${infoRow('Inizio', fmt(start))}
+        ${infoRow('Scadenza', fmt(scad))}
+        ${proroghe.length > 0 ? infoRow('Proroga totale', `+${proroghe.reduce((s,p)=>s+parseInt(p.giorni||0),0)} giorni`) : ''}
+      </div>
     </div>
-    <div class="card">
+    <div class="card" style="margin-bottom:14px;">
       <div class="section-title" style="margin-bottom:10px;">Proroghe (${proroghe.length}/2 usate)</div>
       ${prorogheHtml}
     </div>
@@ -6924,8 +6976,11 @@ function renderWorkoutCard(w, showClient = false) {
 
   const totalEx = blocchi.reduce((acc, b) => acc + (b.esercizi?.length || 0), 0);
   const isSeduta = w.categoria === 'seduta';
+  const hasDolori = isSeduta && w.tipoSeduta === 'dolori' && w.painStart?.length;
+  const stripeColor = isSeduta ? 'var(--accent)' : 'var(--accent2)';
+  const typeLabel = isSeduta ? '⚡ Seduta' : '🏠 Scheda';
 
-  return `<div class="scheda-view-card">
+  return `<div class="scheda-view-card" style="border-top: 3px solid ${stripeColor};">
     <div class="scheda-view-header" onclick="document.getElementById('${bodyId}').classList.toggle('open');this.querySelector('.cv-chev').textContent=document.getElementById('${bodyId}').classList.contains('open')?'▾':'▸'">
       <div style="min-width:0;flex:1;">
         ${showClient && client
@@ -6933,13 +6988,15 @@ function renderWorkoutCard(w, showClient = false) {
           : ''}
         <div class="scheda-view-title">${w.name}</div>
         <div class="scheda-view-meta">
-          ${w.type}${w.meso ? ' · ' + w.meso : ''} · ${date} · ${totalEx} es. · ${blocchi.length} blocchi
+          <span style="background:${isSeduta?'rgba(229,57,53,0.08)':'rgba(25,118,210,0.08)'};color:${isSeduta?'var(--accent)':'var(--accent2)'};border-radius:6px;padding:1px 7px;">${typeLabel}</span>
+          ${w.type ? `<span>${w.type}${w.meso ? ' · ' + w.meso : ''}</span>` : ''}
+          <span>${date}</span>
+          <span>${totalEx} es.</span>
+          <span>${blocchi.length} blocchi</span>
+          ${hasDolori ? `<span style="background:rgba(255,71,87,0.1);color:var(--red);border-radius:6px;padding:1px 7px;font-weight:700;">💢 dolori</span>` : ''}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        ${isSeduta && w.tipoSeduta === 'dolori' && w.painStart?.length
-          ? `<span style="background:rgba(255,71,87,0.1);color:var(--red);padding:3px 10px;border-radius:20px;font-family:'DM Mono';font-size:9px;font-weight:700;letter-spacing:0.06em;">💢 dolori</span>`
-          : ''}
         <button class="btn btn-danger" style="padding:5px 10px;font-size:11px;" onclick="event.stopPropagation();deleteWorkout(${w.id})">🗑</button>
         <span class="cv-chev" style="color:var(--text3);font-size:16px;width:16px;text-align:center;">▸</span>
       </div>
@@ -6959,10 +7016,11 @@ function renderWorkoutCard(w, showClient = false) {
 let _compareSelected = {}; // clientId -> [wId1, wId2]
 
 function renderWorkoutCardComparable(w, clientId) {
-  const date = new Date(w.createdAt).toLocaleDateString('it-IT');
+  const date = new Date(w.createdAt).toLocaleDateString('it-IT', {day:'2-digit',month:'short',year:'numeric'});
   const blocchi = w.blocchi || [];
   const totalEx = blocchi.reduce((acc,b) => acc + (b.esercizi?.length||0), 0);
   const bodyId = `wcard-body-${w.id}`;
+  const hasDolori = w.tipoSeduta === 'dolori' && w.painStart?.length;
 
   const blocchiHtml = blocchi.map(b => {
     const meta = BLOCCO_META[b.tipo] || {label:b.tipo,icon:'📌'};
@@ -6973,22 +7031,27 @@ function renderWorkoutCardComparable(w, clientId) {
     return `<div style="margin-bottom:10px;"><div style="font-weight:700;font-size:12px;margin-bottom:6px;">${meta.icon} ${meta.label}</div>${exHtml}</div>`;
   }).join('');
 
-  return `<div class="scheda-view-card" style="margin-bottom:10px;">
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;" onclick="document.getElementById('${bodyId}').classList.toggle('open');this.querySelector('.cv-chev').textContent=document.getElementById('${bodyId}').classList.contains('open')?'▾':'▸'">
-      <input type="checkbox" id="cmp-${w.id}" onclick="event.stopPropagation();toggleCompareSelect(${clientId},${w.id})"
-        style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+  return `<div class="scheda-view-card" style="border-top:3px solid var(--accent);">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;gap:12px;" onclick="document.getElementById('${bodyId}').classList.toggle('open');this.querySelector('.cv-chev').textContent=document.getElementById('${bodyId}').classList.contains('open')?'▾':'▸'">
+      <label style="display:flex;align-items:center;cursor:pointer;flex-shrink:0;" onclick="event.stopPropagation()">
+        <input type="checkbox" id="cmp-${w.id}" onclick="toggleCompareSelect(${clientId},${w.id})"
+          style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+      </label>
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;font-size:13px;">${w.name}</div>
-        <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${date} · ${totalEx} esercizi
-          ${w.tipoSeduta==='dolori'&&w.painStart?.length?'<span style="color:var(--red);margin-left:6px;">💢</span>':''}
+        <div style="font-weight:800;font-size:14px;letter-spacing:-0.01em;">${w.name}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;">
+          <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${date}</span>
+          <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">·</span>
+          <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${totalEx} es.</span>
+          ${hasDolori ? `<span style="background:rgba(255,71,87,0.1);color:var(--red);border-radius:6px;padding:1px 7px;font-family:'DM Mono';font-size:9px;font-weight:700;">💢 dolori</span>` : ''}
         </div>
       </div>
-      <button class="btn btn-danger" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();deleteWorkout(${w.id})">🗑</button>
-      <span class="cv-chev" style="color:var(--text3);font-size:16px;">▸</span>
+      <button class="btn btn-danger" style="padding:4px 8px;font-size:11px;flex-shrink:0;" onclick="event.stopPropagation();deleteWorkout(${w.id})">🗑</button>
+      <span class="cv-chev" style="color:var(--text3);font-size:16px;flex-shrink:0;">▸</span>
     </div>
     <div class="scheda-view-body" id="${bodyId}">
       ${blocchiHtml||'<div style="color:var(--text3);font-size:13px;">Nessun blocco</div>'}
-      ${w.notes?`<div style="margin-top:10px;font-family:'Lora';font-size:12px;color:var(--text3);">${w.notes}</div>`:''}
+      ${w.notes?`<div style="margin-top:10px;font-family:'Lora';font-size:12px;color:var(--text3);line-height:1.6;">${w.notes}</div>`:''}
     </div>
   </div>`;
 }
@@ -9633,51 +9696,55 @@ function renderPercorsoFitCard(clientId) {
     : '—';
 
   const stepsHtml = stepStatuses.map(({ sec, done, total, pctSec, status }, i) => {
-    const col   = status === 'done' ? 'var(--green)' : status === 'active' ? 'var(--accent)' : 'var(--border)';
-    const badge = status === 'done'
-      ? `<span style="background:rgba(71,255,160,0.12);color:var(--green);border-radius:10px;padding:1px 7px;font-size:9px;font-family:'DM Mono';">✓ ok</span>`
-      : status === 'active'
-      ? `<span style="background:rgba(232,255,71,0.12);color:var(--accent);border-radius:10px;padding:1px 7px;font-size:9px;font-family:'DM Mono';">▶ in corso</span>`
-      : `<span style="background:var(--surface2);color:var(--text3);border-radius:10px;padding:1px 7px;font-size:9px;font-family:'DM Mono';">—</span>`;
+    const isCurrent = i === currentStepIdx;
+    const iconStatus = status === 'done' ? '✅' : isCurrent ? '▶️' : '○';
+    const bgCard = status === 'done'
+      ? 'background:rgba(46,125,50,0.04);border-color:rgba(46,125,50,0.2);'
+      : isCurrent
+      ? 'background:rgba(229,57,53,0.04);border-color:rgba(229,57,53,0.25);'
+      : 'background:var(--surface2);border-color:var(--border);';
+    const labelColor = status === 'done' ? 'color:var(--green);' : isCurrent ? 'color:var(--accent);font-weight:700;' : 'color:var(--text3);';
+    const barColor = status === 'done' ? 'var(--green)' : isCurrent ? 'var(--accent)' : 'var(--border)';
     const shortLabel = sec.label.replace(/Seduta \d+ — /, '');
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
-        <span style="font-family:'DM Mono';font-size:11px;color:${col};min-width:22px;text-align:center;font-weight:700;">S${sec.seduta||i+1}</span>
-        <span style="flex:1;font-size:12px;${status==='none'?'color:var(--text3);':''}">${shortLabel}</span>
-        <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${done}/${total}</span>
-        <div style="width:40px;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
-          <div style="height:100%;width:${pctSec}%;background:${col};border-radius:2px;"></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid;margin-bottom:6px;${bgCard}transition:all 0.15s;">
+        <span style="font-size:14px;flex-shrink:0;">${iconStatus}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;${labelColor}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${shortLabel}</div>
+          <div style="margin-top:4px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${pctSec}%;background:${barColor};border-radius:2px;transition:width 0.4s;"></div>
+          </div>
         </div>
-        ${badge}
+        <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);flex-shrink:0;">${done}/${total}</span>
       </div>`;
   }).join('');
 
   return `
-    <div class="card" style="margin-bottom:16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-        <div class="section-title">🗺️ Percorso Fit</div>
+    <div class="card" style="margin-bottom:16px;padding:0;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="font-family:'DM Mono';font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);">🗺️ Percorso Fit</div>
         <button class="btn btn-secondary btn-sm" onclick="goToPercorso(${clientId})">Apri Percorso →</button>
       </div>
 
       <!-- Barra globale -->
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;padding:12px 14px;background:var(--surface2);border-radius:var(--radius-sm);">
-        <div style="flex:1;">
-          <div style="font-size:10px;font-family:'DM Mono';color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em;">Avanzamento totale</div>
-          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
-            <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:3px;transition:width 0.3s;"></div>
+      <div style="padding:16px 20px;background:linear-gradient(135deg,var(--surface2),var(--surface));border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="flex:1;">
+            <div style="font-size:11px;font-family:'DM Mono';color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em;">Avanzamento totale</div>
+            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),#ff7043);border-radius:4px;transition:width 0.4s;"></div>
+            </div>
+          </div>
+          <div style="text-align:right;min-width:56px;">
+            <div style="font-size:28px;font-weight:800;color:var(--accent);line-height:1;letter-spacing:-0.02em;">${pct}<span style="font-size:14px;">%</span></div>
+            <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${checkedItems}/${totalItems}</div>
           </div>
         </div>
-        <div style="text-align:right;min-width:60px;">
-          <div style="font-size:22px;font-weight:800;color:var(--accent);line-height:1;">${pct}%</div>
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${checkedItems}/${totalItems}</div>
-        </div>
+        ${currentLabel ? `<div style="margin-top:10px;padding:8px 12px;border-left:3px solid var(--accent);background:rgba(229,57,53,0.05);border-radius:0 8px 8px 0;font-size:12px;font-weight:700;color:var(--accent);">${currentLabel}</div>` : ''}
       </div>
 
-      <!-- Step corrente -->
-      ${currentLabel ? `<div style="margin-bottom:12px;padding:8px 12px;border-left:3px solid var(--accent);background:rgba(232,255,71,0.04);border-radius:0 6px 6px 0;font-size:12px;font-weight:700;">${currentLabel}</div>` : ''}
-
       <!-- Step list -->
-      <div>${stepsHtml}</div>
+      <div style="padding:14px 16px;">${stepsHtml}</div>
     </div>`;
 }
 
@@ -9735,18 +9802,21 @@ function renderPercorso() {
   });
 
   let html = `
-    <div style="display:flex;align-items:center;gap:20px;margin-bottom:20px;padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);">
-      <div style="flex:1;">
-        <div style="font-size:11px;font-family:'DM Mono';color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Avanzamento Onboarding</div>
-        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:4px;transition:width 0.3s;"></div>
+    <div style="margin-bottom:20px;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;position:relative;">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),#ff7043);"></div>
+      <div style="display:flex;align-items:center;gap:16px;margin-top:4px;">
+        <div style="flex:1;">
+          <div style="font-size:11px;font-family:'DM Mono';color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Avanzamento Onboarding</div>
+          <div style="height:10px;background:var(--surface2);border-radius:5px;overflow:hidden;border:1px solid var(--border);">
+            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),#ff7043);border-radius:5px;transition:width 0.4s;"></div>
+          </div>
         </div>
+        <div style="text-align:right;min-width:72px;">
+          <div style="font-size:32px;font-weight:800;color:var(--accent);line-height:1;letter-spacing:-0.02em;">${pct}<span style="font-size:16px;">%</span></div>
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${checkedItems}/${totalItems}</div>
+        </div>
+        <button class="btn btn-danger" style="font-size:11px;padding:6px 12px;flex-shrink:0;" onclick="resetPercorso('${clientId}')">Reset</button>
       </div>
-      <div style="text-align:right;">
-        <div style="font-size:28px;font-weight:800;color:var(--accent);">${checkedItems}/${totalItems}</div>
-        <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${pct}% completato</div>
-      </div>
-      <button class="btn btn-danger" style="font-size:11px;padding:6px 12px;" onclick="resetPercorso('${clientId}')">Reset</button>
     </div>
 
     ${criticalSections.size > 0 ? `
@@ -9754,45 +9824,60 @@ function renderPercorso() {
         ⚠ Test KO/LIMIT rilevati — le sedute evidenziate richiedono attenzione extra
       </div>` : ''}
 
-    <div style="display:flex;flex-direction:column;gap:10px;">
+    <div style="display:flex;flex-direction:column;gap:8px;">
       ${PERCORSO_CHECKLIST.map((sec, si) => {
         const secChecked = sec.items.filter(item => checks[`${sec.id}_${item}`]).length;
         const allDone = secChecked === sec.items.length;
+        const hasStarted = secChecked > 0;
         const isCritical = criticalSections.has(sec.id);
-        const borderColor = allDone ? 'var(--green)' : isCritical ? 'rgba(255,212,71,0.5)' : 'var(--border)';
-        const accentColor = allDone ? 'var(--green)' : isCritical ? 'var(--yellow)' : 'var(--accent)';
+
+        // Determina se è bloccata (tutte le precedenti devono essere fatte)
+        const prevDone = si === 0 || PERCORSO_CHECKLIST.slice(0, si).every((ps) => {
+          const done = ps.items.filter(item => checks[`${ps.id}_${item}`]).length;
+          return done === ps.items.length;
+        });
+        const isLocked = !prevDone && !hasStarted;
+        const isCurrent = !allDone && prevDone && !isLocked;
+
+        // Colori e icone per stato
+        const stateIcon = allDone ? '✅' : isLocked ? '🔒' : isCurrent ? '▶️' : '○';
+        const borderLeft = allDone ? 'var(--green)' : isCurrent ? 'var(--accent)' : isCritical ? 'rgba(255,212,71,0.6)' : 'var(--border)';
+        const cardBg = allDone ? 'rgba(46,125,50,0.03)' : isCurrent ? 'rgba(229,57,53,0.02)' : 'var(--surface)';
+        const titleColor = allDone ? 'var(--green)' : isLocked ? 'var(--text3)' : isCurrent ? 'var(--text)' : 'var(--text2)';
 
         const statusBadge = allDone
-          ? `<span style="background:rgba(71,255,130,0.15);color:var(--green);border-radius:10px;padding:2px 9px;font-size:9px;font-family:'DM Mono';">✓ completata</span>`
+          ? `<span style="background:rgba(46,125,50,0.1);color:var(--green);border:1px solid rgba(46,125,50,0.2);border-radius:20px;padding:2px 10px;font-size:10px;font-family:'DM Mono';font-weight:700;white-space:nowrap;">✓ completata</span>`
+          : isLocked
+          ? `<span style="background:var(--surface2);color:var(--text3);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:10px;font-family:'DM Mono';white-space:nowrap;">🔒 bloccata</span>`
           : isCritical
-          ? `<span style="background:rgba(255,212,71,0.12);color:var(--yellow);border-radius:10px;padding:2px 9px;font-size:9px;font-family:'DM Mono';">⚠ priorità alta</span>`
-          : secChecked > 0
-          ? `<span style="background:rgba(232,255,71,0.1);color:var(--accent);border-radius:10px;padding:2px 9px;font-size:9px;font-family:'DM Mono';">▶ in corso</span>`
-          : `<span style="background:var(--surface2);color:var(--text3);border-radius:10px;padding:2px 9px;font-size:9px;font-family:'DM Mono';">— non iniziata</span>`;
+          ? `<span style="background:rgba(255,212,71,0.1);color:var(--yellow);border:1px solid rgba(255,212,71,0.3);border-radius:20px;padding:2px 10px;font-size:10px;font-family:'DM Mono';white-space:nowrap;">⚠ priorità</span>`
+          : hasStarted
+          ? `<span style="background:rgba(229,57,53,0.08);color:var(--accent);border:1px solid rgba(229,57,53,0.2);border-radius:20px;padding:2px 10px;font-size:10px;font-family:'DM Mono';font-weight:700;white-space:nowrap;">▶ in corso</span>`
+          : `<span style="background:var(--surface2);color:var(--text3);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:10px;font-family:'DM Mono';white-space:nowrap;">— da fare</span>`;
 
-        return `<div style="background:var(--surface);border:1px solid ${borderColor};border-left:3px solid ${accentColor};border-radius:var(--radius);overflow:hidden;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;"
-            onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span style="font-family:'DM Mono';font-size:11px;color:${accentColor};font-weight:700;min-width:22px;">S${sec.seduta}</span>
-              <div>
-                <div style="font-weight:700;font-size:13px;">${sec.label.replace(/Seduta \d+ — /,'')}</div>
+        return `<div style="background:${cardBg};border:1px solid var(--border);border-left:3px solid ${borderLeft};border-radius:var(--radius);overflow:hidden;opacity:${isLocked?'0.6':'1'};transition:opacity 0.2s;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:${isLocked?'default':'pointer'};user-select:none;gap:10px;"
+            onclick="${isLocked ? '' : "this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'"}">
+            <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
+              <span style="font-size:18px;flex-shrink:0;">${stateIcon}</span>
+              <div style="min-width:0;">
+                <div style="font-weight:800;font-size:13px;color:${titleColor};line-height:1.2;">${sec.label.replace(/Seduta \d+ — /,'')}</div>
+                <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);margin-top:3px;">Seduta ${sec.seduta} · ${secChecked}/${sec.items.length} completati</div>
               </div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${secChecked}/${sec.items.length}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               ${statusBadge}
-              <span style="color:var(--text3);font-size:12px;">▾</span>
+              ${!isLocked ? `<span style="color:var(--text3);font-size:12px;">▾</span>` : ''}
             </div>
           </div>
-          <div class="pf-body" data-sec-id="${sec.id}" style="display:none;padding:0 16px 14px;border-top:1px solid var(--border);">
-            ${sec.descrizione ? `<div style="font-family:'DM Mono';font-size:10px;color:var(--text3);line-height:1.6;padding:10px 0 12px;border-bottom:1px dashed var(--border);margin-bottom:12px;">${sec.descrizione}</div>` : ''}
-            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <div class="pf-body" data-sec-id="${sec.id}" style="display:none;border-top:1px solid var(--border);">
+            ${sec.descrizione ? `<div style="padding:10px 16px 0;font-family:'DM Mono';font-size:10px;color:var(--text3);line-height:1.6;border-bottom:1px dashed var(--border);padding-bottom:10px;margin-bottom:0;">${sec.descrizione}</div>` : ''}
+            <div style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;">
               ${sec.items.map(item => {
                 const ck = checks[`${sec.id}_${item}`] ? true : false;
-                return `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px;border-radius:6px;border:1px solid ${ck ? 'var(--green)' : 'var(--border)'};background:${ck ? 'rgba(71,255,130,0.08)' : 'var(--surface2)'};font-size:12px;transition:all 0.15s;">
-                  <input type="checkbox" ${ck ? 'checked' : ''} onchange="togglePercorsoCheck('${clientId}','${sec.id}','${item.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--accent);">
-                  <span style="color:${ck ? '#47ff82' : 'var(--text)'};">${item}</span>
+                return `<label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:8px 12px;border-radius:var(--radius-sm);border:1px solid ${ck ? 'rgba(46,125,50,0.35)' : 'var(--border)'};background:${ck ? 'rgba(46,125,50,0.07)' : 'var(--surface2)'};font-size:12px;font-weight:${ck?'700':'400'};transition:all 0.15s;color:${ck?'var(--green)':'var(--text)'};">
+                  <input type="checkbox" ${ck ? 'checked' : ''} onchange="togglePercorsoCheck('${clientId}','${sec.id}','${item.replace(/'/g,"\\'")}',this.checked)" style="accent-color:var(--green);width:14px;height:14px;">
+                  ${ck ? '✓ ' : ''}${item}
                 </label>`;
               }).join('')}
             </div>
