@@ -2503,6 +2503,10 @@ body { font-size: 15px; font-family: 'Outfit', sans-serif; }
 }
 </style>
 <style>
+/* ── BALANCE WIDGET ── */
+.bw-mono { font-family: 'DM Mono', monospace; }
+</style>
+<style>
 /* ── SYNC BAR ── */
 #drive-sync-bar {
   position: fixed;
@@ -4029,81 +4033,122 @@ function renderBalanceWidget(clientId, containerId) {
   const d = computeBalanceData(clientId, days);
   const totalEx = d._totalEx || 0;
   const metPct = totalEx > 0 ? Math.round((d.metab / totalEx) * 100) : 0;
-
-  const pairsHtml = _BALANCE_PAIRS.map(p => {
-    const a = d[p.a] || 0, b = d[p.b] || 0;
-    const ratio = (a + b === 0) ? 100 : Math.round(Math.min(a, b) / Math.max(a, b) * 100);
-    const col = _balancePairColor(ratio);
-    const higher = a >= b ? p.labelA : p.labelB;
-    const lower  = a <  b ? p.labelA : p.labelB;
-    const hint = ratio < 50 ? ` — più ${higher}` : '';
-    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-      <span style="font-family:'DM Mono';font-size:9px;color:var(--text3);width:90px;flex-shrink:0;">${p.labelA} / ${p.labelB}</span>
-      <div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;">
-        <div style="width:${ratio}%;height:100%;background:${col};border-radius:3px;transition:width .3s;"></div>
-      </div>
-      <span style="font-family:'DM Mono';font-size:10px;font-weight:700;color:${col};width:36px;text-align:right;">${ratio}%${hint}</span>
-    </div>`;
-  }).join('');
-
-  const maxVal = Math.max(..._BALANCE_CATS.map(c => d[c.key] || 0), 1);
-  const detailHtml = _BALANCE_CATS.map(c => {
-    const v = d[c.key] || 0;
-    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-      <div style="width:6px;height:6px;border-radius:50%;background:${c.color};flex-shrink:0;"></div>
-      <span style="font-size:10px;color:var(--text3);width:80px;flex-shrink:0;">${c.label}</span>
-      <div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
-        <div style="width:${Math.round(v/maxVal*100)}%;height:100%;background:${c.color};border-radius:2px;"></div>
-      </div>
-      <span style="font-family:'DM Mono';font-size:10px;color:var(--text2);width:20px;text-align:right;">${v}</span>
-    </div>`;
-  }).join('');
-
   const metColor = metPct < 5 ? 'var(--red)' : metPct <= 20 ? 'var(--green)' : 'var(--yellow)';
   const metHint  = metPct < 5 ? 'basso' : metPct <= 20 ? 'ok' : 'alto';
+  const maxVal = Math.max(..._BALANCE_CATS.map(c => d[c.key] || 0), 1);
 
   const okPairs = _BALANCE_PAIRS.filter(p => {
     const a = d[p.a]||0, b = d[p.b]||0;
     return (a+b===0) ? true : Math.round(Math.min(a,b)/Math.max(a,b)*100) >= 75;
   }).length;
 
-  container.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-        <span style="font-family:'DM Mono';font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.06em;">⚖️ BILANCIAMENTO PATTERN</span>
-        <div style="display:flex;gap:4px;">
-          ${[30,90,180].map(dd => '<button onclick="document.getElementById(\'' + containerId + '\').dataset.balanceDays=\'' + dd + '\';renderBalanceWidget(' + clientId + ',\'' + containerId + '\')" style="padding:3px 9px;border-radius:6px;border:1px solid var(--border);background:' + (days===dd?'var(--accent)':'var(--surface2)') + ';color:' + (days===dd?'#fff':'var(--text3)') + ';font-family:\'DM Mono\';font-size:9px;cursor:pointer;">' + (dd===30?'30gg':dd===90?'3M':'6M') + '</button>').join('')}
-        </div>
-      </div>
+  const pairsHtml = _BALANCE_PAIRS.map(p => {
+    const a = d[p.a]||0, b = d[p.b]||0;
+    const ratio = (a+b===0)?100:Math.round(Math.min(a,b)/Math.max(a,b)*100);
+    const col = _balancePairColor(ratio);
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+      +'<span class="bw-mono" style="font-size:9px;color:var(--text3);width:90px;flex-shrink:0;">'+p.labelA+' / '+p.labelB+'</span>'
+      +'<div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;">'
+      +'<div style="width:'+ratio+'%;height:100%;background:'+col+';border-radius:3px;"></div></div>'
+      +'<span class="bw-mono" style="font-size:10px;font-weight:700;color:'+col+';width:30px;text-align:right;">'+ratio+'%</span>'
+      +'</div>';
+  }).join('');
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
-        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:2px;">SEDUTE</div>
-          <div style="font-size:18px;font-weight:800;">${d._sedute}</div>
-        </div>
-        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:2px;">COPPIE OK</div>
-          <div style="font-size:18px;font-weight:800;color:${okPairs===4?'var(--green)':okPairs>=2?'var(--yellow)':'var(--red)'};">${okPairs}/4</div>
-        </div>
-        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:2px;">METABOLICO</div>
-          <div style="font-size:18px;font-weight:800;color:${metColor};">${metPct}% <span style="font-size:10px;">${metHint}</span></div>
-        </div>
-      </div>
+  const detailHtml = _BALANCE_CATS.map(c => {
+    const v = d[c.key]||0;
+    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+      +'<div style="width:6px;height:6px;border-radius:50%;background:'+c.color+';flex-shrink:0;"></div>'
+      +'<span style="font-size:10px;color:var(--text3);width:80px;flex-shrink:0;">'+c.label+'</span>'
+      +'<div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">'
+      +'<div style="width:'+Math.round(v/maxVal*100)+'%;height:100%;background:'+c.color+';border-radius:2px;"></div></div>'
+      +'<span class="bw-mono" style="font-size:10px;color:var(--text2);width:20px;text-align:right;">'+v+'</span>'
+      +'</div>';
+  }).join('');
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div>
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:8px;">COPPIE ANTAGONISTE</div>
-          ${pairsHtml}
-        </div>
-        <div>
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:8px;">OCCORRENZE</div>
-          ${detailHtml}
-        </div>
-      </div>
+  const spiderId = 'bspider-' + containerId.replace(/[^a-zA-Z0-9]/g,'');
+  const cid = clientId;
+  const ctn = containerId;
 
-      ${totalEx === 0 ? '<div style="text-align:center;padding:8px 0;font-size:12px;color:var(--text3);margin-top:8px;">Nessuna seduta nel periodo selezionato</div>' : ''}
-    </div>`;
+  const btnHtml = [30,90,180].map(dd => {
+    const bg  = days===dd ? 'var(--accent)' : 'var(--surface2)';
+    const col = days===dd ? '#fff'          : 'var(--text3)';
+    const lbl = dd===30   ? '30gg'          : dd===90 ? '3M' : '6M';
+    return '<button class="bw-mono" '
+      +'onclick="document.getElementById(this.dataset.c).dataset.balanceDays=this.dataset.d;renderBalanceWidget(parseInt(this.dataset.i),this.dataset.c)" '
+      +'data-c="'+ctn+'" data-d="'+dd+'" data-i="'+cid+'" '
+      +'style="padding:3px 9px;border-radius:6px;border:1px solid var(--border);background:'+bg+';color:'+col+';font-size:9px;cursor:pointer;">'+lbl+'</button>';
+  }).join('');
+
+  container.innerHTML =
+    '<div style="padding:4px 0;">'
+    +'<div style="display:flex;justify-content:flex-end;margin-bottom:10px;gap:4px;">'+btnHtml+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">'
+      +'<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">'
+        +'<div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:2px;">SEDUTE</div>'
+        +'<div style="font-size:18px;font-weight:800;">'+d._sedute+'</div></div>'
+      +'<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">'
+        +'<div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:2px;">COPPIE OK</div>'
+        +'<div style="font-size:18px;font-weight:800;color:'+(okPairs===4?'var(--green)':okPairs>=2?'var(--yellow)':'var(--red)')+';">'+okPairs+'/4</div></div>'
+      +'<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">'
+        +'<div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:2px;">METABOLICO</div>'
+        +'<div style="font-size:18px;font-weight:800;color:'+metColor+';">'+metPct+'% <span style="font-size:10px;">'+metHint+'</span></div></div>'
+    +'</div>'
+    +'<div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:6px;">SPIDER PATTERN</div>'
+    +'<div style="position:relative;width:100%;height:220px;margin-bottom:12px;"><canvas id="'+spiderId+'"></canvas></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+      +'<div><div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:8px;">COPPIE ANTAGONISTE</div>'+pairsHtml+'</div>'
+      +'<div><div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:8px;">OCCORRENZE</div>'+detailHtml+'</div>'
+    +'</div>'
+    +(totalEx===0?'<div style="text-align:center;padding:8px 0;font-size:12px;color:var(--text3);margin-top:8px;">Nessuna seduta nel periodo selezionato</div>':'')
+    +'</div>';
+
+  setTimeout(() => {
+    const canvas = document.getElementById(spiderId);
+    if (!canvas || !window.Chart) return;
+    const ex = Chart.getChart(canvas); if (ex) ex.destroy();
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const gc = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+    const lc = isDark ? '#999' : '#555';
+    new Chart(canvas, {
+      type: 'radar',
+      data: {
+        labels: _BALANCE_CATS.map(c => c.label),
+        datasets: [{
+          data: _BALANCE_CATS.map(c => d[c.key]||0),
+          backgroundColor: 'rgba(229,57,53,0.1)',
+          borderColor: '#e53935',
+          borderWidth: 2,
+          pointBackgroundColor: _BALANCE_CATS.map(c => c.color),
+          pointRadius: 3,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { r: { min: 0,
+          ticks: { stepSize: Math.max(1, Math.ceil(maxVal/4)), color: lc, font: { size: 9 }, backdropColor: 'transparent' },
+          grid: { color: gc }, angleLines: { color: gc }, pointLabels: { color: lc, font: { size: 9 } }
+        }},
+        plugins: { legend: { display: false } }
+      }
+    });
+  }, 60);
+}
+
+function toggleBalanceAccordion(accId, clientId, widgetId) {
+  const acc = document.getElementById(accId);
+  if (!acc) return;
+  const body = acc.querySelector('.profilo-acc-body');
+  if (!body) return;
+  const isOpen = acc.classList.contains('acc-open');
+  acc.classList.toggle('acc-open', !isOpen);
+  body.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    const widget = document.getElementById(widgetId);
+    if (widget && !widget.dataset.rendered) {
+      widget.dataset.rendered = '1';
+      renderBalanceWidget(clientId, widgetId);
+    }
+  }
 }
 
 // ===================================================
@@ -4667,6 +4712,16 @@ function openClientDetail(clientId) {
         </div>
       </div>
 
+      <div class="profilo-accordion" id="acc-balance-${client.id}">
+        <div class="profilo-acc-header" onclick="toggleBalanceAccordion('acc-balance-${client.id}', ${client.id}, 'balance-widget-profilo-${client.id}')">
+          <span>⚖️ Bilanciamento Pattern</span>
+          <span class="acc-chevron">▾</span>
+        </div>
+        <div class="profilo-acc-body" style="display:none;">
+          <div id="balance-widget-profilo-${client.id}" data-balance-days="30"></div>
+        </div>
+      </div>
+
     </div>
 
     <div id="dt-note" class="tab-content">
@@ -4694,7 +4749,16 @@ function openClientDetail(clientId) {
     </div>
 
     <div id="dt-sedute" class="tab-content">
-      <div id="balance-widget-detail-${client.id}" data-balance-days="30"></div>
+      <div style="margin-bottom:12px;">
+        <button onclick="toggleBalancePanel(this,'balance-body-detail-${client.id}','balance-widget-detail-${client.id}','${client.id}')"
+          style="display:flex;align-items:center;gap:8px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+          <span>⚖️ Bilanciamento Pattern</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3);">▸ espandi</span>
+        </button>
+        <div id="balance-body-detail-${client.id}" style="display:none;margin-top:4px;">
+          <div id="balance-widget-detail-${client.id}" data-balance-days="30"></div>
+        </div>
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
         <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);">Seleziona 2 sedute per confrontarle</div>
         <div style="display:flex;gap:8px;">
@@ -7461,6 +7525,18 @@ function toggleStoricoSedute(btn, clientId) {
       panel.dataset.loaded = '1';
       panel.innerHTML = renderStoricoSedutePanel(clientId);
     }
+  }
+}
+
+function toggleBalancePanel(btn, bodyId, widgetId, clientId) {
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : '';
+  btn.querySelector('span:last-child').textContent = isOpen ? '▸ espandi' : '▾ chiudi';
+  if (!isOpen && !body.dataset.rendered) {
+    body.dataset.rendered = '1';
+    renderBalanceWidget(parseInt(clientId), widgetId);
   }
 }
 
@@ -10567,7 +10643,16 @@ function openExistingSeduta(workout, clientId) {
       </div>
 
       <!-- Balance widget -->
-      <div id="balance-widget-builder-${clientId}" data-balance-days="30"></div>
+      <div style="margin-bottom:14px;">
+        <button onclick="toggleBalancePanel(this,'balance-body-builder-${clientId}','balance-widget-builder-${clientId}','${clientId}')"
+          style="display:flex;align-items:center;gap:8px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+          <span>⚖️ Bilanciamento Pattern</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3);">▸ espandi</span>
+        </button>
+        <div id="balance-body-builder-${clientId}" style="display:none;margin-top:4px;">
+          <div id="balance-widget-builder-${clientId}" data-balance-days="30"></div>
+        </div>
+      </div>
 
       <!-- Storico ultime sedute -->
       <div style="margin-bottom:14px;">
@@ -10799,7 +10884,16 @@ function newSedutaBuilder(prefillDate) {
       </div>
 
       <!-- Balance widget -->
-      <div id="balance-widget-builder-${clientId}" data-balance-days="30"></div>
+      <div style="margin-bottom:14px;">
+        <button onclick="toggleBalancePanel(this,'balance-body-builder-${clientId}','balance-widget-builder-${clientId}','${clientId}')"
+          style="display:flex;align-items:center;gap:8px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+          <span>⚖️ Bilanciamento Pattern</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3);">▸ espandi</span>
+        </button>
+        <div id="balance-body-builder-${clientId}" style="display:none;margin-top:4px;">
+          <div id="balance-widget-builder-${clientId}" data-balance-days="30"></div>
+        </div>
+      </div>
 
       <!-- 5b. Storico ultime sedute -->
       <div style="margin-bottom:14px;">
@@ -11395,5 +11489,6 @@ document.addEventListener('click', function(e) {
   }
 });
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </body>
 </html>
