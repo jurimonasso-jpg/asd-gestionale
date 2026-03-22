@@ -2368,6 +2368,139 @@ body { font-size: 15px; font-family: 'Outfit', sans-serif; }
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ===== DASHBOARD MOCKUP STYLE ===== */
+#page-dashboard .dash-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+#page-dashboard .dash-header-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+#page-dashboard .dash-header-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1;
+  color: var(--text);
+  text-transform: uppercase;
+}
+#page-dashboard .dash-header-date {
+  font-size: 13px;
+  color: var(--text3);
+  margin-top: 4px;
+}
+#page-dashboard .dash-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: white;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+#page-dashboard .dash-redline {
+  height: 3px;
+  background: var(--accent);
+  margin: 0 0 20px 0;
+  border-radius: 2px;
+}
+#page-dashboard .dash-stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 24px;
+}
+#page-dashboard .dash-stat-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 14px 8px 12px;
+  text-align: center;
+  border: 1.5px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+#page-dashboard .dash-stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--border);
+}
+#page-dashboard .dash-stat-card.dash-stat-alert {
+  border-color: var(--accent);
+  background: rgba(229,57,53,0.04);
+}
+#page-dashboard .dash-stat-card.dash-stat-alert::after {
+  background: var(--accent);
+}
+#page-dashboard .dash-stat-num {
+  font-family: 'Outfit', sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -1px;
+}
+#page-dashboard .dash-stat-card.dash-stat-alert .dash-stat-num {
+  color: var(--accent);
+}
+#page-dashboard .dash-stat-card.dash-stat-accent .dash-stat-num {
+  color: var(--accent);
+}
+#page-dashboard .dash-stat-lbl {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text3);
+  margin-top: 4px;
+  line-height: 1.3;
+}
+#page-dashboard .dash-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+#page-dashboard .dash-section-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text3);
+}
+#page-dashboard .dash-section-action {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  padding: 0;
+}
+@media (max-width: 480px) {
+  #page-dashboard .dash-stat-num { font-size: 24px; }
+  #page-dashboard .dash-stat-lbl { font-size: 8px; }
+  #page-dashboard .dash-header-title { font-size: 32px; }
+}
 </style>
 <style>
 /* ── SYNC BAR ── */
@@ -2680,90 +2813,77 @@ window.fbLoadFromCloud = async function() {
 
   <!-- ===== DASHBOARD ===== -->
   <div class="page active" id="page-dashboard">
-    <div class="page-header">
+
+    <!-- HEADER MOCKUP STYLE -->
+    <div class="dash-header">
       <div>
-        <div class="page-title">Overview</div>
-        <div class="page-title-big">Dashboard</div>
+        <div class="dash-header-label">Overview</div>
+        <div class="dash-header-title">Dashboard</div>
+        <div class="dash-header-date" id="dash-header-date"></div>
+      </div>
+      <div class="dash-avatar" id="dash-avatar">PT</div>
+    </div>
+    <div class="dash-redline"></div>
+
+    <!-- STAT ROW — 4 card compatte -->
+    <div class="dash-stat-row">
+      <div class="dash-stat-card">
+        <div class="dash-stat-num" id="dash-clients">0</div>
+        <div class="dash-stat-lbl">Clienti<br>Attivi</div>
+      </div>
+      <div class="dash-stat-card">
+        <div class="dash-stat-num" id="dash-pain">0</div>
+        <div class="dash-stat-lbl">PRT<br>Attivi</div>
+      </div>
+      <div class="dash-stat-card dash-stat-accent">
+        <div class="dash-stat-num" id="dash-sed-week">0</div>
+        <div class="dash-stat-lbl">Sedute<br>Sett.</div>
+      </div>
+      <div class="dash-stat-card dash-stat-alert">
+        <div class="dash-stat-num" id="dash-scadenze">0</div>
+        <div class="dash-stat-lbl">In<br>Scadenza</div>
       </div>
     </div>
 
-    <div class="grid-3" style="margin-bottom: 24px;">
-      <div class="stat-box">
-        <div class="stat-value" id="dash-clients">0</div>
-        <div class="stat-label">Clienti Attivi</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-value" id="dash-pain">0</div>
-        <div class="stat-label">PRT Attivi</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-value" id="dash-scadenze">0</div>
-        <div class="stat-label">Percorsi in Scadenza</div>
-      </div>
-    </div>
-    <!-- Riga 2: sedute settimana + clienti dolore oggi + compleanni -->
-    <div class="grid-3" style="margin-bottom:24px;">
-      <div class="stat-box" style="border-color:rgba(232,255,71,0.3);">
-        <div style="display:flex;align-items:flex-end;gap:12px;">
-          <div>
-            <div class="stat-value" id="dash-sed-week" style="color:var(--accent);">0</div>
-            <div class="stat-label">Sedute questa settimana</div>
-          </div>
-          <div style="padding-bottom:8px;font-family:'DM Mono';font-size:11px;color:var(--text3);">
-            vs <span id="dash-sed-lastweek" style="color:var(--text2);">0</span> sett. scorsa
-          </div>
-        </div>
-      </div>
-      <div class="stat-box" style="border-color:rgba(255,71,87,0.3);">
-        <div class="stat-value" id="dash-pain-today" style="color:var(--red);">0</div>
-        <div class="stat-label">Clienti con dolore oggi</div>
-      </div>
-      <div class="stat-box" style="border-color:rgba(255,212,71,0.3);">
-        <div class="stat-value" id="dash-bday-count" style="color:var(--yellow);">0</div>
-        <div class="stat-label">🎂 Compleanni (7 giorni)</div>
-        <div id="dash-bday-names" style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-top:4px;"></div>
-      </div>
-    </div>
+    <!-- hidden elements kept for JS compatibility -->
+    <span id="dash-sed-lastweek" style="display:none;">0</span>
+    <span id="dash-pain-today" style="display:none;">0</span>
+    <span id="dash-bday-count" style="display:none;">0</span>
+    <div id="dash-bday-names" style="display:none;"></div>
 
-    <!-- Riga 3: zone dolore frequenti + alerts -->
-    <div class="grid-2" style="margin-bottom:24px;">
+    <!-- ZONE DOLORE + ALERTS -->
+    <div class="grid-2" style="margin-bottom:20px;">
       <div class="card">
         <div class="section-header">
-          <div class="section-title">💢 Zone Dolore più Frequenti</div>
+          <div class="section-title">💢 Zone Dolore</div>
         </div>
         <div id="dash-pain-zones"></div>
       </div>
       <div class="card">
         <div class="section-header">
-          <div class="section-title">⚠️ Attenzione Richiesta</div>
+          <div class="section-title">⚠️ Attenzione</div>
         </div>
         <div id="dash-alerts"></div>
       </div>
     </div>
 
-    <!-- Riga 4: promemoria note per clienti di oggi -->
-    <div class="card" id="dash-promemoria-card" style="margin-bottom:24px;display:none;">
+    <!-- PROMEMORIA (hidden se vuoto) -->
+    <div class="card" id="dash-promemoria-card" style="margin-bottom:20px;display:none;">
       <div class="section-header">
-        <div class="section-title">💡 Note per la Prossima — Clienti di Oggi</div>
+        <div class="section-title">💡 Note Prossima Seduta</div>
       </div>
       <div id="dash-promemoria"></div>
     </div>
 
-    <div class="grid-2">
-      <div class="card">
-        <div class="section-header">
-          <div class="section-title">Ultimi Clienti</div>
-        </div>
-        <div id="dash-recent-clients"></div>
+    <!-- AGENDA OGGI + DOMANI -->
+    <div style="margin-bottom:20px;">
+      <div class="dash-section-header">
+        <span class="dash-section-title">Agenda</span>
+        <button class="dash-section-action" onclick="showPage('agenda')">Vedi tutto →</button>
       </div>
-      <div class="card">
-        <div class="section-header">
-          <div class="section-title">Note Rapide</div>
-          <button class="btn btn-secondary btn-sm" onclick="addQuickNote()">+ Nota</button>
-        </div>
-        <div id="quick-notes-list"></div>
-      </div>
+      <div id="dash-agenda-oggi"></div>
     </div>
+
   </div>
 
   <!-- ===== CLIENTS ===== -->
@@ -9046,6 +9166,14 @@ function _buildPeriodBars(sedute, bounds) {
 }
 
 function renderDashboard() {
+  // Header date e avatar
+  const dashDate = document.getElementById('dash-header-date');
+  if (dashDate) {
+    const days = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+    const months = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+    const n = new Date();
+    dashDate.textContent = days[n.getDay()] + ', ' + n.getDate() + ' ' + months[n.getMonth()] + ' ' + n.getFullYear();
+  }
   updateClientCount();
   const prtCount = clients.filter(c => c.prt && c.prt !== 'no').length;
   document.getElementById('dash-pain').textContent = prtCount;
@@ -9264,9 +9392,100 @@ function renderDashboard() {
         </div>`).join('');
     }
   }
-}
 
-// ===================================================
+  // ── AGENDA OGGI nella dashboard ─────────────────────────────────────────
+  const agendaOggiEl = document.getElementById('dash-agenda-oggi');
+  if (agendaOggiEl) {
+    const nowD        = new Date();
+    const nowMinutes  = nowD.getHours() * 60 + nowD.getMinutes();
+    const todayStr3   = nowD.toISOString().split('T')[0];
+    const todayName3  = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][nowD.getDay()];
+    const tomorrowD   = new Date(nowD); tomorrowD.setDate(nowD.getDate() + 1);
+    const tomorrowStr = tomorrowD.toISOString().split('T')[0];
+    const tomorrowName = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][tomorrowD.getDay()];
+
+    function buildDayClients(dayName, dateStr) {
+      const fixed = clients.filter(c => c.schedule?.some(s => s.giorno === dayName)).map(c => {
+        const slot = c.schedule.find(s => s.giorno === dayName);
+        return { client: c, orario: slot?.orario || '00:00' };
+      });
+      const manual = getManualSessions().filter(s => s.date === dateStr).map(s => {
+        const c = clients.find(cl => cl.id == s.clientId);
+        return c ? { client: c, orario: s.orario || '00:00' } : null;
+      }).filter(Boolean);
+      return [...fixed, ...manual].sort((a, b) => a.orario.localeCompare(b.orario));
+    }
+
+    function getDashProxNote(clientId) {
+      const notes = getSessionNotes(clientId);
+      for (const n of notes) {
+        if (n.text && n.text.includes('\u27a1\ufe0f')) {
+          const chunk = n.text.split(' | ').find(p => p.startsWith('\u27a1\ufe0f'));
+          if (chunk) return chunk.replace('\u27a1\ufe0f', '').trim();
+        }
+      }
+      return '';
+    }
+
+    function renderDashAgendaItem(c, orario, dateStr) {
+      const prossimaNote = getDashProxNote(c.id);
+      const painActive   = c.painPoints?.filter(p => p.stato !== 'risolto') || [];
+      const isToday      = dateStr === todayStr3;
+      const [hh, mm]     = orario.split(':').map(Number);
+      const slotMin      = hh * 60 + mm;
+
+      let dotColor = '#D1D5DB';
+      let badge = '';
+      if (isToday) {
+        if (slotMin + 60 < nowMinutes) {
+          dotColor = '#22C55E';
+          badge = '<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:#DCFCE7;color:#16A34A;white-space:nowrap;flex-shrink:0;">Fatto</span>';
+        } else if (slotMin <= nowMinutes && nowMinutes <= slotMin + 60) {
+          dotColor = '#F59E0B';
+          badge = '<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:#FEF3C7;color:#B45309;white-space:nowrap;flex-shrink:0;">Ora</span>';
+        } else {
+          dotColor = '#E8000D';
+        }
+      }
+
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">'
+        + '<div style="font-family:Outfit,sans-serif;font-size:17px;font-weight:800;color:var(--text);min-width:48px;line-height:1;">' + orario + '</div>'
+        + '<div style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';flex-shrink:0;"></div>'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="font-size:14px;font-weight:700;color:var(--text);">' + c.nome + ' ' + c.cognome + '</div>'
+        + '<div style="font-size:11px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (c.goal || 'Benessere generale') + (painActive.length > 0 ? ' &nbsp;<span style=\"color:var(--red)\">💢' + painActive.length + '</span>' : '') + '</div>'
+        + (prossimaNote ? '<div style="font-size:11px;font-weight:600;color:var(--accent);margin-top:2px;">⚠ ' + prossimaNote + '</div>' : '')
+        + '</div>'
+        + badge
+        + '<button style="padding:6px 12px;border-radius:8px;border:1px solid var(--accent);background:rgba(229,57,53,0.08);color:var(--accent);cursor:pointer;font-family:Outfit,sans-serif;font-weight:700;font-size:12px;flex-shrink:0;" onclick="newSedutaBuilderForClient(' + c.id + ',\'' + dateStr + '\')">&#9889; Seduta</button>'
+        + '</div>';
+    }
+
+    const todayList    = buildDayClients(todayName3, todayStr3);
+    const tomorrowList = buildDayClients(tomorrowName, tomorrowStr);
+
+    let agendaHtml = '<div style="border:1.5px solid var(--border);border-radius:14px;overflow:hidden;">';
+
+    agendaHtml += '<div style="background:#111111;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">'
+      + '<span style="font-family:Outfit,sans-serif;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#fff;">&#9889; Oggi</span>'
+      + '<span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.45);">' + todayList.length + ' ' + (todayList.length === 1 ? 'seduta' : 'sedute') + '</span>'
+      + '</div>';
+    agendaHtml += todayList.length === 0
+      ? '<div style="padding:14px 16px;font-size:13px;color:var(--text3);">Nessuna seduta programmata</div>'
+      : todayList.map(({client: c, orario}) => renderDashAgendaItem(c, orario, todayStr3)).join('');
+
+    agendaHtml += '<div style="background:var(--surface2);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);">'
+      + '<span style="font-family:Outfit,sans-serif;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);">Domani</span>'
+      + '<span style="font-size:11px;font-weight:600;color:var(--text3);">' + tomorrowList.length + ' ' + (tomorrowList.length === 1 ? 'seduta' : 'sedute') + '</span>'
+      + '</div>';
+    agendaHtml += tomorrowList.length === 0
+      ? '<div style="padding:14px 16px;font-size:13px;color:var(--text3);">Nessuna seduta programmata</div>'
+      : tomorrowList.map(({client: c, orario}) => renderDashAgendaItem(c, orario, tomorrowStr)).join('');
+
+    agendaHtml += '</div>';
+    agendaOggiEl.innerHTML = agendaHtml;
+  }
+}// ===================================================
 // QUICK NOTES
 // ===================================================
 function addQuickNote() { openModal('modal-quick-note'); }
