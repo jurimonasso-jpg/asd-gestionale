@@ -10034,6 +10034,7 @@ function renderPercorso() {
           <div style="font-size:32px;font-weight:800;color:var(--accent);line-height:1;letter-spacing:-0.02em;">${pct}<span style="font-size:16px;">%</span></div>
           <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);">${checkedItems}/${totalItems}</div>
         </div>
+        <button class="btn btn-secondary" style="font-size:11px;padding:6px 12px;flex-shrink:0;" onclick="completePercorsoAll('${clientId}')">✅ Completa tutto</button>
         <button class="btn btn-danger" style="font-size:11px;padding:6px 12px;flex-shrink:0;" onclick="resetPercorso('${clientId}')">Reset</button>
       </div>
     </div>
@@ -10082,6 +10083,7 @@ function renderPercorso() {
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+              ${!allDone && !isLocked ? `<button style="font-size:10px;padding:4px 9px;border-radius:6px;border:1px solid rgba(46,125,50,0.4);background:rgba(46,125,50,0.07);color:var(--green);cursor:pointer;font-family:'DM Mono';font-weight:700;white-space:nowrap;flex-shrink:0;" onclick="event.stopPropagation();completePercorsoSection('${clientId}','${sec.id}')">✅ Completa</button>` : ''}
               ${statusBadge}
               ${!isLocked ? `<span style="color:var(--text3);font-size:12px;">▾</span>` : ''}
             </div>
@@ -10131,6 +10133,34 @@ function togglePercorsoCheck(clientId, secId, item, checked) {
 function resetPercorso(clientId) {
   if (!confirm('Resettare tutto il percorso per questo cliente?')) return;
   localStorage.removeItem(`percorso_check_${clientId}`);
+  renderPercorso();
+}
+
+function completePercorsoSection(clientId, secId) {
+  const key = `percorso_check_${clientId}`;
+  const checks = JSON.parse(localStorage.getItem(key) || '{}');
+  const sec = PERCORSO_CHECKLIST.find(s => s.id === secId);
+  if (!sec) return;
+  sec.items.forEach(item => { checks[`${secId}_${item}`] = true; });
+  localStorage.setItem(key, JSON.stringify(checks));
+  const openPanels = new Set();
+  document.querySelectorAll('#percorso-content .pf-body').forEach(el => {
+    if (el.style.display !== 'none') openPanels.add(el.dataset.secId);
+  });
+  renderPercorso();
+  document.querySelectorAll('#percorso-content .pf-body').forEach(el => {
+    if (openPanels.has(el.dataset.secId)) el.style.display = 'block';
+  });
+}
+
+function completePercorsoAll(clientId) {
+  if (!confirm('Flaggare tutte le voci del percorso come completate?')) return;
+  const key = `percorso_check_${clientId}`;
+  const checks = JSON.parse(localStorage.getItem(key) || '{}');
+  PERCORSO_CHECKLIST.forEach(sec => {
+    sec.items.forEach(item => { checks[`${sec.id}_${item}`] = true; });
+  });
+  localStorage.setItem(key, JSON.stringify(checks));
   renderPercorso();
 }
 
