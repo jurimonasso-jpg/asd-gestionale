@@ -3928,6 +3928,185 @@ let testResults = JSON.parse(localStorage.getItem('asd_tests') || '{}');
 // schedaBlocchi declared below in workout section
 let editingClientId = null;
 
+// ===================================================
+// BALANCE — calcolo pattern di movimento
+// ===================================================
+const _BALANCE_CAT_MAP = {};
+(function _buildBalanceCatMap() {
+  const mapping = {
+    'pushH':  'Push Orizzontale',
+    'pullH':  'Pull Orizzontale',
+    'pushV':  'Push Verticale',
+    'pullV':  'Pull Verticale',
+    'hipD':   'Hip Dominant / Glutei',
+    'kneeD':  'Knee Dominant / Squat',
+    'coreI':  'Core — Isometria',
+    'coreD':  'Core — Dinamico',
+    'rasta':  '🔴 Rastapower',
+    'metab':  'Metabolico',
+  };
+  for (const [key, catName] of Object.entries(mapping)) {
+    const items = EXERCISES[catName]?.items || [];
+    items.forEach(nome => { _BALANCE_CAT_MAP[nome.toLowerCase()] = key; });
+  }
+})();
+
+function _classifyExercise(nome) {
+  if (!nome) return null;
+  const low = nome.toLowerCase();
+  if (_BALANCE_CAT_MAP[low]) return _BALANCE_CAT_MAP[low];
+  for (const [exName, key] of Object.entries(_BALANCE_CAT_MAP)) {
+    if (low.includes(exName) || exName.includes(low)) return key;
+  }
+  return null;
+}
+
+function computeBalanceData(clientId, days) {
+  const cacheKey = `asd_balance_${clientId}_${days}`;
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+    if (cached && cached._ts && (Date.now() - cached._ts) < 60000) return cached;
+  } catch(e) {}
+
+  const cutoff = Date.now() - days * 86400000;
+  const sedute = workouts.filter(w =>
+    w.clientId == clientId &&
+    w.categoria === 'seduta' &&
+    new Date(w.createdAt).getTime() >= cutoff
+  );
+
+  const counts = { pushH:0, pullH:0, pushV:0, pullV:0, hipD:0, kneeD:0, coreI:0, coreD:0, rasta:0, metab:0 };
+  let totalEx = 0;
+
+  sedute.forEach(s => {
+    (s.blocchi || []).forEach(b => {
+      (b.esercizi || []).forEach(ex => {
+        const cat = _classifyExercise(ex.nome);
+        if (cat && counts[cat] !== undefined) { counts[cat]++; totalEx++; }
+      });
+    });
+  });
+
+  const result = { ...counts, _sedute: sedute.length, _totalEx: totalEx, _ts: Date.now() };
+  try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
+  return result;
+}
+
+function _invalidateBalanceCache(clientId) {
+  [30, 90, 180].forEach(d => {
+    try { localStorage.removeItem(`asd_balance_${clientId}_${d}`); } catch(e) {}
+  });
+}
+
+const _BALANCE_PAIRS = [
+  { a:'pushH', b:'pullH', labelA:'Push H', labelB:'Pull H' },
+  { a:'pushV', b:'pullV', labelA:'Push V', labelB:'Pull V' },
+  { a:'hipD',  b:'kneeD', labelA:'Hip dom.', labelB:'Knee dom.' },
+  { a:'coreI', b:'coreD', labelA:'Core iso', labelB:'Core din' },
+];
+const _BALANCE_CATS = [
+  { key:'pushH', label:'Push orizz.',   color:'#1976d2' },
+  { key:'pullH', label:'Pull orizz.',   color:'#1565c0' },
+  { key:'pushV', label:'Push vert.',    color:'#f57c00' },
+  { key:'pullV', label:'Pull vert.',    color:'#e65100' },
+  { key:'hipD',  label:'Hip dominant',  color:'#2e7d32' },
+  { key:'kneeD', label:'Knee dominant', color:'#388e3c' },
+  { key:'coreI', label:'Core iso.',     color:'#7b1fa2' },
+  { key:'coreD', label:'Core din.',     color:'#6a1b9a' },
+  { key:'rasta', label:'Rastapower',    color:'#c62828' },
+  { key:'metab', label:'Metabolico',    color:'#f9a825' },
+];
+
+function _balancePairColor(ratio) {
+  return ratio >= 75 ? 'var(--green)' : ratio >= 50 ? 'var(--yellow)' : 'var(--red)';
+}
+
+function renderBalanceWidget(clientId, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const days = parseInt(container.dataset.balanceDays || '30');
+  const d = computeBalanceData(clientId, days);
+  const totalEx = d._totalEx || 0;
+  const metPct = totalEx > 0 ? Math.round((d.metab / totalEx) * 100) : 0;
+
+  const pairsHtml = _BALANCE_PAIRS.map(p => {
+    const a = d[p.a] || 0, b = d[p.b] || 0;
+    const ratio = (a + b === 0) ? 100 : Math.round(Math.min(a, b) / Math.max(a, b) * 100);
+    const col = _balancePairColor(ratio);
+    const higher = a >= b ? p.labelA : p.labelB;
+    const lower  = a <  b ? p.labelA : p.labelB;
+    const hint = ratio < 50 ? ` — più ${higher}` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="font-family:'DM Mono';font-size:9px;color:var(--text3);width:90px;flex-shrink:0;">${p.labelA} / ${p.labelB}</span>
+      <div style="flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+        <div style="width:${ratio}%;height:100%;background:${col};border-radius:3px;transition:width .3s;"></div>
+      </div>
+      <span style="font-family:'DM Mono';font-size:10px;font-weight:700;color:${col};width:36px;text-align:right;">${ratio}%${hint}</span>
+    </div>`;
+  }).join('');
+
+  const maxVal = Math.max(..._BALANCE_CATS.map(c => d[c.key] || 0), 1);
+  const detailHtml = _BALANCE_CATS.map(c => {
+    const v = d[c.key] || 0;
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <div style="width:6px;height:6px;border-radius:50%;background:${c.color};flex-shrink:0;"></div>
+      <span style="font-size:10px;color:var(--text3);width:80px;flex-shrink:0;">${c.label}</span>
+      <div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
+        <div style="width:${Math.round(v/maxVal*100)}%;height:100%;background:${c.color};border-radius:2px;"></div>
+      </div>
+      <span style="font-family:'DM Mono';font-size:10px;color:var(--text2);width:20px;text-align:right;">${v}</span>
+    </div>`;
+  }).join('');
+
+  const metColor = metPct < 5 ? 'var(--red)' : metPct <= 20 ? 'var(--green)' : 'var(--yellow)';
+  const metHint  = metPct < 5 ? 'basso' : metPct <= 20 ? 'ok' : 'alto';
+
+  const okPairs = _BALANCE_PAIRS.filter(p => {
+    const a = d[p.a]||0, b = d[p.b]||0;
+    return (a+b===0) ? true : Math.round(Math.min(a,b)/Math.max(a,b)*100) >= 75;
+  }).length;
+
+  container.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <span style="font-family:'DM Mono';font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.06em;">⚖️ BILANCIAMENTO PATTERN</span>
+        <div style="display:flex;gap:4px;">
+          ${[30,90,180].map(dd => '<button onclick="document.getElementById(\'' + containerId + '\').dataset.balanceDays=\'' + dd + '\';renderBalanceWidget(' + clientId + ',\'' + containerId + '\')" style="padding:3px 9px;border-radius:6px;border:1px solid var(--border);background:' + (days===dd?'var(--accent)':'var(--surface2)') + ';color:' + (days===dd?'#fff':'var(--text3)') + ';font-family:\'DM Mono\';font-size:9px;cursor:pointer;">' + (dd===30?'30gg':dd===90?'3M':'6M') + '</button>').join('')}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:2px;">SEDUTE</div>
+          <div style="font-size:18px;font-weight:800;">${d._sedute}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:2px;">COPPIE OK</div>
+          <div style="font-size:18px;font-weight:800;color:${okPairs===4?'var(--green)':okPairs>=2?'var(--yellow)':'var(--red)'};">${okPairs}/4</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:2px;">METABOLICO</div>
+          <div style="font-size:18px;font-weight:800;color:${metColor};">${metPct}% <span style="font-size:10px;">${metHint}</span></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:8px;">COPPIE ANTAGONISTE</div>
+          ${pairsHtml}
+        </div>
+        <div>
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-bottom:8px;">OCCORRENZE</div>
+          ${detailHtml}
+        </div>
+      </div>
+
+      ${totalEx === 0 ? '<div style="text-align:center;padding:8px 0;font-size:12px;color:var(--text3);margin-top:8px;">Nessuna seduta nel periodo selezionato</div>' : ''}
+    </div>`;
+}
+
+// ===================================================
 function save() {
   localStorage.setItem('asd_clients', JSON.stringify(clients));
   localStorage.setItem('asd_workouts', JSON.stringify(workouts));
@@ -4515,6 +4694,7 @@ function openClientDetail(clientId) {
     </div>
 
     <div id="dt-sedute" class="tab-content">
+      <div id="balance-widget-detail-${client.id}" data-balance-days="30"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
         <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);">Seleziona 2 sedute per confrontarle</div>
         <div style="display:flex;gap:8px;">
@@ -4535,6 +4715,7 @@ function openClientDetail(clientId) {
   `;
 
   document.getElementById('client-detail-content').innerHTML = html;
+  renderBalanceWidget(client.id, `balance-widget-detail-${client.id}`);
   showPage('client-detail');
 }
 
@@ -10385,6 +10566,9 @@ function openExistingSeduta(workout, clientId) {
         </div>
       </div>
 
+      <!-- Balance widget -->
+      <div id="balance-widget-builder-${clientId}" data-balance-days="30"></div>
+
       <!-- Storico ultime sedute -->
       <div style="margin-bottom:14px;">
         <button onclick="toggleStoricoSedute(this, ${clientId})"
@@ -10456,6 +10640,7 @@ function openExistingSeduta(workout, clientId) {
   else if (radioNorm)                        { radioNorm.checked = true; sbTipoChanged('normale'); }
 
   renderSedutaBuilderBlocchi();
+  renderBalanceWidget(clientId, `balance-widget-builder-${clientId}`);
   content.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
@@ -10613,6 +10798,9 @@ function newSedutaBuilder(prefillDate) {
         </div>
       </div>
 
+      <!-- Balance widget -->
+      <div id="balance-widget-builder-${clientId}" data-balance-days="30"></div>
+
       <!-- 5b. Storico ultime sedute -->
       <div style="margin-bottom:14px;">
         <button onclick="toggleStoricoSedute(this, ${clientId})"
@@ -10635,6 +10823,7 @@ function newSedutaBuilder(prefillDate) {
   document.getElementById('sb-chart-start').innerHTML = _buildSnChart('sb', {}, []);
   document.getElementById('sb-chart-end').innerHTML   = _buildSnChart('sbend', {}, []);
   renderSedutaBuilderBlocchi();
+  renderBalanceWidget(clientId, `balance-widget-builder-${clientId}`);
   content.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
@@ -10753,6 +10942,7 @@ function saveSedutaBuilder() {
     workouts.push(workout);
   }
   save();
+  _invalidateBalanceCache(clientId);
   _syncAll(clientId, workout.id, _editingWasExisting);
 
   // ── Auto-save nota post-seduta se c'è testo nelle note builder ──────────
