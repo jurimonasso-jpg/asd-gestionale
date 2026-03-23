@@ -9623,9 +9623,17 @@ function renderDashboard() {
           const parts = n.text.split(' | ');
           const chunk = parts.find(p => p.startsWith('➡️'));
           if (chunk) {
-            const testo = chunk.replace('➡️', '').trim();
-            const dataStr = new Date(n.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
-            proItems.push({ client: c, testo, dataStr });
+            // Mostra solo se non esiste una seduta completata dopo questa nota
+            const _noteDate = n.date || '';
+            const _hasNewerWorkout = workouts.some(wk =>
+              wk.clientId == c.id &&
+              (wk.createdAt?.split('T')[0] || '') > _noteDate
+            );
+            if (!_hasNewerWorkout) {
+              const testo = chunk.replace('➡️', '').trim();
+              const dataStr = new Date(n.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+              proItems.push({ client: c, testo, dataStr });
+            }
             break;
           }
         }
@@ -9678,7 +9686,16 @@ function renderDashboard() {
       for (const n of notes) {
         if (n.text && n.text.includes('\u27a1\ufe0f')) {
           const chunk = n.text.split(' | ').find(p => p.startsWith('\u27a1\ufe0f'));
-          if (chunk) return chunk.replace('\u27a1\ufe0f', '').trim();
+          if (chunk) {
+            // Mostra la nota solo se non esiste una seduta completata dopo questa nota
+            const _noteDate = n.date || '';
+            const _hasNewerWorkout = workouts.some(wk =>
+              wk.clientId == clientId &&
+              (wk.createdAt?.split('T')[0] || '') > _noteDate
+            );
+            if (!_hasNewerWorkout) return chunk.replace('\u27a1\ufe0f', '').trim();
+            break;
+          }
         }
       }
       return '';
@@ -10762,14 +10779,26 @@ function newSedutaBuilder(prefillDate) {
   const today = new Date().toISOString().split('T')[0];
   const initDate = prefillDate || today;
 
-  // Cerca note "prossima seduta" dall'ultima nota salvata
+  // Cerca note "prossima seduta" dall'ultima nota salvata,
+  // ma solo se non esiste già una seduta completata DOPO quella nota
   const _lastNotes = getSessionNotes(clientId);
   let _prossimaNote = '';
   for (const n of _lastNotes) {
     if (n.text && n.text.includes('➡️')) {
       const parts = n.text.split(' | ');
       const prossimaChunk = parts.find(p => p.startsWith('➡️'));
-      if (prossimaChunk) { _prossimaNote = prossimaChunk.replace('➡️ ', '').trim(); break; }
+      if (prossimaChunk) {
+        // Controlla se esiste già una seduta salvata dopo la data di questa nota
+        const _noteDate = n.date || '';
+        const _hasNewerWorkout = workouts.some(wk =>
+          wk.clientId == clientId &&
+          (wk.createdAt?.split('T')[0] || '') > _noteDate
+        );
+        if (!_hasNewerWorkout) {
+          _prossimaNote = prossimaChunk.replace('➡️ ', '').trim();
+        }
+        break;
+      }
     }
   }
   const _prossimaBanner = _prossimaNote
