@@ -3936,7 +3936,7 @@ let editingClientId = null;
 // BALANCE — calcolo pattern di movimento
 // ===================================================
 const _BALANCE_CAT_MAP = {};
-(function _buildBalanceCatMap() {
+function _buildBalanceCatMap() {
   const mapping = {
     'pushH':  'Push Orizzontale',
     'pullH':  'Pull Orizzontale',
@@ -3953,7 +3953,8 @@ const _BALANCE_CAT_MAP = {};
     const items = EXERCISES[catName]?.items || [];
     items.forEach(nome => { _BALANCE_CAT_MAP[nome.toLowerCase()] = key; });
   }
-})();
+}
+_buildBalanceCatMap();
 
 function _classifyExercise(nome) {
   if (!nome) return null;
@@ -6867,6 +6868,8 @@ function _injectCustomIntoExercises() {
       EXERCISES[catName].items.push(e.nome);
     }
   });
+  // Aggiorna la mappa balance con gli esercizi custom appena iniettati
+  _buildBalanceCatMap();
 }
 
 function deleteCustomExercise(nome) {
