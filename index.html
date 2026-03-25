@@ -9487,8 +9487,9 @@ function renderDashboard() {
   const lastWeekStart = new Date(weekStart); lastWeekStart.setDate(lastWeekStart.getDate()-7);
   const lastWeekEnd   = new Date(weekStart);
 
-  const sedWeek     = workouts.filter(w => w.categoria==='seduta' && new Date(w.createdAt) >= weekStart).length;
-  const sedLastWeek = workouts.filter(w => w.categoria==='seduta' && new Date(w.createdAt) >= lastWeekStart && new Date(w.createdAt) < lastWeekEnd).length;
+  const meId = clients.find(c => c.sonoIo)?.id;
+  const sedWeek     = workouts.filter(w => w.categoria==='seduta' && w.clientId !== meId && new Date(w.createdAt) >= weekStart).length;
+  const sedLastWeek = workouts.filter(w => w.categoria==='seduta' && w.clientId !== meId && new Date(w.createdAt) >= lastWeekStart && new Date(w.createdAt) < lastWeekEnd).length;
   const sedWeekEl = document.getElementById('dash-sed-week');
   const sedLastWeekEl = document.getElementById('dash-sed-lastweek');
   if (sedWeekEl) sedWeekEl.textContent = sedWeek;
@@ -9707,13 +9708,13 @@ function renderDashboard() {
     const tomorrowName = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][tomorrowD.getDay()];
 
     function buildDayClients(dayName, dateStr) {
-      const fixed = clients.filter(c => c.schedule?.some(s => s.giorno === dayName)).map(c => {
+      const fixed = clients.filter(c => !c.sonoIo && c.schedule?.some(s => s.giorno === dayName)).map(c => {
         const slot = c.schedule.find(s => s.giorno === dayName);
         return { client: c, orario: slot?.orario || '00:00' };
       });
       const manual = getManualSessions().filter(s => s.date === dateStr).map(s => {
         const c = clients.find(cl => cl.id == s.clientId);
-        return c ? { client: c, orario: s.orario || '00:00' } : null;
+        return (c && !c.sonoIo) ? { client: c, orario: s.orario || '00:00' } : null;
       }).filter(Boolean);
       return [...fixed, ...manual].sort((a, b) => a.orario.localeCompare(b.orario));
     }
