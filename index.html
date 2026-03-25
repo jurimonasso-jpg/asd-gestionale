@@ -9175,7 +9175,7 @@ function populateStatsFilter() {
   if (!sel) return;
   const cur = sel.value;
   sel.innerHTML = '<option value="">Tutti i clienti</option>' +
-    clients.map(c => `<option value="${c.id}" ${c.id==cur?'selected':''}>${c.nome} ${c.cognome}</option>`).join('');
+    clients.filter(c => !c.sonoIo).map(c => `<option value="${c.id}" ${c.id==cur?'selected':''}>${c.nome} ${c.cognome}</option>`).join('');
 }
 
 function setStatsView(v) {
@@ -9257,6 +9257,8 @@ function renderStats() {
   // Filter workouts
   const filterW = w => {
     if (w.categoria !== 'seduta') return false;
+    const wClient = clients.find(c => c.id === w.clientId);
+    if (wClient?.sonoIo) return false;
     if (clientId && w.clientId != clientId) return false;
     return true;
   };
@@ -9394,6 +9396,7 @@ function _countSkipped(start, end, clientId) {
       String(d.getDate()).padStart(2,'0');
     const dayName = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][d.getDay()];
     clients.forEach(c => {
+      if (c.sonoIo) return;
       if (clientId && c.id != clientId) return;
       if (!c.schedule?.some(s => s.giorno===dayName)) return;
       const reason = getFixedSlotSkipReason(c.id, dayStr);
