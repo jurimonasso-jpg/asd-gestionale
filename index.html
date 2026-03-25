@@ -3336,6 +3336,15 @@ window.fbLoadFromCloud = async function() {
     <!-- TAB PERCORSO / ABBONAMENTO -->
     <div class="tab-content" id="tab-abbonamento">
       <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px 14px;background:rgba(25,118,210,0.07);border:1px solid rgba(25,118,210,0.25);border-radius:var(--radius);">
+          <input type="checkbox" id="c-sono-io" style="width:16px;height:16px;accent-color:var(--accent2);flex-shrink:0;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--accent2);">🏋️ Questo sono io (PT)</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">Profilo personale — escluso dai contatori dashboard</div>
+          </div>
+        </label>
+      </div>
+      <div class="form-group">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:12px 14px;background:rgba(255,71,87,0.07);border:1px solid rgba(255,71,87,0.2);border-radius:var(--radius);">
           <input type="checkbox" id="c-ex-cliente" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;">
           <div>
@@ -4247,6 +4256,7 @@ function openNewClientModal() {
   document.getElementById('c-abb-start').value = '';
   document.getElementById('c-session-start').value = '';
   document.getElementById('c-ex-cliente').checked = false;
+  document.getElementById('c-sono-io').checked = false;
   loadProrogheToForm([]);
   updateAbbonamentoPreview();
   renderScheduleSlots([]);
@@ -4286,6 +4296,7 @@ function saveClient() {
     abbStart: document.getElementById('c-abb-start').value,
     abbProroghe: getProrogheFromForm(),
     exCliente: document.getElementById('c-ex-cliente').checked,
+    sonoIo: document.getElementById('c-sono-io').checked,
     sessionStart: document.getElementById('c-session-start').value || null,
     schedule: getScheduleFromForm(),
     createdAt: editingClientId ? (clients.find(c=>c.id===editingClientId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
@@ -4323,6 +4334,18 @@ function saveClient() {
     });
   }
   client.abbRinnovi = abbRinnovi;
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Unicità "Sono io": può esserci un solo profilo con sonoIo=true ──────
+  if (client.sonoIo) {
+    const existing = clients.find(c => c.sonoIo && c.id !== client.id);
+    if (existing) {
+      const nome = `${existing.nome} ${existing.cognome}`;
+      if (!confirm(`⚠️ Il profilo "${nome}" è già contrassegnato come "Sono io".\nVuoi rimuovere il flag da quel profilo e assegnarlo a questo?`)) return;
+      const idx = clients.findIndex(c => c.id === existing.id);
+      if (idx !== -1) clients[idx] = { ...clients[idx], sonoIo: false };
+    }
+  }
   // ─────────────────────────────────────────────────────────────────────────
 
   if (editingClientId) {
@@ -4841,6 +4864,7 @@ function editClient(id) {
   const isPrt = (c.prt === 'sospetto' || c.prt === 'confermato');
   ['prt-traits-group','stress-group','traumi-group'].forEach(id=>document.getElementById(id).style.display=isPrt?'block':'none');
   document.getElementById('c-ex-cliente').checked = c.exCliente || false;
+  document.getElementById('c-sono-io').checked = c.sonoIo || false;
   document.getElementById('c-patologie').value = c.patologie || '';
   document.getElementById('c-farmaci').value = c.farmaci || '';
   document.getElementById('c-sports').value = c.sports || '';
@@ -6216,8 +6240,9 @@ function renderPainHistory(clientId) {
 
 
 function updateClientCount() {
-  document.getElementById('totalClients').textContent = clients.length;
-  document.getElementById('dash-clients').textContent = clients.length;
+  const countable = clients.filter(c => !c.sonoIo);
+  document.getElementById('totalClients').textContent = countable.length;
+  document.getElementById('dash-clients').textContent = countable.length;
 }
 
 // ===================================================
@@ -9443,11 +9468,12 @@ function renderDashboard() {
     dashDate.textContent = days[n.getDay()] + ', ' + n.getDate() + ' ' + months[n.getMonth()] + ' ' + n.getFullYear();
   }
   updateClientCount();
-  const prtCount = clients.filter(c => c.prt && c.prt !== 'no').length;
+  const prtCount = clients.filter(c => !c.sonoIo && c.prt && c.prt !== 'no').length;
   document.getElementById('dash-pain').textContent = prtCount;
 
   // Scadenze nei prossimi 30 giorni
   const scadentiPresto = clients.filter(c => {
+    if (c.sonoIo) return false;
     const d = abbDaysLeft(c);
     return d !== null && d >= 0 && d <= 30;
   });
