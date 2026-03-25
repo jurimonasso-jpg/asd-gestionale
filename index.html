@@ -3777,13 +3777,20 @@ const EXERCISES = {
       "Farmer Walk","Farmer Walk Singolo","Pound Walking"
     ]
   },
-  "Metabolico": {
+  "Cardio": {
+    color: "#00bcd4",
+    items: [
+      "Jumping Jack","Burpee","Pogo Hop","Bike"
+    ]
+  },
+  "Potenza": {
     color: "#ff4757",
     items: [
-      "Squat Jump","Affondi Jump","Pogo Hop","Burpee","Box Jump","Step Up","Jumping Jack",
+      "Squat Jump","Affondi Jump","Box Jump","Step Up",
       "Swing (KB)","Thruster (KB)","Clean (KB)","Clean & Press (KB)",
       "Thruster (DB)","Clean & Press (DB)","Snatch (DB)",
-      "Swing (Sand Bag)","Clean (Sand Bag)","Shoulder Deadlift"
+      "Swing (Sand Bag)","Clean (Sand Bag)","Shoulder Deadlift",
+      "Lumberjack","Tormentor","Fisherman","Launch"
     ]
   },
   "🔴 Rastapower": {
@@ -3947,7 +3954,8 @@ function _buildBalanceCatMap() {
     'coreI':  'Core — Isometria',
     'coreD':  'Core — Dinamico',
     'rasta':  '🔴 Rastapower',
-    'metab':  'Metabolico',
+    'potenza': 'Potenza',
+    'cardio':  'Cardio',
   };
   for (const [key, catName] of Object.entries(mapping)) {
     const items = EXERCISES[catName]?.items || [];
@@ -3980,7 +3988,7 @@ function computeBalanceData(clientId, days) {
     new Date(w.createdAt).getTime() >= cutoff
   );
 
-  const counts = { pushH:0, pullH:0, pushV:0, pullV:0, hipD:0, kneeD:0, coreI:0, coreD:0, rasta:0, metab:0 };
+  const counts = { pushH:0, pullH:0, pushV:0, pullV:0, hipD:0, kneeD:0, coreI:0, coreD:0, rasta:0, potenza:0, cardio:0 };
   let totalEx = 0;
 
   sedute.forEach(s => {
@@ -4018,8 +4026,8 @@ const _BALANCE_CATS = [
   { key:'kneeD', label:'Knee dominant', color:'#388e3c' },
   { key:'coreI', label:'Core iso.',     color:'#7b1fa2' },
   { key:'coreD', label:'Core din.',     color:'#6a1b9a' },
-  { key:'rasta', label:'Rastapower',    color:'#c62828' },
-  { key:'metab', label:'Metabolico',    color:'#f9a825' },
+  { key:'rasta',   label:'Rastapower',  color:'#c62828' },
+  { key:'potenza', label:'Potenza',      color:'#ff4757' },
 ];
 
 function _balancePairColor(ratio) {
@@ -4033,7 +4041,7 @@ function renderBalanceWidget(clientId, containerId) {
   const days = parseInt(container.dataset.balanceDays || '30');
   const d = computeBalanceData(clientId, days);
   const totalEx = d._totalEx || 0;
-  const metPct = totalEx > 0 ? Math.round((d.metab / totalEx) * 100) : 0;
+  const metPct = totalEx > 0 ? Math.round((d.potenza / totalEx) * 100) : 0;
   const metColor = metPct < 5 ? 'var(--red)' : metPct <= 20 ? 'var(--green)' : 'var(--yellow)';
   const metHint  = metPct < 5 ? 'basso' : metPct <= 20 ? 'ok' : 'alto';
   const maxVal = Math.max(..._BALANCE_CATS.map(c => d[c.key] || 0), 1);
@@ -4091,7 +4099,7 @@ function renderBalanceWidget(clientId, containerId) {
         +'<div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:2px;">COPPIE OK</div>'
         +'<div style="font-size:18px;font-weight:800;color:'+(okPairs===4?'var(--green)':okPairs>=2?'var(--yellow)':'var(--red)')+';">'+okPairs+'/4</div></div>'
       +'<div style="background:var(--surface2);border-radius:8px;padding:8px 10px;">'
-        +'<div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:2px;">METABOLICO</div>'
+        +'<div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:2px;">POTENZA</div>'
         +'<div style="font-size:18px;font-weight:800;color:'+metColor+';">'+metPct+'% <span style="font-size:10px;">'+metHint+'</span></div></div>'
     +'</div>'
     +'<div class="bw-mono" style="font-size:9px;color:var(--text3);margin-bottom:6px;">SPIDER PATTERN</div>'
@@ -8788,7 +8796,7 @@ function generateEvidenceSession(clientId) {
   const potenzaPool = isPRT
     ? [...(EXERCISES['Core — Dinamico']?.items || []).slice(0,6)]
     : [
-        ...(EXERCISES['Metabolico']?.items || []),
+        ...(EXERCISES['Potenza']?.items || []),
         ...(EXERCISES['🔴 Rastapower']?.items || []).slice(0,8),
       ];
   const potenzaEx = pick(potenzaPool, 1);
