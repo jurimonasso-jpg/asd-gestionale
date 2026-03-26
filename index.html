@@ -3,6 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gestionale PT">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gestionale PT">
+<meta name="theme-color" content="#0d0d0d">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Gestionale PT — Allenati Senza Dolori</title>
   <meta name="version" content="202603201630">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -4778,9 +4790,9 @@ function openClientDetail(clientId) {
               </div>
             </div>
             ${client.followUpEnabled ? `
-            <button class="btn btn-secondary btn-sm" onclick="window.open(getFollowUpWaLink(` + client.id + `), '_blank')">
+            <a class="btn btn-secondary btn-sm" href="${getFollowUpWaLink(` + client.id + `)}" target="_blank" rel="noreferrer" style="text-decoration:none;">
               💬 Invia su WhatsApp
-            </button>` : ''}
+            </a>` : ''}
           </div>
           ${client.followUpEnabled ? `
           <div>
@@ -11555,7 +11567,7 @@ function renderFollowUpBanner() {
           const nome = encodeURIComponent(c.name || c.nome || '');
           const linkPost = FOLLOWUP_BASE + '/followup-post-seduta.html?clientId=' + c.id + '&nome=' + nome;
           const linkSett = FOLLOWUP_BASE + '/followup-settimanale.html?clientId=' + c.id + '&nome=' + nome;
-          const tel = (c.telefono || '').replace(/\s+/g, '').replace(/^\+/, '').replace(/^00/, '');
+          const tel = (c.telefono || '').replace(/\s+/g, '');
           const waText = type === 'post'
             ? 'Ciao ' + (c.nome||c.name||'') + '! 💪\n\nCome ti sei sentito/a durante la seduta di ieri?\nCompila il tuo follow-up qui:\n\n' + linkPost
             : 'Ciao ' + (c.nome||c.name||'') + '! 👋\n\nCheck settimanale — come è andata questa settimana?\nCompila qui:\n\n' + linkSett;
@@ -11567,7 +11579,7 @@ function renderFollowUpBanner() {
             <div style="flex:1;min-width:0;">
               <div style="font-size:12px;font-weight:700;">${c.nome} ${c.cognome}</div>
               <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
-                <button onclick="window.open('${waLink}', '_blank')" style="font-size:10px;font-family:DM Mono,monospace;color:#25D366;cursor:pointer;background:rgba(37,211,102,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(37,211,102,0.25);">💬 WhatsApp</button>
+                <a href="${waLink}" target="_blank" rel="noreferrer" style="font-size:10px;font-family:DM Mono,monospace;color:#25D366;text-decoration:none;background:rgba(37,211,102,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(37,211,102,0.25);">💬 WhatsApp</a>
                 <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--text3);">${label}</span>
               </div>
             </div>
@@ -11599,7 +11611,7 @@ function toggleFollowUp(clientId) {
 function getFollowUpWaLink(clientId) {
   const c = clients.find(cl => cl.id === clientId);
   if (!c) return '#';
-  const tel = (c.telefono || '').replace(/\s+/g, '').replace(/^\+/, '').replace(/^00/, '');
+  const tel = (c.telefono || '').replace(/\s+/g, '');
   const nome = encodeURIComponent(c.nome || c.name || '');
   const linkPost = FOLLOWUP_BASE_URL + '/followup-post-seduta.html?clientId=' + clientId + '&nome=' + nome;
   const linkSett = FOLLOWUP_BASE_URL + '/followup-settimanale.html?clientId=' + clientId + '&nome=' + nome;
@@ -11808,5 +11820,17 @@ document.addEventListener('click', function(e) {
 });
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/asd-gestionale/sw.js');
+}
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js');
+  });
+}
+</script>
 </body>
 </html>
