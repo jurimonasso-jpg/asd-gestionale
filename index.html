@@ -11555,9 +11555,11 @@ function renderFollowUpBanner() {
           const nome = encodeURIComponent(c.name || c.nome || '');
           const linkPost = FOLLOWUP_BASE + '/followup-post-seduta.html?clientId=' + c.id + '&nome=' + nome;
           const linkSett = FOLLOWUP_BASE + '/followup-settimanale.html?clientId=' + c.id + '&nome=' + nome;
-          const tel = (c.telefono || '').replace(/\s+/g, '').replace(/^00/, '+');
-          const waMsg = 'Ciao ' + (c.nome||c.name||'') + '! 👋\n\nEcco i tuoi link di follow-up personali:\n\n📋 *Post seduta* (compila dopo ogni allenamento):\n' + linkPost + '\n\n📊 *Check settimanale* (compila una volta a settimana):\n' + linkSett + '\n\nGrazie! 💪';
-          const waLink = (tel ? 'https://wa.me/' + tel : 'https://wa.me/') + '?text=' + encodeURIComponent(waMsg);
+          const tel = (c.telefono || '').replace(/\s+/g, '').replace(/^\+/, '').replace(/^00/, '');
+          const waText = type === 'post'
+            ? 'Ciao ' + (c.nome||c.name||'') + '! 💪\n\nCome ti sei sentito/a durante la seduta di ieri?\nCompila il tuo follow-up qui:\n\n' + linkPost
+            : 'Ciao ' + (c.nome||c.name||'') + '! 👋\n\nCheck settimanale — come è andata questa settimana?\nCompila qui:\n\n' + linkSett;
+          const waLink = (tel ? 'https://wa.me/' + tel : 'https://wa.me/') + '?text=' + encodeURIComponent(waText);
           const initials = ((c.nome||'')[0]||'') + ((c.cognome||'')[0]||'');
           return `
           <div id="fu-row-${c.id}-${type}" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">
@@ -11597,7 +11599,7 @@ function toggleFollowUp(clientId) {
 function getFollowUpWaLink(clientId) {
   const c = clients.find(cl => cl.id === clientId);
   if (!c) return '#';
-  const tel = (c.telefono || '').replace(/\s+/g, '').replace(/^00/, '+');
+  const tel = (c.telefono || '').replace(/\s+/g, '').replace(/^\+/, '').replace(/^00/, '');
   const nome = encodeURIComponent(c.nome || c.name || '');
   const linkPost = FOLLOWUP_BASE_URL + '/followup-post-seduta.html?clientId=' + clientId + '&nome=' + nome;
   const linkSett = FOLLOWUP_BASE_URL + '/followup-settimanale.html?clientId=' + clientId + '&nome=' + nome;
