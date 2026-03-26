@@ -11507,17 +11507,18 @@ function renderFollowUpBanner() {
 
   const items = [];
 
-  // ── POST-SEDUTA: clienti che hanno avuto una seduta ieri ─────────────────
+  // ── POST-SEDUTA: clienti che hanno avuto una seduta ieri (solo archiviate) ──
   const archive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]');
-  const manSess = JSON.parse(localStorage.getItem('asd_manual_sessions') || '[]');
 
   fuClients.forEach(c => {
     const key = _fuDismissKey(c.id, 'post', yestStr);
     if (localStorage.getItem(key)) return;
-    const hadSession =
-      archive.some(s => String(s.clientId) === String(c.id) && s.date === yestStr) ||
-      manSess.some(s  => String(s.clientId) === String(c.id) && s.date === yestStr) ||
-      workouts.some(w => String(w.clientId) === String(c.id) && w.categoria === 'seduta' && (w.createdAt||'').startsWith(yestStr));
+    // Usa solo sessions_archive: contiene sedute effettivamente completate/archiviate
+    const hadSession = archive.some(s =>
+      String(s.clientId) === String(c.id) &&
+      s.date === yestStr &&
+      s.outcome !== 'delete'
+    );
     if (!hadSession) return;
     items.push({ client: c, type: 'post', dateStr: yestStr, label: 'Post-seduta ieri' });
   });
@@ -11539,9 +11540,9 @@ function renderFollowUpBanner() {
   banner.innerHTML = `
     <div style="border:1px solid rgba(71,200,255,0.25);border-radius:10px;background:rgba(71,200,255,0.05);overflow:hidden;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;"
-           onclick="this.parentElement.querySelector('.fu-banner-body').classList.toggle('fu-banner-open')">
+           onclick="(function(btn){var body=btn.parentElement.querySelector('.fu-banner-body');var open=body.style.display==='none';body.style.display=open?'block':'none';btn.querySelector('.fu-chevron').textContent=open?'▴':'▾';})(this)">
         <span style="font-size:12px;font-weight:700;color:var(--accent);">📬 Follow-up da inviare (${items.length})</span>
-        <span style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">tocca per espandere ▾</span>
+        <span style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">tocca per espandere <span class="fu-chevron">▾</span></span>
       </div>
       <div class="fu-banner-body" style="display:none;border-top:1px solid rgba(71,200,255,0.15);">
         ${items.map(({client: c, type, dateStr, label}) => {
