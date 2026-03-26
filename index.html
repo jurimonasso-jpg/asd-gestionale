@@ -4772,9 +4772,9 @@ function openClientDetail(clientId) {
               </div>
             </div>
             ${client.followUpEnabled ? `
-            <button id="fu-copy-btn-${client.id}" class="btn btn-secondary btn-sm" onclick="copyFollowUpLinks(${client.id})">
-              📋 Copia messaggio WhatsApp
-            </button>` : ''}
+            <a href="${getFollowUpWaLink(` + client.id + `)}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;">
+              💬 Invia su WhatsApp
+            </a>` : ''}
           </div>
           ${client.followUpEnabled ? `
           <div>
@@ -11549,6 +11549,9 @@ function renderFollowUpBanner() {
           const nome = encodeURIComponent(c.name || c.nome || '');
           const linkPost = FOLLOWUP_BASE + '/followup-post-seduta.html?clientId=' + c.id + '&nome=' + nome;
           const linkSett = FOLLOWUP_BASE + '/followup-settimanale.html?clientId=' + c.id + '&nome=' + nome;
+          const tel = (c.telefono || '').replace(/\s+/g, '').replace(/^00/, '+');
+          const waMsg = 'Ciao ' + (c.nome||c.name||'') + '! 👋\n\nEcco i tuoi link di follow-up personali:\n\n📋 *Post seduta* (compila dopo ogni allenamento):\n' + linkPost + '\n\n📊 *Check settimanale* (compila una volta a settimana):\n' + linkSett + '\n\nGrazie! 💪';
+          const waLink = (tel ? 'https://wa.me/' + tel : 'https://wa.me/') + '?text=' + encodeURIComponent(waMsg);
           const initials = ((c.nome||'')[0]||'') + ((c.cognome||'')[0]||'');
           return `
           <div id="fu-row-${c.id}-${type}" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">
@@ -11556,8 +11559,7 @@ function renderFollowUpBanner() {
             <div style="flex:1;min-width:0;">
               <div style="font-size:12px;font-weight:700;">${c.nome} ${c.cognome}</div>
               <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
-                <a href="${linkPost}" target="_blank" style="font-size:10px;font-family:DM Mono,monospace;color:var(--accent2);text-decoration:none;background:rgba(71,200,255,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(71,200,255,0.2);">📋 Post-seduta</a>
-                <a href="${linkSett}" target="_blank" style="font-size:10px;font-family:DM Mono,monospace;color:var(--accent2);text-decoration:none;background:rgba(71,200,255,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(71,200,255,0.2);">📊 Settimanale</a>
+                <a href="${waLink}" target="_blank" style="font-size:10px;font-family:DM Mono,monospace;color:#25D366;text-decoration:none;background:rgba(37,211,102,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(37,211,102,0.25);">💬 WhatsApp</a>
                 <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--text3);">${label}</span>
               </div>
             </div>
@@ -11586,18 +11588,16 @@ function toggleFollowUp(clientId) {
   openClient(clientId);
 }
 
-function copyFollowUpLinks(clientId) {
+function getFollowUpWaLink(clientId) {
   const c = clients.find(cl => cl.id === clientId);
-  if (!c) return;
-  const nome = encodeURIComponent(c.name || c.nome || '');
-  const linkPost = `${FOLLOWUP_BASE_URL}/followup-post-seduta.html?clientId=${clientId}&nome=${nome}`;
-  const linkSett = `${FOLLOWUP_BASE_URL}/followup-settimanale.html?clientId=${clientId}&nome=${nome}`;
-  const msg = `Ciao ${c.name || c.nome}! 👋\n\nEcco i tuoi link di follow-up personali:\n\n📋 *Post seduta* (compila dopo ogni allenamento):\n${linkPost}\n\n📊 *Check settimanale* (compila una volta a settimana):\n${linkSett}\n\nGrazie! 💪`;
-  navigator.clipboard.writeText(msg).then(() => {
-    _showSaveToast(false);
-    const btn = document.getElementById('fu-copy-btn-' + clientId);
-    if (btn) { btn.textContent = '✅ Copiato!'; setTimeout(() => { btn.textContent = '📋 Copia messaggio WhatsApp'; }, 2000); }
-  });
+  if (!c) return '#';
+  const tel = (c.telefono || '').replace(/\s+/g, '').replace(/^00/, '+');
+  const nome = encodeURIComponent(c.nome || c.name || '');
+  const linkPost = FOLLOWUP_BASE_URL + '/followup-post-seduta.html?clientId=' + clientId + '&nome=' + nome;
+  const linkSett = FOLLOWUP_BASE_URL + '/followup-settimanale.html?clientId=' + clientId + '&nome=' + nome;
+  const msg = 'Ciao ' + (c.nome || c.name) + '! 👋\n\nEcco i tuoi link di follow-up personali:\n\n📋 *Post seduta* (compila dopo ogni allenamento):\n' + linkPost + '\n\n📊 *Check settimanale* (compila una volta a settimana):\n' + linkSett + '\n\nGrazie! 💪';
+  const base = tel ? 'https://wa.me/' + tel : 'https://wa.me/';
+  return base + '?text=' + encodeURIComponent(msg);
 }
 
 async function loadFollowupCharts(clientId) {
