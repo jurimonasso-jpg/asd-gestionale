@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Come è andata la settimana? — Juri Monasso</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --border: #e4e7ed;
+    --accent: #e53935;
+    --text: #111318;
+    --muted: #6b7280;
+    --green: #2e7d32;
+    --green-bg: #e8f5e9;
+    --red: #c62828;
+    --red-bg: #ffebee;
+    --yellow: #e65100;
+    --yellow-bg: #fff3e0;
+    --blue: #1565c0;
+    --blue-bg: #e3f2fd;
+    --purple: #6a1b9a;
+    --purple-bg: #f3e5f5;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 60px;
+  }
+
+  .progress-bar { height: 4px; background: var(--border); position: sticky; top: 0; z-index: 10; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s ease; width: 16%; }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 20px 24px;
+  }
+  .brand { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .greeting { font-size: 24px; font-weight: 800; line-height: 1.2; margin-bottom: 6px; }
+  .greeting span { color: var(--accent); }
+  .subtitle { font-size: 14px; color: var(--muted); }
+
+  .form { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+
+  .section-label { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .question { font-size: 16px; font-weight: 600; line-height: 1.4; margin-bottom: 18px; color: var(--text); }
+
+  .slider-value { text-align: center; font-size: 52px; font-weight: 800; line-height: 1; margin-bottom: 14px; transition: color 0.3s; }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%; height: 6px;
+    background: var(--border);
+    border-radius: 3px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(229,57,53,0.3);
+  }
+  .slider-labels { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+  /* Colori slider specifici */
+  input.sleep-range::-webkit-slider-thumb { background: var(--blue) !important; box-shadow: 0 2px 8px rgba(21,101,192,0.25) !important; }
+  .sleep-val { color: var(--blue) !important; }
+
+  input.stress-range::-webkit-slider-thumb { background: var(--purple) !important; box-shadow: 0 2px 8px rgba(106,27,154,0.25) !important; }
+  .stress-val { color: var(--purple) !important; }
+
+  /* TOGGLE SI/NO */
+  .toggle-row { display: flex; gap: 10px; }
+  .toggle-btn {
+    flex: 1; padding: 14px; border-radius: var(--radius);
+    border: 2px solid var(--border); background: var(--bg);
+    color: var(--text); font-family: 'Outfit', sans-serif;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: all 0.18s; text-align: center;
+  }
+  .toggle-btn.sel-no { border-color: var(--green); background: var(--green-bg); color: var(--green); }
+  .toggle-btn.sel-si { border-color: var(--red); background: var(--red-bg); color: var(--red); }
+
+  /* PAIN DETAIL */
+  .pain-detail { margin-top: 18px; display: none; flex-direction: column; gap: 18px; }
+  .pain-detail.visible { display: flex; }
+
+  .zone-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .zone-chip {
+    padding: 7px 13px; border-radius: 20px;
+    border: 1.5px solid var(--border); background: var(--bg);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: all 0.18s; color: var(--muted);
+    font-family: 'Outfit', sans-serif;
+  }
+  .zone-chip.selected { border-color: var(--red); background: var(--red-bg); color: var(--red); font-weight: 600; }
+
+  .pain-slider-section { display: none; margin-top: 4px; }
+  .pain-slider-section.visible { display: block; }
+  .pain-val { text-align: center; font-size: 52px; font-weight: 800; color: var(--red); line-height: 1; margin-bottom: 14px; }
+  input.pain-range::-webkit-slider-thumb { background: var(--red) !important; box-shadow: 0 2px 8px rgba(198,40,40,0.3) !important; }
+
+  /* ESERCIZI 3 opzioni */
+  .esercizi-grid { display: flex; flex-direction: column; gap: 10px; }
+  .esercizi-option {
+    background: var(--bg); border: 2px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+    cursor: pointer; transition: all 0.18s;
+    display: flex; align-items: center; gap: 12px;
+    user-select: none;
+  }
+  .esercizi-option:active { transform: scale(0.98); }
+  .esercizi-option.selected { border-color: var(--accent); background: var(--red-bg); }
+  .esercizi-option .emo { font-size: 22px; }
+  .esercizi-option .txt { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .esercizi-option.selected .txt { color: var(--red); }
+
+  /* TESTO LIBERO */
+  textarea {
+    width: 100%; min-height: 90px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px; color: var(--text);
+    padding: 12px 14px; resize: none; outline: none;
+    transition: border-color 0.18s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+
+  .submit-btn {
+    width: 100%; padding: 16px; border-radius: var(--radius);
+    border: none; background: var(--accent); color: #fff;
+    font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 4px 16px rgba(229,57,53,0.25);
+  }
+  .submit-btn:active { transform: scale(0.98); }
+  .submit-btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; box-shadow: none; transform: none; }
+
+  .note { font-size: 12px; color: var(--muted); text-align: center; margin-top: -8px; }
+  .optional-tag { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; margin-left: 8px; vertical-align: middle; }
+
+  .success-screen {
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh;
+    padding: 40px 24px; text-align: center; background: var(--bg);
+  }
+  .success-screen.visible { display: flex; }
+  .success-icon { font-size: 72px; margin-bottom: 24px; animation: pop 0.4s ease; }
+  @keyframes pop { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+  .success-title { font-size: 26px; font-weight: 800; margin-bottom: 10px; }
+  .success-sub { font-size: 15px; color: var(--muted); line-height: 1.6; max-width: 280px; }
+
+  .error-screen {
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 100vh;
+    padding: 40px 24px; text-align: center; background: var(--bg);
+  }
+  .error-screen.visible { display: flex; }
+
+  #loadingState { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; display: none; }
+  #loadingState.visible { display: block; }
+</style>
+</head>
+<body>
+
+<div id="mainContent">
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="header">
+    <div class="brand">Juri Monasso · Personal Trainer</div>
+    <div class="greeting">Ciao <span id="clientName">...</span> 👋</div>
+    <div class="subtitle">Come è andata questa settimana?</div>
+  </div>
+
+  <div id="loadingState" class="visible">Caricamento...</div>
+
+  <form class="form" id="followupForm" style="display:none" onsubmit="return false;">
+
+    <!-- Q1: ENERGIA -->
+    <div class="card">
+      <div class="section-label">01 — Energia</div>
+      <div class="question">Com'è stata la tua energia questa settimana?</div>
+      <div class="slider-value" id="energiaVal" style="color:var(--yellow)">5</div>
+      <input type="range" min="1" max="10" value="5" id="energiaSlider"
+        oninput="updateSlider('energia', this.value)">
+      <div class="slider-labels"><span>😴 A terra</span><span>⚡ Al massimo</span></div>
+    </div>
+
+    <!-- Q2: DOLORE A RIPOSO -->
+    <div class="card">
+      <div class="section-label">02 — Dolore</div>
+      <div class="question">Hai sentito dolori a riposo questa settimana?</div>
+      <div class="toggle-row">
+        <button class="toggle-btn" onclick="selectDolore('no', this)" type="button">✅ No, sto bene</button>
+        <button class="toggle-btn" onclick="selectDolore('si', this)" type="button">⚠️ Sì</button>
+      </div>
+      <div class="pain-detail" id="painDetail">
+        <div>
+          <div class="section-label" style="margin-bottom:10px">Dove hai sentito il dolore?</div>
+          <div class="zone-grid">
+            <div class="zone-chip" onclick="toggleZone('Collo', this)">Collo</div>
+            <div class="zone-chip" onclick="toggleZone('Trap Dx', this)">Trap Dx</div>
+            <div class="zone-chip" onclick="toggleZone('Trap Sx', this)">Trap Sx</div>
+            <div class="zone-chip" onclick="toggleZone('Spalla Dx', this)">Spalla Dx</div>
+            <div class="zone-chip" onclick="toggleZone('Spalla Sx', this)">Spalla Sx</div>
+            <div class="zone-chip" onclick="toggleZone('Dorso', this)">Dorso</div>
+            <div class="zone-chip" onclick="toggleZone('Lombare', this)">Lombare</div>
+            <div class="zone-chip" onclick="toggleZone('Anca Dx', this)">Anca Dx</div>
+            <div class="zone-chip" onclick="toggleZone('Anca Sx', this)">Anca Sx</div>
+            <div class="zone-chip" onclick="toggleZone('Ginocchio Dx', this)">Ginocchio Dx</div>
+            <div class="zone-chip" onclick="toggleZone('Ginocchio Sx', this)">Ginocchio Sx</div>
+            <div class="zone-chip" onclick="toggleZone('Tibia Dx', this)">Tibia Dx</div>
+            <div class="zone-chip" onclick="toggleZone('Tibia Sx', this)">Tibia Sx</div>
+            <div class="zone-chip" onclick="toggleZone('Altro', this)">Altro</div>
+          </div>
+        </div>
+        <div class="pain-slider-section" id="painSliderSection">
+          <div class="section-label" style="margin-bottom:10px">Quanto era intenso? (1-10)</div>
+          <div class="pain-val" id="painVal">5</div>
+          <input type="range" min="1" max="10" value="5" id="painSlider" class="pain-range"
+            oninput="updateSlider('pain', this.value)">
+          <div class="slider-labels"><span>1 — Lieve</span><span>10 — Forte</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Q3: SONNO -->
+    <div class="card">
+      <div class="section-label">03 — Sonno</div>
+      <div class="question">Com'è stata la qualità del sonno questa settimana?</div>
+      <div class="slider-value sleep-val" id="sonnoVal">5</div>
+      <input type="range" min="1" max="10" value="5" id="sonnoSlider" class="sleep-range"
+        oninput="updateSlider('sonno', this.value)">
+      <div class="slider-labels"><span>😵 Malissimo</span><span>😴 Benissimo</span></div>
+    </div>
+
+    <!-- Q4: STRESS -->
+    <div class="card">
+      <div class="section-label">04 — Stress</div>
+      <div class="question">Quanto stress hai avuto questa settimana?</div>
+      <div class="slider-value stress-val" id="stressVal">5</div>
+      <input type="range" min="1" max="10" value="5" id="stressSlider" class="stress-range"
+        oninput="updateSlider('stress', this.value)">
+      <div class="slider-labels"><span>😌 Per niente</span><span>🤯 Moltissimo</span></div>
+    </div>
+
+    <!-- Q5: ESERCIZI -->
+    <div class="card">
+      <div class="section-label">05 — Esercizi a casa</div>
+      <div class="question">Hai fatto gli esercizi assegnati a casa?</div>
+      <div class="esercizi-grid">
+        <div class="esercizi-option" onclick="selectEsercizi('tutti', this)">
+          <span class="emo">✅</span><span class="txt">Sì, li ho fatti tutti</span>
+        </div>
+        <div class="esercizi-option" onclick="selectEsercizi('in_parte', this)">
+          <span class="emo">🔶</span><span class="txt">In parte</span>
+        </div>
+        <div class="esercizi-option" onclick="selectEsercizi('no', this)">
+          <span class="emo">❌</span><span class="txt">No, non li ho fatti</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Q6: TESTO LIBERO -->
+    <div class="card">
+      <div class="section-label">06 — Messaggio <span class="optional-tag">opzionale</span></div>
+      <div class="question">Vuoi dirmi qualcosa?</div>
+      <textarea id="noteLibere" placeholder="Come ti senti, qualcosa che hai notato, domande..."></textarea>
+    </div>
+
+    <p class="note">Le risposte 1-5 sono necessarie · il messaggio è facoltativo 💪</p>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitForm()" disabled>
+      Invia risposta
+    </button>
+
+  </form>
+</div>
+
+<div class="success-screen" id="successScreen">
+  <div class="success-icon">🙌</div>
+  <div class="success-title">Grazie!</div>
+  <div class="success-sub">Juri ha ricevuto il tuo resoconto settimanale. A presto in palestra!</div>
+</div>
+
+<div class="error-screen" id="errorScreen">
+  <div style="font-size:48px;margin-bottom:16px">😕</div>
+  <div class="success-title">Link non valido</div>
+  <div class="success-sub">Chiedi a Juri di inviarti un nuovo link personalizzato.</div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyD1fVEprn5HmDyIqWcfwQ7HIFUI5yrlr3Y",
+    authDomain: "gestionale-pt.firebaseapp.com",
+    projectId: "gestionale-pt",
+    storageBucket: "gestionale-pt.firebasestorage.app",
+    messagingSenderId: "627277031910",
+    appId: "1:627277031910:web:b5dfb113e0de13f53e0e27"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const params = new URLSearchParams(window.location.search);
+  const clientId = params.get('clientId');
+  const clientName = decodeURIComponent(params.get('nome') || '');
+
+  document.getElementById('loadingState').classList.remove('visible');
+
+  if (!clientId) {
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('errorScreen').classList.add('visible');
+  } else {
+    document.getElementById('clientName').textContent = clientName || 'campione';
+    document.getElementById('followupForm').style.display = 'flex';
+  }
+
+  window._submitToFirebase = async function(payload) {
+    try {
+      await addDoc(collection(db, 'followups'), {
+        ...payload,
+        tipo: 'check_settimanale',
+        clientId: clientId,
+        clientName: clientName,
+        timestamp: serverTimestamp(),
+        date: new Date().toISOString().split('T')[0]
+      });
+      document.getElementById('mainContent').style.display = 'none';
+      document.getElementById('successScreen').classList.add('visible');
+    } catch(e) {
+      alert('Errore nel salvataggio. Riprova tra poco.');
+      document.getElementById('submitBtn').disabled = false;
+      document.getElementById('submitBtn').textContent = 'Invia risposta';
+    }
+  };
+</script>
+
+<script>
+  const state = { energia: 5, dolore: null, zone: [], dolorePain: 5, sonno: 5, stress: 5, esercizi: null, note: '' };
+
+  function updateProgress() {
+    const doloreOk = state.dolore === 'no' || (state.dolore === 'si' && state.zone.length > 0);
+    const allOk = doloreOk && state.esercizi !== null;
+    document.getElementById('submitBtn').disabled = !allOk;
+    let filled = 3; // energia + sonno + stress sempre presenti
+    if (state.dolore !== null) filled++;
+    if (state.esercizi !== null) filled++;
+    document.getElementById('progressFill').style.width = ((filled / 5) * 100) + '%';
+  }
+
+  function updateSlider(type, val) {
+    val = parseInt(val);
+    if (type === 'energia') {
+      state.energia = val;
+      const el = document.getElementById('energiaVal');
+      el.textContent = val;
+      el.style.color = val <= 3 ? 'var(--red)' : val <= 6 ? 'var(--yellow)' : 'var(--green)';
+    } else if (type === 'pain') {
+      state.dolorePain = val;
+      document.getElementById('painVal').textContent = val;
+    } else if (type === 'sonno') {
+      state.sonno = val;
+      document.getElementById('sonnoVal').textContent = val;
+    } else if (type === 'stress') {
+      state.stress = val;
+      const el = document.getElementById('stressVal');
+      el.textContent = val;
+      el.style.color = val <= 3 ? 'var(--green)' : val <= 6 ? 'var(--yellow)' : 'var(--purple)';
+    }
+    updateProgress();
+  }
+
+  function selectDolore(val, el) {
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('sel-no','sel-si'));
+    state.dolore = val;
+    if (val === 'no') {
+      el.classList.add('sel-no');
+      document.getElementById('painDetail').classList.remove('visible');
+      document.getElementById('painSliderSection').classList.remove('visible');
+      state.zone = [];
+      document.querySelectorAll('.zone-chip').forEach(c => c.classList.remove('selected'));
+    } else {
+      el.classList.add('sel-si');
+      document.getElementById('painDetail').classList.add('visible');
+    }
+    updateProgress();
+  }
+
+  function toggleZone(zona, el) {
+    el.classList.toggle('selected');
+    state.zone = el.classList.contains('selected')
+      ? [...state.zone, zona]
+      : state.zone.filter(z => z !== zona);
+    document.getElementById('painSliderSection').classList.toggle('visible', state.zone.length > 0);
+    updateProgress();
+  }
+
+  function selectEsercizi(val, el) {
+    document.querySelectorAll('.esercizi-option').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    state.esercizi = val;
+    updateProgress();
+  }
+
+  async function submitForm() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Invio in corso...';
+    state.note = document.getElementById('noteLibere').value.trim();
+    await window._submitToFirebase({
+      energia: state.energia,
+      dolore: state.dolore === 'si',
+      zoneDolorose: state.dolore === 'si' ? state.zone.map(z => ({ label: z, intensity: state.dolorePain })) : [],
+      intensitaDolore: state.dolore === 'si' ? state.dolorePain : null,
+      sonno: state.sonno,
+      stress: state.stress,
+      esercizi: state.esercizi,
+      note: state.note || null
+    });
+  }
+
+  updateProgress();
+</script>
+</body>
+</html>
