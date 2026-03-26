@@ -2588,7 +2588,7 @@ body { font-size: 15px; font-family: 'Outfit', sans-serif; }
 </style>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyD1fVEprn5HmDyIqWcfwQ7HIFUI5yrlr3Y",
@@ -2874,6 +2874,9 @@ window.fbLoadFromCloud = async function() {
       </div>
       <div id="dash-promemoria"></div>
     </div>
+
+    <!-- FOLLOW-UP REMINDER BANNER -->
+    <div id="fu-reminder-banner" style="display:none;margin-bottom:12px;"></div>
 
     <!-- AGENDA OGGI + DOMANI -->
     <div style="margin-bottom:20px;">
@@ -4747,6 +4750,40 @@ function openClientDetail(clientId) {
         </div>
         <div class="profilo-acc-body" style="display:none;">
           <div id="balance-widget-profilo-${client.id}" data-balance-days="30"></div>
+        </div>
+      </div>
+
+      <!-- SEZIONE: FOLLOW-UP -->
+      <div class="profilo-accordion" id="acc-followup-${client.id}">
+        <div class="profilo-acc-header" onclick="toggleAccordion('acc-followup-${client.id}'); if(document.getElementById('acc-followup-${client.id}').classList.contains('acc-open')) loadFollowupCharts(${client.id});">
+          <span>📬 Follow-Up ${client.followUpEnabled
+            ? `<span style="background:rgba(71,255,160,0.15);color:var(--green);border-radius:10px;font-size:10px;padding:2px 8px;font-family:DM Mono,monospace;">● attivo</span>`
+            : `<span style="background:var(--surface2);color:var(--text3);border-radius:10px;font-size:10px;padding:2px 8px;font-family:DM Mono,monospace;">○ disattivo</span>`
+          }</span>
+          <span class="acc-chevron">▾</span>
+        </div>
+        <div class="profilo-acc-body" style="display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:13px;color:var(--text2);">Follow-up attivo</span>
+              <div onclick="toggleFollowUp(${client.id})"
+                style="width:42px;height:24px;border-radius:12px;background:${client.followUpEnabled ? 'var(--accent)' : 'var(--surface2)'};border:1px solid ${client.followUpEnabled ? 'var(--accent)' : 'var(--border)'};cursor:pointer;position:relative;transition:background .2s;">
+                <div style="position:absolute;top:3px;left:${client.followUpEnabled ? '20px' : '3px'};width:16px;height:16px;border-radius:50%;background:${client.followUpEnabled ? 'var(--bg)' : 'var(--text3)'};transition:left .2s;"></div>
+              </div>
+            </div>
+            ${client.followUpEnabled ? `
+            <button id="fu-copy-btn-${client.id}" class="btn btn-secondary btn-sm" onclick="copyFollowUpLinks(${client.id})">
+              📋 Copia messaggio WhatsApp
+            </button>` : ''}
+          </div>
+          ${client.followUpEnabled ? `
+          <div>
+            <div style="font-size:11px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:10px;">Trend risposte</div>
+            <div id="fu-charts-${client.id}">
+              <div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;">Apri la sezione per caricare i dati.</div>
+            </div>
+          </div>` : `
+          <div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;">Attiva il follow-up per inviare i link al cliente e visualizzare i trend.</div>`}
         </div>
       </div>
 
@@ -9695,6 +9732,9 @@ function renderDashboard() {
     }
   }
 
+  // ── FOLLOW-UP BANNER ──────────────────────────────────────────────────────
+  renderFollowUpBanner();
+
   // ── AGENDA OGGI nella dashboard ─────────────────────────────────────────
   const agendaOggiEl = document.getElementById('dash-agenda-oggi');
   if (agendaOggiEl) {
@@ -11437,6 +11477,205 @@ function populateSedutaSelect() {
 // INIT
 // ===================================================
 _injectCustomIntoExercises();
+// ═══════════════════════════════════════════════════════════
+// FOLLOW-UP REMINDER BANNER
+// ═══════════════════════════════════════════════════════════
+
+function _fuDismissKey(clientId, type, dateStr) {
+  return 'fu_dismiss_' + type + '_' + clientId + '_' + dateStr;
+}
+
+function fuMarkSent(clientId, type, dateStr) {
+  localStorage.setItem(_fuDismissKey(clientId, type, dateStr), '1');
+  renderFollowUpBanner();
+}
+
+function renderFollowUpBanner() {
+  const banner = document.getElementById('fu-reminder-banner');
+  if (!banner) return;
+
+  const today      = new Date();
+  const todayStr   = today.toISOString().split('T')[0];
+  const isSunday   = today.getDay() === 0;
+
+  const yesterday  = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const yestStr    = yesterday.toISOString().split('T')[0];
+
+  const fuClients  = clients.filter(c => !c.sonoIo && c.followUpEnabled);
+  if (fuClients.length === 0) { banner.style.display = 'none'; return; }
+
+  const items = [];
+
+  // ── POST-SEDUTA: clienti che hanno avuto una seduta ieri ─────────────────
+  const archive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]');
+  const manSess = JSON.parse(localStorage.getItem('asd_manual_sessions') || '[]');
+
+  fuClients.forEach(c => {
+    const key = _fuDismissKey(c.id, 'post', yestStr);
+    if (localStorage.getItem(key)) return;
+    const hadSession =
+      archive.some(s => String(s.clientId) === String(c.id) && s.date === yestStr) ||
+      manSess.some(s  => String(s.clientId) === String(c.id) && s.date === yestStr) ||
+      workouts.some(w => String(w.clientId) === String(c.id) && w.categoria === 'seduta' && (w.createdAt||'').startsWith(yestStr));
+    if (!hadSession) return;
+    items.push({ client: c, type: 'post', dateStr: yestStr, label: 'Post-seduta ieri' });
+  });
+
+  // ── SETTIMANALE: solo domenica ────────────────────────────────────────────
+  if (isSunday) {
+    fuClients.forEach(c => {
+      const key = _fuDismissKey(c.id, 'sett', todayStr);
+      if (localStorage.getItem(key)) return;
+      items.push({ client: c, type: 'sett', dateStr: todayStr, label: 'Check settimanale' });
+    });
+  }
+
+  if (items.length === 0) { banner.style.display = 'none'; return; }
+
+  banner.style.display = '';
+  const FOLLOWUP_BASE = 'https://jurimonasso-jpg.github.io/asd-gestionale';
+
+  banner.innerHTML = `
+    <div style="border:1px solid rgba(71,200,255,0.25);border-radius:10px;background:rgba(71,200,255,0.05);overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;"
+           onclick="this.parentElement.querySelector('.fu-banner-body').classList.toggle('fu-banner-open')">
+        <span style="font-size:12px;font-weight:700;color:var(--accent);">📬 Follow-up da inviare (${items.length})</span>
+        <span style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">tocca per espandere ▾</span>
+      </div>
+      <div class="fu-banner-body" style="display:none;border-top:1px solid rgba(71,200,255,0.15);">
+        ${items.map(({client: c, type, dateStr, label}) => {
+          const nome = encodeURIComponent(c.name || c.nome || '');
+          const linkPost = FOLLOWUP_BASE + '/followup-post-seduta.html?clientId=' + c.id + '&nome=' + nome;
+          const linkSett = FOLLOWUP_BASE + '/followup-settimanale.html?clientId=' + c.id + '&nome=' + nome;
+          const initials = ((c.nome||'')[0]||'') + ((c.cognome||'')[0]||'');
+          return `
+          <div id="fu-row-${c.id}-${type}" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">
+            <div style="width:30px;height:30px;border-radius:50%;background:rgba(71,200,255,0.12);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--accent);flex-shrink:0;">${initials.toUpperCase()}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:700;">${c.nome} ${c.cognome}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+                <a href="${linkPost}" target="_blank" style="font-size:10px;font-family:DM Mono,monospace;color:var(--accent2);text-decoration:none;background:rgba(71,200,255,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(71,200,255,0.2);">📋 Post-seduta</a>
+                <a href="${linkSett}" target="_blank" style="font-size:10px;font-family:DM Mono,monospace;color:var(--accent2);text-decoration:none;background:rgba(71,200,255,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(71,200,255,0.2);">📊 Settimanale</a>
+                <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--text3);">${label}</span>
+              </div>
+            </div>
+            <button onclick="fuMarkSent(${c.id},'${type}','${dateStr}')"
+              style="font-size:10px;font-family:DM Mono,monospace;padding:3px 10px;border-radius:10px;border:1px solid rgba(71,255,160,0.3);background:rgba(71,255,160,0.08);color:var(--green);cursor:pointer;white-space:nowrap;flex-shrink:0;">
+              ✓ Inviato
+            </button>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FOLLOW-UP SYSTEM
+// ═══════════════════════════════════════════════════════════
+
+const FOLLOWUP_BASE_URL = 'https://jurimonasso-jpg.github.io/asd-gestionale';
+
+function toggleFollowUp(clientId) {
+  const c = clients.find(cl => cl.id === clientId);
+  if (!c) return;
+  c.followUpEnabled = !c.followUpEnabled;
+  save();
+  openClient(clientId);
+}
+
+function copyFollowUpLinks(clientId) {
+  const c = clients.find(cl => cl.id === clientId);
+  if (!c) return;
+  const nome = encodeURIComponent(c.name || c.nome || '');
+  const linkPost = `${FOLLOWUP_BASE_URL}/followup-post-seduta.html?clientId=${clientId}&nome=${nome}`;
+  const linkSett = `${FOLLOWUP_BASE_URL}/followup-settimanale.html?clientId=${clientId}&nome=${nome}`;
+  const msg = `Ciao ${c.name || c.nome}! 👋\n\nEcco i tuoi link di follow-up personali:\n\n📋 *Post seduta* (compila dopo ogni allenamento):\n${linkPost}\n\n📊 *Check settimanale* (compila una volta a settimana):\n${linkSett}\n\nGrazie! 💪`;
+  navigator.clipboard.writeText(msg).then(() => {
+    _showSaveToast(false);
+    const btn = document.getElementById('fu-copy-btn-' + clientId);
+    if (btn) { btn.textContent = '✅ Copiato!'; setTimeout(() => { btn.textContent = '📋 Copia messaggio WhatsApp'; }, 2000); }
+  });
+}
+
+async function loadFollowupCharts(clientId) {
+  const container = document.getElementById('fu-charts-' + clientId);
+  if (!container) return;
+  if (container.dataset.loaded === '1') return;
+  container.dataset.loaded = '1';
+  container.innerHTML = '<div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;padding:8px 0;">Caricamento dati...</div>';
+
+  try {
+    const q = query(
+      collection(db, 'followups'),
+      where('clientId', '==', String(clientId)),
+      orderBy('timestamp', 'asc')
+    );
+    const snap = await getDocs(q);
+    const docs = snap.docs.map(d => d.data());
+
+    if (docs.length === 0) {
+      container.innerHTML = '<div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;padding:8px 0;">Nessun follow-up ricevuto ancora.</div>';
+      return;
+    }
+
+    const labels  = docs.map(d => d.date || d.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '—');
+    const energia = docs.map(d => d.energia ?? null);
+    const dolore  = docs.map(d => d.intensitaDolore ?? null);
+    const sonno   = docs.map(d => d.sonno ?? null);
+    const stress  = docs.map(d => d.stress ?? null);
+    const hasStress = stress.some(v => v !== null && v !== undefined);
+
+    const datasets = [
+      { label: 'Energia', data: energia, borderColor: '#47c8ff', backgroundColor: 'rgba(71,200,255,0.08)',   tension: 0.3, spanGaps: true, pointRadius: 3 },
+      { label: 'Dolore',  data: dolore,  borderColor: '#ff4757', backgroundColor: 'rgba(255,71,87,0.08)',    tension: 0.3, spanGaps: true, pointRadius: 3 },
+      { label: 'Sonno',   data: sonno,   borderColor: '#a29bfe', backgroundColor: 'rgba(162,155,254,0.08)',  tension: 0.3, spanGaps: true, pointRadius: 3 },
+    ];
+    if (hasStress) {
+      datasets.push({ label: 'Stress', data: stress, borderColor: '#ffd32a', backgroundColor: 'rgba(255,211,42,0.08)', tension: 0.3, spanGaps: true, pointRadius: 3 });
+    }
+
+    container.innerHTML = `
+      <div style="margin-bottom:6px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${docs.length} risposte totali · ultima: ${labels[labels.length-1]}</div>
+      <div style="position:relative;width:100%;height:200px;">
+        <canvas id="fu-canvas-${clientId}"></canvas>
+      </div>
+      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
+        ${datasets.map(ds => `<span style="font-size:10px;font-family:'DM Mono',monospace;color:${ds.borderColor};">● ${ds.label}</span>`).join('')}
+      </div>
+    `;
+
+    const canvas = document.getElementById('fu-canvas-' + clientId);
+    if (!canvas || !window.Chart) return;
+    const existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+
+    new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: {
+            min: 0, max: 10,
+            ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 } },
+            grid:  { color: 'rgba(255,255,255,0.05)' }
+          },
+          x: {
+            ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 }, maxRotation: 45 },
+            grid:  { color: 'rgba(255,255,255,0.05)' }
+          }
+        }
+      }
+    });
+  } catch (err) {
+    container.innerHTML = `<div style="color:var(--red);font-size:12px;font-family:'DM Mono',monospace;">Errore caricamento: ${err.message}</div>`;
+  }
+}
+
 renderDashboard();
 renderClients();
 renderWorkouts();
@@ -11547,6 +11786,10 @@ function toggleSyncPopup(e) {
 function closeSyncPopup() {
   document.getElementById('sync-popup').classList.remove('open');
 }
+
+
+// ═══════════════════════════════════════════════════════════
+
 document.addEventListener('click', function(e) {
   const popup = document.getElementById('sync-popup');
   const btn = document.getElementById('sync-nav-btn');
