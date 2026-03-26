@@ -4778,9 +4778,9 @@ function openClientDetail(clientId) {
               </div>
             </div>
             ${client.followUpEnabled ? `
-            <a href="${getFollowUpWaLink(` + client.id + `)}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;">
+            <button class="btn btn-secondary btn-sm" onclick="window.open(getFollowUpWaLink(` + client.id + `), '_blank')">
               💬 Invia su WhatsApp
-            </a>` : ''}
+            </button>` : ''}
           </div>
           ${client.followUpEnabled ? `
           <div>
@@ -11565,7 +11565,7 @@ function renderFollowUpBanner() {
             <div style="flex:1;min-width:0;">
               <div style="font-size:12px;font-weight:700;">${c.nome} ${c.cognome}</div>
               <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
-                <a href="${waLink}" target="_blank" style="font-size:10px;font-family:DM Mono,monospace;color:#25D366;text-decoration:none;background:rgba(37,211,102,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(37,211,102,0.25);">💬 WhatsApp</a>
+                <button onclick="window.open('${waLink}', '_blank')" style="font-size:10px;font-family:DM Mono,monospace;color:#25D366;cursor:pointer;background:rgba(37,211,102,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(37,211,102,0.25);">💬 WhatsApp</button>
                 <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--text3);">${label}</span>
               </div>
             </div>
