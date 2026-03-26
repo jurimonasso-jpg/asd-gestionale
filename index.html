@@ -11513,11 +11513,11 @@ function renderFollowUpBanner() {
   fuClients.forEach(c => {
     const key = _fuDismissKey(c.id, 'post', yestStr);
     if (localStorage.getItem(key)) return;
-    // Usa solo sessions_archive: contiene sedute effettivamente completate/archiviate
+    // Usa solo sessions_archive con outcome 'done' = sedute effettivamente svolte
     const hadSession = archive.some(s =>
       String(s.clientId) === String(c.id) &&
       s.date === yestStr &&
-      s.outcome !== 'delete'
+      s.outcome === 'done'
     );
     if (!hadSession) return;
     items.push({ client: c, type: 'post', dateStr: yestStr, label: 'Post-seduta ieri' });
