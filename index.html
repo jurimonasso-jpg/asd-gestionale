@@ -2601,6 +2601,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+window._db = db;
+window._fsQuery = query;
+window._fsWhere = where;
+window._fsOrderBy = orderBy;
+window._fsCollection = collection;
+window._fsDocs = getDocs;
 
 const SYNC_KEYS_FIXED = [
   'asd_clients','asd_workouts','asd_custom_exercises',
@@ -11608,12 +11614,12 @@ async function loadFollowupCharts(clientId) {
   container.innerHTML = '<div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;padding:8px 0;">Caricamento dati...</div>';
 
   try {
-    const q = query(
-      collection(db, 'followups'),
-      where('clientId', '==', String(clientId)),
-      orderBy('timestamp', 'asc')
+    const q = window._fsQuery(
+      window._fsCollection(window._db, 'followups'),
+      window._fsWhere('clientId', '==', String(clientId)),
+      window._fsOrderBy('timestamp', 'asc')
     );
-    const snap = await getDocs(q);
+    const snap = await window._fsDocs(q);
     const docs = snap.docs.map(d => d.data());
 
     if (docs.length === 0) {
