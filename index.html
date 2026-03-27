@@ -11609,7 +11609,7 @@ function toggleFollowUp(clientId) {
   if (!c) return;
   c.followUpEnabled = !c.followUpEnabled;
   save();
-  openClient(clientId);
+  openClientDetail(clientId);
 }
 
 function getFollowUpWaLink(clientId) {
@@ -11830,7 +11830,9 @@ document.addEventListener('click', function(e) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/asd-gestionale/sw.js');
+  navigator.serviceWorker.getRegistrations().then(function(registrations) {
+    for (var reg of registrations) { reg.unregister(); }
+  });
 }
 </script>
 </body>
