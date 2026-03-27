@@ -50,6 +50,47 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ===== FOLLOW-UP BANNER IN MODALE SEDUTA ===== */
+#wu-followup-banner { margin-bottom: 14px; border-radius: var(--radius); overflow: hidden; transition: box-shadow .2s; }
+#wu-followup-banner.fu-green .fu-banner-hdr { background: #f1f8f2; border: 1.5px solid #a5d6a7; border-bottom: none; }
+#wu-followup-banner.fu-yellow .fu-banner-hdr { background: #fffdf0; border: 1.5px solid #ffe082; border-bottom: none; }
+#wu-followup-banner.fu-red .fu-banner-hdr { background: #fff5f5; border: 1.5px solid #ef9a9a; border-bottom: none; }
+#wu-followup-banner.fu-gray .fu-banner-hdr { background: var(--surface2); border: 1.5px solid var(--border); border-bottom: none; }
+.fu-banner-hdr { padding: 9px 14px; cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; border-radius: var(--radius) var(--radius) 0 0; }
+.fu-banner-hdr-left { display: flex; align-items: flex-start; flex-direction: column; gap: 1px; }
+.fu-banner-hdr-row { display: flex; align-items: center; gap: 7px; }
+.fu-sem-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.fu-green .fu-sem-dot { background: var(--green); box-shadow: 0 0 0 3px #c8e6c9; }
+.fu-yellow .fu-sem-dot { background: #f9a825; box-shadow: 0 0 0 3px #fff9c4; }
+.fu-red .fu-sem-dot { background: var(--accent); box-shadow: 0 0 0 3px #ffcdd2; }
+.fu-gray .fu-sem-dot { background: var(--text3); }
+.fu-banner-title { font-size: 12px; font-weight: 700; color: var(--text); }
+.fu-banner-sub { font-size: 11px; color: var(--text3); margin-left: 16px; }
+.fu-toggle-icon { font-size: 11px; color: var(--text3); font-weight: 700; transition: transform .2s; }
+.fu-toggle-icon.open { transform: rotate(180deg); }
+.fu-banner-body { display: none; background: var(--surface); border: 1.5px solid var(--border); border-top: none; border-radius: 0 0 var(--radius) var(--radius); padding: 12px 14px; }
+.fu-banner-body.open { display: block; }
+.fu-trend-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); margin-bottom: 8px; }
+.fu-trend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.fu-trend-name { font-size: 11px; font-weight: 600; color: var(--text2); width: 56px; flex-shrink: 0; }
+.fu-trend-bars { display: flex; gap: 3px; align-items: flex-end; height: 22px; flex: 1; }
+.fu-trend-bar { border-radius: 3px 3px 0 0; flex: 1; min-width: 10px; }
+.fu-trend-val { font-size: 11px; font-weight: 700; font-family: 'DM Mono', monospace; width: 20px; text-align: right; flex-shrink: 0; }
+.fu-trend-arrow { font-size: 13px; flex-shrink: 0; }
+.fu-last-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.fu-last-label { font-size: 11px; color: var(--text3); }
+.fu-diff-pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; }
+.fu-diff-easy { background: var(--green-bg); color: var(--green); }
+.fu-diff-ok { background: var(--blue-bg); color: var(--blue); }
+.fu-diff-hard { background: var(--yellow-bg); color: var(--yellow); }
+.fu-diff-tohard { background: var(--red-bg); color: var(--red); }
+.fu-last-date { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; margin-left: auto; }
+.fu-suggestion { margin-top: 10px; background: var(--surface2); border-radius: 8px; padding: 9px 12px; border-left: 3px solid var(--accent2); display: flex; gap: 8px; align-items: flex-start; }
+.fu-suggestion-icon { font-size: 15px; flex-shrink: 0; }
+.fu-suggestion-text { font-size: 12px; line-height: 1.5; color: var(--text); }
+.fu-suggestion-text strong { color: var(--accent2); }
+.fu-no-data { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; padding: 4px 0; }
+
 body {
   font-family: 'Outfit', sans-serif;
   background: var(--bg);
@@ -3590,6 +3631,53 @@ window.fbLoadFromCloud = async function() {
       </div>
     </div>
 
+    <!-- FOLLOW-UP BANNER -->
+    <div id="wu-followup-banner" class="fu-gray" style="display:none;">
+      <div class="fu-banner-hdr" onclick="wuToggleFollowupBanner()">
+        <div class="fu-banner-hdr-left">
+          <div class="fu-banner-hdr-row">
+            <div class="fu-sem-dot"></div>
+            <div class="fu-banner-title" id="wu-fu-title">—</div>
+          </div>
+          <div class="fu-banner-sub" id="wu-fu-sub"></div>
+        </div>
+        <div class="fu-toggle-icon open" id="wu-fu-toggle">▼</div>
+      </div>
+      <div class="fu-banner-body open" id="wu-fu-body">
+        <div class="fu-trend-label">Trend ultime risposte</div>
+        <div class="fu-trend-row">
+          <div class="fu-trend-name">⚡ Energia</div>
+          <div class="fu-trend-bars" id="wu-bars-energia"></div>
+          <div class="fu-trend-val" id="wu-val-energia" style="color:var(--accent2)"></div>
+          <div class="fu-trend-arrow" id="wu-arr-energia"></div>
+        </div>
+        <div class="fu-trend-row">
+          <div class="fu-trend-name">😴 Sonno</div>
+          <div class="fu-trend-bars" id="wu-bars-sonno"></div>
+          <div class="fu-trend-val" id="wu-val-sonno" style="color:#6a1b9a"></div>
+          <div class="fu-trend-arrow" id="wu-arr-sonno"></div>
+        </div>
+        <div class="fu-trend-row">
+          <div class="fu-trend-name">🦴 Dolore</div>
+          <div class="fu-trend-bars" id="wu-bars-dolore"></div>
+          <div class="fu-trend-val" id="wu-val-dolore" style="color:var(--accent)"></div>
+          <div class="fu-trend-arrow" id="wu-arr-dolore"></div>
+        </div>
+        <div class="fu-last-row" id="wu-fu-last-row" style="display:none;">
+          <div class="fu-last-label">Ultima seduta:</div>
+          <div class="fu-diff-pill" id="wu-fu-last-diff"></div>
+          <div class="fu-last-date" id="wu-fu-last-date"></div>
+        </div>
+        <div class="fu-suggestion" id="wu-fu-suggestion">
+          <div class="fu-suggestion-icon">💡</div>
+          <div class="fu-suggestion-text" id="wu-fu-sugg-text"></div>
+        </div>
+      </div>
+    </div>
+    <div id="wu-followup-nodata" style="display:none;margin-bottom:14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;">
+      <span style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;">📬 Nessun follow-up ricevuto ancora da questo cliente.</span>
+    </div>
+
     <!-- STATO INIZIO SEDUTA -->
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
@@ -4795,11 +4883,8 @@ function openClientDetail(clientId) {
             </button>` : ''}
           </div>
           ${client.followUpEnabled ? `
-          <div>
-            <div style="font-size:11px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:10px;">Trend risposte</div>
-            <div id="fu-charts-${client.id}">
-              <div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;">Apri la sezione per caricare i dati.</div>
-            </div>
+          <div id="fu-charts-${client.id}">
+            <div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;">Apri la sezione per caricare i dati.</div>
           </div>` : `
           <div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;">Attiva il follow-up per inviare i link al cliente e visualizzare i trend.</div>`}
         </div>
@@ -6582,6 +6667,7 @@ function openNewWorkoutModal(clientId = null, prefillPain = null) {
 
   renderSchedaBlocchi();
   openModal('modal-new-workout');
+  wuLoadFollowupBanner(clientId);
 }
 
 function openNewWorkoutModalCat(clientId, categoria) {
@@ -6596,6 +6682,7 @@ function openNewWorkoutModalCat(clientId, categoria) {
 function wClientChanged() {
   const clientId = document.getElementById('w-client').value;
   if (!clientId) return;
+  wuLoadFollowupBanner(clientId);
   // Check for a note today
   const todayNote = _getTodayNote(clientId);
   if (todayNote?.painStart?.length) {
@@ -11642,60 +11729,351 @@ async function loadFollowupCharts(clientId) {
       return;
     }
 
-    const labels  = docs.map(d => d.date || d.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '—');
-    const energia = docs.map(d => d.energia ?? null);
-    const dolore  = docs.map(d => d.intensitaDolore ?? null);
-    const sonno   = docs.map(d => d.sonno ?? null);
-    const stress  = docs.map(d => d.stress ?? null);
-    const hasStress = stress.some(v => v !== null && v !== undefined);
+    // ── helpers ──────────────────────────────────────────────────
+    const DIFF_MAP = {
+      'Troppo facile': { cls: 'fu-diff-easy', color: '#2e7d32' },
+      'Era giusto':    { cls: 'fu-diff-ok',   color: '#1565c0' },
+      'Impegnativo':   { cls: 'fu-diff-hard', color: '#e65100' },
+      'Troppo duro':   { cls: 'fu-diff-tohard', color: '#c62828' },
+    };
 
-    const datasets = [
-      { label: 'Energia', data: energia, borderColor: '#47c8ff', backgroundColor: 'rgba(71,200,255,0.08)',   tension: 0.3, spanGaps: true, pointRadius: 3 },
-      { label: 'Dolore',  data: dolore,  borderColor: '#ff4757', backgroundColor: 'rgba(255,71,87,0.08)',    tension: 0.3, spanGaps: true, pointRadius: 3 },
-      { label: 'Sonno',   data: sonno,   borderColor: '#a29bfe', backgroundColor: 'rgba(162,155,254,0.08)',  tension: 0.3, spanGaps: true, pointRadius: 3 },
-    ];
-    if (hasStress) {
-      datasets.push({ label: 'Stress', data: stress, borderColor: '#ffd32a', backgroundColor: 'rgba(255,211,42,0.08)', tension: 0.3, spanGaps: true, pointRadius: 3 });
+    function fuBuildSvgChart(filteredDocs) {
+      const W = 320, H = 140;
+      const PAD = { top: 18, right: 12, bottom: 28, left: 26 };
+      const cW = W - PAD.left - PAD.right;
+      const cH = H - PAD.top - PAD.bottom;
+      const n  = filteredDocs.length;
+      if (n === 0) return '<div style="color:var(--text3);font-size:11px;font-family:DM Mono,monospace;padding:12px 0;text-align:center;">Nessun dato per questo filtro.</div>';
+      const xPos = i => PAD.left + (n > 1 ? (i / (n-1)) * cW : cW / 2);
+      const yPos = v => PAD.top + cH - (v / 10) * cH;
+
+      let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;overflow:visible;">`;
+
+      // grid
+      [0,2,4,6,8,10].forEach(v => {
+        const y = yPos(v);
+        svg += `<line x1="${PAD.left}" x2="${W-PAD.right}" y1="${y}" y2="${y}" stroke="var(--border)" stroke-width="1"/>`;
+        if (v % 2 === 0) svg += `<text x="${PAD.left-4}" y="${y+4}" text-anchor="end" font-size="8" fill="var(--text3)" font-family="DM Mono,monospace">${v}</text>`;
+      });
+
+      // x labels + type badges
+      filteredDocs.forEach((d, i) => {
+        const x  = xPos(i);
+        const lbl = d.date || '—';
+        svg += `<text x="${x}" y="${H-PAD.bottom+12}" text-anchor="middle" font-size="8" fill="var(--text3)" font-family="DM Mono,monospace">${lbl}</text>`;
+        // circle = post, diamond = weekly
+        if (d.tipo === 'post' || d.difficolta) {
+          svg += `<circle cx="${x}" cy="${H-PAD.bottom+3}" r="2.5" fill="var(--accent2)"/>`;
+        } else {
+          svg += `<rect x="${x-3}" y="${H-PAD.bottom}" width="6" height="6" transform="rotate(45,${x},${H-PAD.bottom+3})" fill="#6a1b9a"/>`;
+        }
+      });
+
+      // lines
+      const series = [
+        { key:'energia',         color:'var(--accent2)', vals: filteredDocs.map(d=>d.energia??null) },
+        { key:'sonno',           color:'#6a1b9a',        vals: filteredDocs.map(d=>d.sonno??null) },
+        { key:'intensitaDolore', color:'var(--accent)',  vals: filteredDocs.map(d=>d.intensitaDolore??null) },
+        { key:'stress',          color:'var(--yellow)',  vals: filteredDocs.map(d=>d.stress??null) },
+      ];
+      series.forEach(({ vals, color }) => {
+        const pts = vals.map((v,i) => v != null ? { x: xPos(i), y: yPos(v) } : null).filter(Boolean);
+        if (pts.length < 2) {
+          pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" stroke="var(--surface)" stroke-width="1.5"/>`; });
+          return;
+        }
+        let path = `M ${pts[0].x} ${pts[0].y}`;
+        for (let i = 1; i < pts.length; i++) {
+          const cpx = (pts[i].x - pts[i-1].x) / 3;
+          path += ` C ${pts[i-1].x+cpx} ${pts[i-1].y} ${pts[i].x-cpx} ${pts[i].y} ${pts[i].x} ${pts[i].y}`;
+        }
+        svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+        pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" stroke="var(--surface)" stroke-width="1.5"/>`; });
+      });
+
+      // difficulty markers (triangles on top)
+      filteredDocs.forEach((d, i) => {
+        if (!d.difficolta) return;
+        const info = DIFF_MAP[d.difficolta];
+        if (!info) return;
+        const x = xPos(i), y = PAD.top + 6, s = 5;
+        svg += `<polygon points="${x},${y-s} ${x-s},${y+s} ${x+s},${y+s}" fill="${info.color}" opacity="0.85" style="cursor:pointer;">
+          <title>${d.difficolta} · ${d.date||''}</title>
+        </polygon>`;
+      });
+
+      svg += '</svg>';
+      return svg;
     }
 
+    function fuBuildHeatmap(docs) {
+      const days    = ['L','M','M','G','V','S','D'];
+      const metrics = [
+        { key:'energia',         label:'⚡ En.',  isDolore:false, color:'var(--accent2)' },
+        { key:'sonno',           label:'😴 Son.', isDolore:false, color:'#6a1b9a' },
+        { key:'intensitaDolore', label:'🦴 Dol.', isDolore:true,  color:'var(--accent)' },
+      ];
+      // Map docs to day-of-week (0=Mon)
+      const byDay = Array.from({length:7}, () => []);
+      docs.forEach(d => {
+        const ts = d.timestamp?.toDate?.() || (d.date ? new Date(d.date.split('/').reverse().join('-')) : null);
+        if (!ts) return;
+        const dow = (ts.getDay() + 6) % 7; // 0=Mon
+        byDay[dow].push(d);
+      });
+
+      function cellStyle(vals, isDolore) {
+        if (!vals.length) return 'background:var(--surface2);color:var(--text3);';
+        const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+        if (isDolore) {
+          return avg === 0
+            ? 'background:var(--green-bg);color:var(--green);'
+            : avg < 3 ? 'background:#fff3e0;color:var(--yellow);'
+            : 'background:var(--red-bg);color:var(--red);';
+        }
+        if (avg >= 7) return 'background:var(--green-bg);color:var(--green);';
+        if (avg >= 5) return 'background:#fff3e0;color:var(--yellow);';
+        return 'background:var(--red-bg);color:var(--red);';
+      }
+
+      let html = `<div style="display:grid;grid-template-columns:46px repeat(7,1fr);gap:2px;font-size:10px;">`;
+      // header
+      html += `<div></div>`;
+      days.forEach(d => { html += `<div style="text-align:center;font-weight:700;color:var(--text3);font-family:DM Mono,monospace;padding-bottom:3px;">${d}</div>`; });
+      metrics.forEach(m => {
+        html += `<div style="display:flex;align-items:center;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;padding-right:3px;">${m.label}</div>`;
+        byDay.forEach((dayDocs) => {
+          const vals = dayDocs.map(d => d[m.key]).filter(v => v != null && v !== undefined);
+          const avg  = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
+          const style = cellStyle(vals, m.isDolore);
+          const display = avg === null ? '·' : m.isDolore ? (avg === 0 ? '✓' : avg) : avg;
+          html += `<div style="${style}border-radius:4px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:DM Mono,monospace;">${display}</div>`;
+        });
+      });
+      html += `</div>`;
+      return html;
+    }
+
+    function fuBuildHistory(docs) {
+      const reversed = [...docs].reverse().slice(0, 10);
+      return reversed.map(d => {
+        const diff = d.difficolta ? DIFF_MAP[d.difficolta] : null;
+        const isPost = d.tipo === 'post' || d.difficolta;
+        const metrics = [
+          d.energia != null ? `⚡ ${d.energia}` : null,
+          d.sonno   != null ? `😴 ${d.sonno}`   : null,
+          d.stress  != null ? `😤 ${d.stress}`  : null,
+        ].filter(Boolean).join(' · ');
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="width:8px;height:8px;border-radius:50%;background:${isPost?'var(--accent2)':'#6a1b9a'};flex-shrink:0;"></div>
+          <div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;min-width:52px;">${d.date||'—'}</div>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:600;">${isPost ? '⚡ Post-allenamento' : '📅 Check settimanale'}</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px;">
+              ${diff ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:${diff.color}22;color:${diff.color};">${d.difficolta}</span>` : ''}
+              ${d.intensitaDolore > 0 ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--red-bg);color:var(--red);">⚠️ Dolore</span>` : ''}
+              ${d.esercizi ? `<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:var(--surface2);color:var(--text3);">🏠 ${d.esercizi}</span>` : ''}
+            </div>
+          </div>
+          <div style="text-align:right;font-size:11px;color:var(--text3);font-family:DM Mono,monospace;white-space:nowrap;">${metrics}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── render all ────────────────────────────────────────────────
+    const allDocs  = docs;
+    const postDocs = docs.filter(d => d.tipo === 'post' || d.difficolta);
+    const wkDocs   = docs.filter(d => d.tipo === 'settimanale' || (!d.difficolta && d.stress != null));
+    const lastDate = allDocs[allDocs.length-1];
+    const lastLbl  = lastDate?.date || lastDate?.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '—';
+
     container.innerHTML = `
-      <div style="margin-bottom:6px;font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${docs.length} risposte totali · ultima: ${labels[labels.length-1]}</div>
-      <div style="position:relative;width:100%;height:200px;">
-        <canvas id="fu-canvas-${clientId}"></canvas>
+      <div style="font-size:11px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:10px;">
+        ${docs.length} risposte totali · ultima: ${lastLbl}
       </div>
-      <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">
-        ${datasets.map(ds => `<span style="font-size:10px;font-family:'DM Mono',monospace;color:${ds.borderColor};">● ${ds.label}</span>`).join('')}
+
+      <!-- FILTRI -->
+      <div style="display:flex;gap:4px;margin-bottom:10px;">
+        <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
+        <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
+        <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:'Outfit',sans-serif;">Settimanale</button>
       </div>
+
+      <!-- GRAFICO -->
+      <div id="fu-svg-${clientId}" style="margin-bottom:12px;"></div>
+
+      <!-- LEGENDA -->
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+        <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--accent2);">● Energia</span>
+        <span style="font-size:10px;font-family:DM Mono,monospace;color:#6a1b9a;">● Sonno</span>
+        <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--accent);">● Dolore</span>
+        <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--yellow);">● Stress</span>
+        <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--text3);">▲ Difficoltà seduta</span>
+      </div>
+
+      <!-- HEATMAP -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:6px;">🌡️ Heatmap per giorno</div>
+      <div style="margin-bottom:14px;">${fuBuildHeatmap(allDocs)}</div>
+
+      <!-- STORICO -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:4px;">📅 Ultime risposte</div>
+      <div id="fu-history-${clientId}">${fuBuildHistory(allDocs)}</div>
     `;
 
-    const canvas = document.getElementById('fu-canvas-' + clientId);
-    if (!canvas || !window.Chart) return;
-    const existing = Chart.getChart(canvas);
-    if (existing) existing.destroy();
+    // Store docs for tab switching
+    window._fuDocs = window._fuDocs || {};
+    window._fuDocs[clientId] = { all: allDocs, post: postDocs, wk: wkDocs };
 
-    new Chart(canvas, {
-      type: 'line',
-      data: { labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: {
-            min: 0, max: 10,
-            ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 } },
-            grid:  { color: 'rgba(255,255,255,0.05)' }
-          },
-          x: {
-            ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 }, maxRotation: 45 },
-            grid:  { color: 'rgba(255,255,255,0.05)' }
-          }
-        }
-      }
-    });
+    // Render initial chart
+    document.getElementById('fu-svg-' + clientId).innerHTML = fuBuildSvgChart(allDocs);
+    // Store builder function
+    window._fuBuildSvgChart = window._fuBuildSvgChart || {};
+    window._fuBuildSvgChart[clientId] = fuBuildSvgChart;
+
   } catch (err) {
     container.innerHTML = `<div style="color:var(--red);font-size:12px;font-family:'DM Mono',monospace;">Errore caricamento: ${err.message}</div>`;
   }
+}
+
+function fuSwitchTab(clientId, tab) {
+  ['all','post','wk'].forEach(t => {
+    const btn = document.getElementById(`fu-tab-${t}-${clientId}`);
+    if (!btn) return;
+    const active = t === tab;
+    btn.style.background  = active ? 'var(--accent)'   : 'var(--surface2)';
+    btn.style.color       = active ? 'var(--bg)'        : 'var(--text2)';
+    btn.style.border      = active ? '1px solid var(--accent)' : '1px solid var(--border)';
+  });
+  const docs    = window._fuDocs?.[clientId]?.[tab] || [];
+  const builder = window._fuBuildSvgChart?.[clientId];
+  const svgEl   = document.getElementById('fu-svg-' + clientId);
+  if (builder && svgEl) svgEl.innerHTML = builder(docs);
+}
+
+// ===== FOLLOW-UP BANNER IN MODALE SEDUTA =====
+function wuToggleFollowupBanner() {
+  const body = document.getElementById('wu-fu-body');
+  const icon = document.getElementById('wu-fu-toggle');
+  const open = body.classList.toggle('open');
+  icon.classList.toggle('open', open);
+}
+
+async function wuLoadFollowupBanner(clientId) {
+  const banner  = document.getElementById('wu-followup-banner');
+  const nodata  = document.getElementById('wu-followup-nodata');
+  banner.style.display = 'none';
+  nodata.style.display = 'none';
+  if (!clientId) return;
+
+  // Fetch docs from Firebase
+  let docs = [];
+  try {
+    if (window._db && window._fsQuery) {
+      const q = window._fsQuery(
+        window._fsCollection(window._db, 'followups'),
+        window._fsWhere('clientId', '==', String(clientId)),
+        window._fsOrderBy('timestamp', 'asc')
+      );
+      const snap = await window._fsDocs(q);
+      docs = snap.docs.map(d => d.data());
+    }
+  } catch(e) { /* silent */ }
+
+  if (!docs.length) {
+    nodata.style.display = 'block';
+    return;
+  }
+
+  // Keep last 6 entries for trend
+  const recent = docs.slice(-6);
+  const energia = recent.map(d => d.energia ?? null).filter(v => v !== null);
+  const sonno   = recent.map(d => d.sonno ?? null).filter(v => v !== null);
+  const dolore  = recent.map(d => d.intensitaDolore ?? null).filter(v => v !== null);
+
+  // Render bars helper
+  function renderBars(containerId, vals, color, valId, arrId, isDolore) {
+    const c = document.getElementById(containerId);
+    if (!c) return;
+    c.innerHTML = '';
+    if (!vals.length) { c.innerHTML = '<span style="font-size:10px;color:var(--text3);">—</span>'; return; }
+    const max = isDolore ? Math.max(...vals, 1) : 10;
+    vals.forEach((v, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'fu-trend-bar';
+      const h = Math.max(4, (v / max) * 22);
+      bar.style.height = h + 'px';
+      bar.style.opacity = 0.3 + (i / Math.max(vals.length - 1, 1)) * 0.7;
+      bar.style.background = isDolore ? (v === 0 ? 'var(--green)' : 'var(--accent)') : color;
+      c.appendChild(bar);
+    });
+    const last = vals[vals.length - 1];
+    const prev = vals.length > 1 ? vals[vals.length - 2] : last;
+    const diff = last - prev;
+    const valEl = document.getElementById(valId);
+    const arrEl = document.getElementById(arrId);
+    if (valEl) valEl.textContent = isDolore ? (last === 0 ? '✓' : '!') : last;
+    if (arrEl) {
+      const up = diff > 0, dn = diff < 0;
+      const isGoodUp = !isDolore; // for dolore, up is bad
+      arrEl.textContent = up ? '↑' : dn ? '↓' : '→';
+      arrEl.style.color = up ? (isGoodUp ? 'var(--green)' : 'var(--accent)') : dn ? (isGoodUp ? 'var(--accent)' : 'var(--green)') : 'var(--text3)';
+    }
+  }
+
+  renderBars('wu-bars-energia', energia, 'var(--accent2)', 'wu-val-energia', 'wu-arr-energia', false);
+  renderBars('wu-bars-sonno',   sonno,   '#6a1b9a',        'wu-val-sonno',   'wu-arr-sonno',   false);
+  renderBars('wu-bars-dolore',  dolore,  'var(--accent)',  'wu-val-dolore',  'wu-arr-dolore',  true);
+
+  // Last session difficulty (from post-seduta responses)
+  const lastPost = [...docs].reverse().find(d => d.tipo === 'post' || d.difficolta);
+  const lastRow  = document.getElementById('wu-fu-last-row');
+  if (lastPost && lastPost.difficolta) {
+    const diffMap = {
+      'Troppo facile': 'fu-diff-easy',
+      'Era giusto':    'fu-diff-ok',
+      'Impegnativo':   'fu-diff-hard',
+      'Troppo duro':   'fu-diff-tohard',
+    };
+    const pill = document.getElementById('wu-fu-last-diff');
+    pill.textContent = lastPost.difficolta;
+    pill.className   = 'fu-diff-pill ' + (diffMap[lastPost.difficolta] || 'fu-diff-ok');
+    const dateStr = lastPost.date || lastPost.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '';
+    document.getElementById('wu-fu-last-date').textContent = dateStr;
+    lastRow.style.display = 'flex';
+  } else {
+    lastRow.style.display = 'none';
+  }
+
+  // Semaforo + suggestion
+  const lastEn  = energia.length ? energia[energia.length - 1] : 5;
+  const lastSn  = sonno.length   ? sonno[sonno.length - 1]     : 5;
+  const lastDol = dolore.length  ? dolore[dolore.length - 1]   : 0;
+  const enTrend = energia.length > 1 ? lastEn - energia[energia.length - 2] : 0;
+  const snTrend = sonno.length   > 1 ? lastSn - sonno[sonno.length - 2]     : 0;
+
+  let color = 'fu-green', title = '🟢 Cliente in forma', sub = '', sugg = '';
+
+  if (lastEn <= 4 || lastSn <= 4 || lastDol > 2 || (enTrend <= -2 && snTrend <= -1)) {
+    color = 'fu-red';
+    title = '🔴 Attenzione';
+    sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10` + (lastDol > 0 ? ' · Dolore presente' : '');
+    sugg  = '<strong>Riduci il carico oggi.</strong> Energia e/o sonno bassi — considera una seduta di recupero attivo o deload. Chiedi come si sente prima di iniziare.';
+  } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
+    color = 'fu-yellow';
+    title = '🟡 Monitorare';
+    sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10`;
+    sugg  = '<strong>Mantieni il carico della scorsa seduta, non aumentare.</strong> Trend in leggero calo — allarga il warm-up e valuta come risponde.';
+  } else {
+    sub  = `Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
+    sugg = '<strong>Buon momento per progredire.</strong> Energia e sonno stabili — puoi aumentare carico o volume su Fase 1 e 2.';
+  }
+
+  const bannerEl = document.getElementById('wu-followup-banner');
+  bannerEl.className = color;
+  document.getElementById('wu-fu-title').textContent = title;
+  document.getElementById('wu-fu-sub').textContent   = sub;
+  document.getElementById('wu-fu-sugg-text').innerHTML = sugg;
+  bannerEl.style.display = 'block';
 }
 
 renderDashboard();
