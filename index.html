@@ -11731,10 +11731,10 @@ async function loadFollowupCharts(clientId) {
 
     // ── helpers ──────────────────────────────────────────────────
     const DIFF_MAP = {
-      'Troppo facile': { cls: 'fu-diff-easy', color: '#2e7d32' },
-      'Era giusto':    { cls: 'fu-diff-ok',   color: '#1565c0' },
-      'Impegnativo':   { cls: 'fu-diff-hard', color: '#e65100' },
-      'Troppo duro':   { cls: 'fu-diff-tohard', color: '#c62828' },
+      'facile':      { cls: 'fu-diff-easy',   color: '#2e7d32', label: 'Troppo facile' },
+      'giusto':      { cls: 'fu-diff-ok',     color: '#1565c0', label: 'Era giusto'    },
+      'impegnativo': { cls: 'fu-diff-hard',   color: '#e65100', label: 'Impegnativo'   },
+      'duro':        { cls: 'fu-diff-tohard', color: '#c62828', label: 'Troppo duro'   },
     };
 
     function fuBuildSvgChart(filteredDocs) {
@@ -11771,7 +11771,7 @@ async function loadFollowupCharts(clientId) {
       filteredDocs.forEach((d, i) => {
         const x = xPos(i);
         svg += `<text x="${x}" y="${H-PAD.bottom+13}" text-anchor="middle" font-size="8" fill="#bbb" font-family="DM Mono,monospace">${fmtDate(d)}</text>`;
-        if (d.tipo === 'post' || d.difficolta) {
+        if (d.tipo === 'post_seduta') {
           svg += `<circle cx="${x}" cy="${H-PAD.bottom+4}" r="2.5" fill="#1565c0"/>`;
         } else {
           svg += `<rect x="${x-3}" y="${H-PAD.bottom+1}" width="6" height="6" transform="rotate(45,${x},${H-PAD.bottom+4})" fill="#6a1b9a"/>`;
@@ -11802,8 +11802,8 @@ async function loadFollowupCharts(clientId) {
 
       // difficulty markers — bigger triangles at top, with white ring
       filteredDocs.forEach((d, i) => {
-        if (!d.difficolta) return;
-        const info = DIFF_MAP[d.difficolta];
+        if (!d.seduta) return;
+        const info = DIFF_MAP[d.seduta];
         if (!info) return;
         const x = xPos(i);
         const y = PAD.top - 10; // above chart area
@@ -11812,7 +11812,7 @@ async function loadFollowupCharts(clientId) {
         svg += `<polygon points="${x},${y-s-1} ${x-s-1},${y+s+1} ${x+s+1},${y+s+1}" fill="white"/>`;
         // colored triangle
         svg += `<polygon points="${x},${y-s} ${x-s},${y+s} ${x+s},${y+s}" fill="${info.color}">
-          <title>${d.difficolta} · ${fmtDate(d)}</title>
+          <title>${info.label} · ${fmtDate(d)}</title>
         </polygon>`;
         // connector line from triangle to chart
         svg += `<line x1="${x}" y1="${y+s+2}" x2="${x}" y2="${PAD.top}" stroke="${info.color}" stroke-width="1" stroke-dasharray="2,2" opacity="0.4"/>`;
@@ -11873,15 +11873,15 @@ async function loadFollowupCharts(clientId) {
     function fuBuildHistory(docs) {
       const reversed = [...docs].reverse().slice(0, 10);
       return reversed.map(d => {
-        const diff   = d.difficolta ? DIFF_MAP[d.difficolta] : null;
-        const isPost = d.tipo === 'post' || d.difficolta;
+        const diff   = d.seduta ? DIFF_MAP[d.seduta] : null;
+        const isPost = d.tipo === 'post_seduta';
         return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
           <div style="width:9px;height:9px;border-radius:50%;background:${isPost?'#1565c0':'#6a1b9a'};flex-shrink:0;"></div>
           <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;min-width:38px;flex-shrink:0;">${(d.date||'—').slice(0,5).replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2')}</div>
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:700;">${isPost ? '⚡ Post-allenamento' : '📅 Check settimanale'}</div>
             <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
-              ${diff ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${diff.color}22;color:${diff.color};">${d.difficolta}</span>` : ''}
+              ${diff ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${diff.color}22;color:${diff.color};">${diff.label}</span>` : ''}
               ${d.intensitaDolore > 0 ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ffebee;color:#c62828;">⚠️ Dolore</span>` : ''}
               ${d.esercizi && d.esercizi !== 'null' ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);">🏠 ${d.esercizi}</span>` : ''}
             </div>
@@ -11897,8 +11897,8 @@ async function loadFollowupCharts(clientId) {
 
     // ── render all ────────────────────────────────────────────────
     const allDocs  = docs;
-    const postDocs = docs.filter(d => d.tipo === 'post' || d.difficolta);
-    const wkDocs   = docs.filter(d => d.tipo === 'settimanale' || (!d.difficolta && d.stress != null));
+    const postDocs = docs.filter(d => d.tipo === 'post_seduta');
+    const wkDocs   = docs.filter(d => d.tipo === 'settimanale' || d.tipo === 'weekly');
     const lastDate = allDocs[allDocs.length-1];
     const lastLbl  = lastDate?.date || lastDate?.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '—';
 
@@ -11921,12 +11921,12 @@ async function loadFollowupCharts(clientId) {
     }
 
     // ── last post-seduta doc ──
-    const lastPost = [...allDocs].reverse().find(d => d.tipo === 'post' || d.difficolta) || allDocs[allDocs.length-1];
-    const lpDate   = lastPost ? (fmtDateLong(lastPost.date || lastPost.timestamp?.toDate?.()?.toLocaleDateString('it-IT'))) : '—';
-    const lpEn     = lastPost?.energia ?? '—';
-    const lpSn     = lastPost?.sonno   ?? '—';
-    const lpDol    = lastPost?.intensitaDolore;
-    const lpDiff   = lastPost?.difficolta;
+    const lastPost   = [...allDocs].reverse().find(d => d.tipo === 'post_seduta') || allDocs[allDocs.length-1];
+    const lpDate     = lastPost ? (fmtDateLong(lastPost.date || lastPost.timestamp?.toDate?.()?.toLocaleDateString('it-IT'))) : '—';
+    const lpEn       = lastPost?.energia ?? '—';
+    const lpSn       = lastPost?.sonno   ?? '—';
+    const lpDol      = lastPost?.intensitaDolore;
+    const lpDiff     = lastPost?.seduta;
     const lpDiffInfo = lpDiff ? DIFF_MAP[lpDiff] : null;
 
     function fmtDateLong(s) {
@@ -11961,7 +11961,7 @@ async function loadFollowupCharts(clientId) {
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📌 Ultima risposta — ${lpDate}</div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;">
         <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;">
-          ${lastPost?.difficolta ? 'Post-allenamento' : 'Check settimanale'} · ${lpDate}
+          ${lastPost?.seduta ? 'Post-allenamento' : 'Check settimanale'} · ${lpDate}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
@@ -11972,7 +11972,7 @@ async function loadFollowupCharts(clientId) {
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
             <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🔥 Seduta</div>
             ${lpDiffInfo
-              ? `<div style="margin-top:6px;"><span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:${lpDiffInfo.color}22;color:${lpDiffInfo.color};">${lpDiff}</span></div>`
+              ? `<div style="margin-top:6px;"><span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:${lpDiffInfo.color}22;color:${lpDiffInfo.color};">${lpDiffInfo.label}</span></div>`
               : `<div style="font-size:13px;color:var(--text3);margin-top:4px;">—</div>`}
             <div style="font-size:11px;color:var(--text3);margin-top:4px;">percepita</div>
           </div>
@@ -12127,18 +12127,21 @@ async function wuLoadFollowupBanner(clientId) {
   renderBars('wu-bars-dolore',  dolore,  'var(--accent)',  'wu-val-dolore',  'wu-arr-dolore',  true);
 
   // Last session difficulty (from post-seduta responses)
-  const lastPost = [...docs].reverse().find(d => d.tipo === 'post' || d.difficolta);
+  const lastPost = [...docs].reverse().find(d => d.tipo === 'post_seduta');
   const lastRow  = document.getElementById('wu-fu-last-row');
-  if (lastPost && lastPost.difficolta) {
+  if (lastPost && lastPost.seduta) {
     const diffMap = {
-      'Troppo facile': 'fu-diff-easy',
-      'Era giusto':    'fu-diff-ok',
-      'Impegnativo':   'fu-diff-hard',
-      'Troppo duro':   'fu-diff-tohard',
+      'facile':      'fu-diff-easy',
+      'giusto':      'fu-diff-ok',
+      'impegnativo': 'fu-diff-hard',
+      'duro':        'fu-diff-tohard',
+    };
+    const labelMap = {
+      'facile':'Troppo facile', 'giusto':'Era giusto', 'impegnativo':'Impegnativo', 'duro':'Troppo duro'
     };
     const pill = document.getElementById('wu-fu-last-diff');
-    pill.textContent = lastPost.difficolta;
-    pill.className   = 'fu-diff-pill ' + (diffMap[lastPost.difficolta] || 'fu-diff-ok');
+    pill.textContent = labelMap[lastPost.seduta] || lastPost.seduta;
+    pill.className   = 'fu-diff-pill ' + (diffMap[lastPost.seduta] || 'fu-diff-ok');
     const dateStr = lastPost.date || lastPost.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '';
     document.getElementById('wu-fu-last-date').textContent = dateStr;
     lastRow.style.display = 'flex';
