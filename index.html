@@ -10766,6 +10766,10 @@ function openExistingSeduta(workout, clientId) {
       </div>
 
       ${_prossimaBanner}
+
+      <!-- FOLLOW-UP BANNER -->
+      <div id="sb-fu-banner-wrap" style="margin-bottom:12px;"></div>
+
       <div id="sb-dolori-section" style="display:${tipoSeduta==='dolori'?'block':'none'};background:var(--surface);border:1px solid rgba(255,71,87,0.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;">
         <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;">🔴 Dolori inizio seduta</div>
         <div id="sb-chart-start"></div>
@@ -10927,6 +10931,7 @@ function openExistingSeduta(workout, clientId) {
   renderSedutaBuilderBlocchi();
   renderBalanceWidget(clientId, `balance-widget-builder-${clientId}`);
   content.scrollIntoView({ behavior:'smooth', block:'start' });
+  sbLoadFollowupBanner(clientId);
 }
 
 function newSedutaBuilderForClient(clientId, dateStr) {
@@ -11016,6 +11021,10 @@ function newSedutaBuilder(prefillDate) {
       </div>
 
       ${_prossimaBanner}
+
+      <!-- FOLLOW-UP BANNER -->
+      <div id="sb-fu-banner-wrap" style="margin-bottom:12px;"></div>
+
       <!-- 1. Dolori INIZIO — solo se dolori -->
       <div id="sb-dolori-section" style="display:none;background:var(--surface);border:1px solid rgba(255,71,87,0.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;">
         <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;">🔴 Dolori inizio seduta</div>
@@ -11131,6 +11140,7 @@ function newSedutaBuilder(prefillDate) {
   renderSedutaBuilderBlocchi();
   renderBalanceWidget(clientId, `balance-widget-builder-${clientId}`);
   content.scrollIntoView({ behavior:'smooth', block:'start' });
+  sbLoadFollowupBanner(clientId);
 }
 
 let _sbPainStart = {};
@@ -12057,6 +12067,125 @@ function fuSwitchTab(clientId, tab) {
   const builder = window._fuBuildSvgChart?.[clientId];
   const svgEl   = document.getElementById('fu-svg-' + clientId);
   if (builder && svgEl) svgEl.innerHTML = builder(docs);
+}
+
+// ===== FOLLOW-UP BANNER NEL SEDUTA BUILDER (agenda) =====
+async function sbLoadFollowupBanner(clientId) {
+  const wrap = document.getElementById('sb-fu-banner-wrap');
+  if (!wrap || !clientId) return;
+  if (!window._db || !window._fsQuery) return;
+
+  let docs = [];
+  try {
+    const q = window._fsQuery(
+      window._fsCollection(window._db, 'followups'),
+      window._fsWhere('clientId', '==', String(clientId)),
+      window._fsOrderBy('timestamp', 'asc')
+    );
+    const snap = await window._fsDocs(q);
+    docs = snap.docs.map(d => d.data());
+  } catch(e) { return; }
+
+  if (!docs.length) return;
+
+  const recent  = docs.slice(-6);
+  const energia = recent.map(d => d.energia).filter(v => v != null);
+  const sonno   = recent.map(d => d.sonno).filter(v => v != null);
+  const dolore  = recent.map(d => d.intensitaDolore).filter(v => v != null);
+
+  const lastEn   = energia.length ? energia[energia.length-1] : 5;
+  const lastSn   = sonno.length   ? sonno[sonno.length-1]     : 5;
+  const lastDol  = dolore.length  ? dolore[dolore.length-1]   : 0;
+  const enTrend  = energia.length > 1 ? lastEn - energia[energia.length-2] : 0;
+  const snTrend  = sonno.length   > 1 ? lastSn - sonno[sonno.length-2]     : 0;
+
+  let bColor, bBg, bBorder, bEmoji, bTitle, bSub, bSugg;
+  if (lastEn <= 4 || lastSn <= 4 || lastDol > 2 || (enTrend <= -2 && snTrend <= -1)) {
+    bColor='#c62828'; bBg='#fff5f5'; bBorder='#ef9a9a';
+    bEmoji='🔴'; bTitle='Attenzione';
+    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0?' · Dolore presente':''}`;
+    bSugg='<strong>Riduci il carico oggi.</strong> Trend negativo — considera una seduta di recupero attivo o deload.';
+  } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
+    bColor='#e65100'; bBg='#fffdf0'; bBorder='#ffe082';
+    bEmoji='⚠️'; bTitle='Monitorare';
+    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10`;
+    bSugg='<strong>Mantieni il carico della scorsa seduta.</strong> Energia in calo — allarga il warm-up e verifica come risponde.';
+  } else {
+    bColor='#2e7d32'; bBg='#f1f8f2'; bBorder='#a5d6a7';
+    bEmoji='🟢'; bTitle='In forma';
+    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
+    bSugg='<strong>Buon momento per progredire.</strong> Energia e sonno stabili — puoi aumentare carico o volume.';
+  }
+
+  // Last seduta difficulty
+  const lastPost = [...docs].reverse().find(d => d.tipo === 'post_seduta');
+  const labelMap = { facile:'Troppo facile', giusto:'Era giusto', impegnativo:'Impegnativo', duro:'Troppo duro' };
+  const colorMap = { facile:'#2e7d32', giusto:'#1565c0', impegnativo:'#e65100', duro:'#c62828' };
+  const lastDiffHtml = lastPost?.seduta
+    ? `<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:${colorMap[lastPost.seduta]}22;color:${colorMap[lastPost.seduta]};">${labelMap[lastPost.seduta]||lastPost.seduta}</span>`
+    : '';
+
+  // Trend bars helper
+  function miniBar(vals, invert) {
+    if (!vals.length) return '<span style="font-size:10px;color:var(--text3);">—</span>';
+    const max = invert ? Math.max(...vals,1) : 10;
+    return vals.map((v,i) => {
+      const h = Math.max(3, (v/max)*18);
+      const op = 0.3 + (i/Math.max(vals.length-1,1))*0.7;
+      const col = invert ? (v===0?'#2e7d32':'#e53935') : (v>=7?'#2e7d32':v>=5?'#e65100':'#e53935');
+      return `<div style="display:inline-block;width:8px;height:${h}px;background:${col};opacity:${op};border-radius:2px 2px 0 0;vertical-align:bottom;margin-right:2px;"></div>`;
+    }).join('');
+  }
+
+  const last  = arr => arr.length ? arr[arr.length-1] : null;
+  const arrow = (arr, invert) => {
+    if (arr.length < 2) return '';
+    const d = arr[arr.length-1] - arr[arr.length-2];
+    const up = d > 0, dn = d < 0;
+    const good = invert ? dn : up;
+    const bad  = invert ? up : dn;
+    const col  = good ? '#2e7d32' : bad ? '#e53935' : '#9e9e9e';
+    return `<span style="color:${col};font-size:12px;">${up?'↑':dn?'↓':'→'}</span>`;
+  };
+
+  wrap.innerHTML = `
+    <div style="background:${bBg};border:1.5px solid ${bBorder};border-radius:var(--radius);overflow:hidden;">
+      <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <div>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span style="font-size:14px;">${bEmoji}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--text);">${bTitle}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px;margin-left:21px;">${bSub}</div>
+        </div>
+        <span style="font-size:11px;color:var(--text3);font-weight:700;">▼</span>
+      </div>
+      <div style="background:var(--surface);border-top:1px solid var(--border);padding:10px 14px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px;">Trend ultime risposte</div>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">⚡ Energia</span>
+            <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(energia,false)}</div>
+            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#1565c0;width:16px;">${last(energia)??'—'}</span>
+            ${arrow(energia,false)}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">😴 Sonno</span>
+            <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(sonno,false)}</div>
+            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#6a1b9a;width:16px;">${last(sonno)??'—'}</span>
+            ${arrow(sonno,false)}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">🦴 Dolore</span>
+            <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(dolore,true)}</div>
+            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#e53935;width:16px;">${last(dolore)===0?'✓':last(dolore)??'—'}</span>
+            ${arrow(dolore,true)}
+          </div>
+        </div>
+        ${lastDiffHtml ? `<div style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid var(--border);margin-bottom:8px;"><span style="font-size:11px;color:var(--text3);">Ultima seduta:</span>${lastDiffHtml}</div>` : ''}
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;border-left:3px solid #1565c0;font-size:12px;line-height:1.5;">${bSugg}</div>
+      </div>
+    </div>`;
 }
 
 // ===== FOLLOW-UP BANNER IN MODALE SEDUTA =====
