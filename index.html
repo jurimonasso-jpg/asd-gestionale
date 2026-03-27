@@ -11825,27 +11825,33 @@ async function loadFollowupCharts(clientId) {
     function fuBuildHeatmap(docs) {
       const days    = ['L','M','M','G','V','S','D'];
       const metrics = [
-        { key:'energia',         label:'⚡ En.',  isDolore:false, color:'var(--accent2)' },
-        { key:'sonno',           label:'😴 Son.', isDolore:false, color:'#6a1b9a' },
-        { key:'intensitaDolore', label:'🦴 Dol.', isDolore:true,  color:'var(--accent)' },
+        { key:'energia',         label:'⚡ En.',   isDolore:false, isStress:false },
+        { key:'sonno',           label:'😴 Son.',  isDolore:false, isStress:false },
+        { key:'intensitaDolore', label:'🦴 Dol.',  isDolore:true,  isStress:false },
+        { key:'stress',          label:'😤 Str.',  isDolore:false, isStress:true  },
       ];
       // Map docs to day-of-week (0=Mon)
       const byDay = Array.from({length:7}, () => []);
       docs.forEach(d => {
-        const ts = d.timestamp?.toDate?.() || (d.date ? new Date(d.date.split('/').reverse().join('-')) : null);
-        if (!ts) return;
+        const ts = d.timestamp?.toDate?.() || (d.date ? new Date(d.date) : null);
+        if (!ts || isNaN(ts)) return;
         const dow = (ts.getDay() + 6) % 7; // 0=Mon
         byDay[dow].push(d);
       });
 
-      function cellStyle(vals, isDolore) {
+      function cellStyle(vals, isDolore, isStress) {
         if (!vals.length) return 'background:var(--surface2);color:var(--text3);';
         const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
         if (isDolore) {
-          return avg === 0
-            ? 'background:var(--green-bg);color:var(--green);'
-            : avg < 3 ? 'background:#fff3e0;color:var(--yellow);'
-            : 'background:var(--red-bg);color:var(--red);';
+          if (avg === 0) return 'background:var(--green-bg);color:var(--green);';
+          if (avg < 4)  return 'background:#fff3e0;color:var(--yellow);';
+          return 'background:var(--red-bg);color:var(--red);';
+        }
+        if (isStress) {
+          // stress: high = bad
+          if (avg <= 3) return 'background:var(--green-bg);color:var(--green);';
+          if (avg <= 6) return 'background:#fff3e0;color:var(--yellow);';
+          return 'background:var(--red-bg);color:var(--red);';
         }
         if (avg >= 7) return 'background:var(--green-bg);color:var(--green);';
         if (avg >= 5) return 'background:#fff3e0;color:var(--yellow);';
@@ -11853,7 +11859,6 @@ async function loadFollowupCharts(clientId) {
       }
 
       let html = `<div style="display:grid;grid-template-columns:46px repeat(7,1fr);gap:2px;font-size:10px;">`;
-      // header
       html += `<div></div>`;
       days.forEach(d => { html += `<div style="text-align:center;font-weight:700;color:var(--text3);font-family:DM Mono,monospace;padding-bottom:3px;">${d}</div>`; });
       metrics.forEach(m => {
@@ -11861,7 +11866,7 @@ async function loadFollowupCharts(clientId) {
         byDay.forEach((dayDocs) => {
           const vals = dayDocs.map(d => d[m.key]).filter(v => v != null && v !== undefined);
           const avg  = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
-          const style = cellStyle(vals, m.isDolore);
+          const style = cellStyle(vals, m.isDolore, m.isStress);
           const display = avg === null ? '·' : m.isDolore ? (avg === 0 ? '✓' : avg) : avg;
           html += `<div style="${style}border-radius:4px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:DM Mono,monospace;">${display}</div>`;
         });
@@ -11875,22 +11880,23 @@ async function loadFollowupCharts(clientId) {
       return reversed.map(d => {
         const diff   = d.seduta ? DIFF_MAP[d.seduta] : null;
         const isPost = d.tipo === 'post_seduta';
+        const isSett = d.tipo === 'check_settimanale';
         return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
           <div style="width:9px;height:9px;border-radius:50%;background:${isPost?'#1565c0':'#6a1b9a'};flex-shrink:0;"></div>
           <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;min-width:38px;flex-shrink:0;">${(d.date||'—').slice(0,5).replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2')}</div>
           <div style="flex:1;">
-            <div style="font-size:13px;font-weight:700;">${isPost ? '⚡ Post-allenamento' : '📅 Check settimanale'}</div>
+            <div style="font-size:13px;font-weight:700;">${isPost ? '⚡ Post-allenamento' : isSett ? '📅 Check settimanale' : '📋 Follow-up'}</div>
             <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
               ${diff ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${diff.color}22;color:${diff.color};">${diff.label}</span>` : ''}
               ${d.intensitaDolore > 0 ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ffebee;color:#c62828;">⚠️ Dolore</span>` : ''}
+              ${d.intensitaDolore > 0 && d.zoneDolorose?.length ? d.zoneDolorose.map(z=>`<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label}</span>`).join('') : ''}
               ${d.esercizi && d.esercizi !== 'null' ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);">🏠 ${d.esercizi}</span>` : ''}
             </div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
             ${d.energia  != null ? `<div style="font-size:11px;color:var(--text3);">⚡ <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.energia}</b></div>` : ''}
             ${d.sonno    != null ? `<div style="font-size:11px;color:var(--text3);">😴 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.sonno}</b></div>` : ''}
-            ${d.stress   != null ? `<div style="font-size:11px;color:var(--text3);">😤 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.stress}</b></div>` : ''}
-          </div>
+            ${d.stress   != null ? `<div style="font-size:11px;color:var(--text3);">😤 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.stress}</b></div>` : ''}          </div>
         </div>`;
       }).join('');
     }
@@ -11898,7 +11904,7 @@ async function loadFollowupCharts(clientId) {
     // ── render all ────────────────────────────────────────────────
     const allDocs  = docs;
     const postDocs = docs.filter(d => d.tipo === 'post_seduta');
-    const wkDocs   = docs.filter(d => d.tipo === 'settimanale' || d.tipo === 'weekly');
+    const wkDocs   = docs.filter(d => d.tipo === 'check_settimanale');
     const lastDate = allDocs[allDocs.length-1];
     const lastLbl  = lastDate?.date || lastDate?.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '—';
 
@@ -11984,7 +11990,8 @@ async function loadFollowupCharts(clientId) {
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
             <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🦴 Dolore</div>
             <div style="font-size:14px;font-weight:700;margin-top:4px;color:${lpDol>0?'var(--red)':'var(--green)'};">${lpDol>0?'⚠️ Sì':'✅ No'}</div>
-            <div style="font-size:11px;color:var(--text3);">a riposo</div>
+            ${lpDol>0 && lastPost?.zoneDolorose?.length ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px;">${lastPost.zoneDolorose.map(z=>`<span style="font-size:9px;padding:1px 6px;border-radius:10px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label}</span>`).join('')}</div>` : ''}
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">a riposo</div>
           </div>
         </div>
       </div>
