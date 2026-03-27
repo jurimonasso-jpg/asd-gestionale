@@ -93,9 +93,43 @@
   .toggle-btn.sel-no { border-color: var(--green); background: var(--green-bg); color: var(--green); }
   .toggle-btn.sel-si { border-color: var(--red); background: var(--red-bg); color: var(--red); }
 
-  /* PAIN DETAIL */
   .pain-detail { margin-top: 18px; display: none; flex-direction: column; gap: 18px; }
   .pain-detail.visible { display: flex; }
+
+  .zone-category-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 14px;
+    margin-bottom: 7px;
+  }
+  #zoneContainer .zone-grid { margin-bottom: 2px; }
+
+  .zone-slider-block {
+    background: var(--red-bg);
+    border: 1px solid #f5c6c6;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 8px;
+  }
+  .zone-slider-block:first-child { margin-top: 0; }
+  .zone-slider-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--red);
+    margin-bottom: 10px;
+  }
+  .zone-pain-val {
+    text-align: center;
+    font-size: 40px;
+    font-weight: 800;
+    color: var(--red);
+    line-height: 1;
+    margin-bottom: 10px;
+  }
 
   .zone-grid { display: flex; flex-wrap: wrap; gap: 8px; }
   .zone-chip {
@@ -107,9 +141,6 @@
   }
   .zone-chip.selected { border-color: var(--red); background: var(--red-bg); color: var(--red); font-weight: 600; }
 
-  .pain-slider-section { display: none; margin-top: 4px; }
-  .pain-slider-section.visible { display: block; }
-  .pain-val { text-align: center; font-size: 52px; font-weight: 800; color: var(--red); line-height: 1; margin-bottom: 14px; }
   input.pain-range::-webkit-slider-thumb { background: var(--red) !important; box-shadow: 0 2px 8px rgba(198,40,40,0.3) !important; }
 
   /* ESERCIZI 3 opzioni */
@@ -212,30 +243,77 @@
       <div class="pain-detail" id="painDetail">
         <div>
           <div class="section-label" style="margin-bottom:10px">Dove hai sentito il dolore?</div>
-          <div class="zone-grid">
-            <div class="zone-chip" onclick="toggleZone('Collo', this)">Collo</div>
-            <div class="zone-chip" onclick="toggleZone('Trap Dx', this)">Trap Dx</div>
-            <div class="zone-chip" onclick="toggleZone('Trap Sx', this)">Trap Sx</div>
-            <div class="zone-chip" onclick="toggleZone('Spalla Dx', this)">Spalla Dx</div>
-            <div class="zone-chip" onclick="toggleZone('Spalla Sx', this)">Spalla Sx</div>
-            <div class="zone-chip" onclick="toggleZone('Dorso', this)">Dorso</div>
-            <div class="zone-chip" onclick="toggleZone('Lombare', this)">Lombare</div>
-            <div class="zone-chip" onclick="toggleZone('Anca Dx', this)">Anca Dx</div>
-            <div class="zone-chip" onclick="toggleZone('Anca Sx', this)">Anca Sx</div>
-            <div class="zone-chip" onclick="toggleZone('Ginocchio Dx', this)">Ginocchio Dx</div>
-            <div class="zone-chip" onclick="toggleZone('Ginocchio Sx', this)">Ginocchio Sx</div>
-            <div class="zone-chip" onclick="toggleZone('Tibia Dx', this)">Tibia Dx</div>
-            <div class="zone-chip" onclick="toggleZone('Tibia Sx', this)">Tibia Sx</div>
-            <div class="zone-chip" onclick="toggleZone('Altro', this)">Altro</div>
+          <div id="zoneContainer">
+            <div class="zone-category-label">Testa / Collo / Viso</div>
+            <div class="zone-grid">
+              <div class="zone-chip" onclick="toggleZone('Faccia', this)">Faccia</div>
+              <div class="zone-chip" onclick="toggleZone('Mandibola Dx', this)">Mandibola Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Mandibola Sx', this)">Mandibola Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Testa (retro)', this)">Testa (retro)</div>
+              <div class="zone-chip" onclick="toggleZone('Collo', this)">Collo</div>
+            </div>
+            <div class="zone-category-label">Spalla / Schiena</div>
+            <div class="zone-grid">
+              <div class="zone-chip" onclick="toggleZone('Trap Sx', this)">Trap Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Trap Dx', this)">Trap Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Spalla Sx', this)">Spalla Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Spalla Dx', this)">Spalla Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Dorso (schiena alta)', this)">Dorso</div>
+              <div class="zone-chip" onclick="toggleZone('Scapola Sx', this)">Scapola Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Scapola Dx', this)">Scapola Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Lombare', this)">Lombare</div>
+              <div class="zone-chip" onclick="toggleZone('Petto Dx', this)">Petto Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Petto Sx', this)">Petto Sx</div>
+            </div>
+            <div class="zone-category-label">Core / Addome</div>
+            <div class="zone-grid">
+              <div class="zone-chip" onclick="toggleZone('Stomaco', this)">Stomaco</div>
+              <div class="zone-chip" onclick="toggleZone('Intestino / Addome', this)">Intestino / Addome</div>
+              <div class="zone-chip" onclick="toggleZone('Pube / Inguine', this)">Pube / Inguine</div>
+            </div>
+            <div class="zone-category-label">Braccio / Mano</div>
+            <div class="zone-grid">
+              <div class="zone-chip" onclick="toggleZone('Bicipite Dx', this)">Bicipite Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Bicipite Sx', this)">Bicipite Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Gomito Dx', this)">Gomito Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Gomito Sx', this)">Gomito Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Polso Dx', this)">Polso Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Polso Sx', this)">Polso Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Mano/Dita Dx', this)">Mano/Dita Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Mano/Dita Sx', this)">Mano/Dita Sx</div>
+            </div>
+            <div class="zone-category-label">Anca / Gluteo</div>
+            <div class="zone-grid">
+              <div class="zone-chip" onclick="toggleZone('Anca Sx', this)">Anca Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Anca Dx', this)">Anca Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Gluteo Sx', this)">Gluteo Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Gluteo Dx', this)">Gluteo Dx</div>
+            </div>
+            <div class="zone-category-label">Coscia / Ginocchio</div>
+            <div class="zone-grid">
+              <div class="zone-chip" onclick="toggleZone('Coscia Dx (fronte)', this)">Coscia Dx (fronte)</div>
+              <div class="zone-chip" onclick="toggleZone('Coscia Sx (fronte)', this)">Coscia Sx (fronte)</div>
+              <div class="zone-chip" onclick="toggleZone('Coscia Sx (retro)', this)">Coscia Sx (retro)</div>
+              <div class="zone-chip" onclick="toggleZone('Coscia Dx (retro)', this)">Coscia Dx (retro)</div>
+              <div class="zone-chip" onclick="toggleZone('Ginocchio Dx', this)">Ginocchio Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Ginocchio Sx', this)">Ginocchio Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Ginocchio Sx (retro)', this)">Ginocchio Sx (retro)</div>
+              <div class="zone-chip" onclick="toggleZone('Ginocchio Dx (retro)', this)">Ginocchio Dx (retro)</div>
+            </div>
+            <div class="zone-category-label">Gamba / Piede</div>
+            <div class="zone-grid">
+              <div class="zone-chip" onclick="toggleZone('Tibia Dx', this)">Tibia Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Tibia Sx', this)">Tibia Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Polpaccio Sx', this)">Polpaccio Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Polpaccio Dx', this)">Polpaccio Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Caviglia Dx', this)">Caviglia Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Caviglia Sx', this)">Caviglia Sx</div>
+              <div class="zone-chip" onclick="toggleZone('Piede Dx', this)">Piede Dx</div>
+              <div class="zone-chip" onclick="toggleZone('Piede Sx', this)">Piede Sx</div>
+            </div>
           </div>
         </div>
-        <div class="pain-slider-section" id="painSliderSection">
-          <div class="section-label" style="margin-bottom:10px">Quanto era intenso? (1-10)</div>
-          <div class="pain-val" id="painVal">5</div>
-          <input type="range" min="1" max="10" value="5" id="painSlider" class="pain-range"
-            oninput="updateSlider('pain', this.value)">
-          <div class="slider-labels"><span>1 — Lieve</span><span>10 — Forte</span></div>
-        </div>
+        <div id="painSlidersContainer"></div>
       </div>
     </div>
 
@@ -355,13 +433,13 @@
 </script>
 
 <script>
-  const state = { energia: 5, dolore: null, zone: [], dolorePain: 5, sonno: 5, stress: 5, esercizi: null, note: '' };
+  const state = { energia: 5, dolore: null, zone: {}, sonno: 5, stress: 5, esercizi: null, note: '' };
 
   function updateProgress() {
-    const doloreOk = state.dolore === 'no' || (state.dolore === 'si' && state.zone.length > 0);
+    const doloreOk = state.dolore === 'no' || (state.dolore === 'si' && Object.keys(state.zone).length > 0);
     const allOk = doloreOk && state.esercizi !== null;
     document.getElementById('submitBtn').disabled = !allOk;
-    let filled = 3; // energia + sonno + stress sempre presenti
+    let filled = 3;
     if (state.dolore !== null) filled++;
     if (state.esercizi !== null) filled++;
     document.getElementById('progressFill').style.width = ((filled / 5) * 100) + '%';
@@ -374,9 +452,6 @@
       const el = document.getElementById('energiaVal');
       el.textContent = val;
       el.style.color = val <= 3 ? 'var(--red)' : val <= 6 ? 'var(--yellow)' : 'var(--green)';
-    } else if (type === 'pain') {
-      state.dolorePain = val;
-      document.getElementById('painVal').textContent = val;
     } else if (type === 'sonno') {
       state.sonno = val;
       document.getElementById('sonnoVal').textContent = val;
@@ -389,15 +464,22 @@
     updateProgress();
   }
 
+  function zoneId(zona) { return zona.replace(/[^a-zA-Z0-9]/g, '_'); }
+
+  function updateZonePain(zona, val) {
+    state.zone[zona].intensity = parseInt(val);
+    document.getElementById('zpval-' + zoneId(zona)).textContent = val;
+  }
+
   function selectDolore(val, el) {
     document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('sel-no','sel-si'));
     state.dolore = val;
     if (val === 'no') {
       el.classList.add('sel-no');
       document.getElementById('painDetail').classList.remove('visible');
-      document.getElementById('painSliderSection').classList.remove('visible');
-      state.zone = [];
+      state.zone = {};
       document.querySelectorAll('.zone-chip').forEach(c => c.classList.remove('selected'));
+      document.getElementById('painSlidersContainer').innerHTML = '';
     } else {
       el.classList.add('sel-si');
       document.getElementById('painDetail').classList.add('visible');
@@ -407,10 +489,27 @@
 
   function toggleZone(zona, el) {
     el.classList.toggle('selected');
-    state.zone = el.classList.contains('selected')
-      ? [...state.zone, zona]
-      : state.zone.filter(z => z !== zona);
-    document.getElementById('painSliderSection').classList.toggle('visible', state.zone.length > 0);
+    const container = document.getElementById('painSlidersContainer');
+    if (el.classList.contains('selected')) {
+      state.zone[zona] = { intensity: 5 };
+      const sid = zoneId(zona);
+      const block = document.createElement('div');
+      block.className = 'zone-slider-block';
+      block.id = 'zblock-' + sid;
+      block.innerHTML = `
+        <div class="zone-slider-label">📍 ${zona}</div>
+        <div class="section-label" style="margin-bottom:8px">Intensità (1-10)</div>
+        <div class="zone-pain-val" id="zpval-${sid}">5</div>
+        <input type="range" min="1" max="10" value="5" class="pain-range"
+          oninput="updateZonePain('${zona.replace(/'/g,"\\'")}', this.value)">
+        <div class="slider-labels"><span>1 — Lieve</span><span>10 — Forte</span></div>
+      `;
+      container.appendChild(block);
+    } else {
+      delete state.zone[zona];
+      const block = document.getElementById('zblock-' + zoneId(zona));
+      if (block) block.remove();
+    }
     updateProgress();
   }
 
@@ -426,11 +525,15 @@
     btn.disabled = true;
     btn.textContent = 'Invio in corso...';
     state.note = document.getElementById('noteLibere').value.trim();
+    const zoneDolorose = Object.entries(state.zone).map(([label, data]) => ({ label, intensity: data.intensity }));
+    const intensitaMedia = zoneDolorose.length > 0
+      ? Math.round(zoneDolorose.reduce((s, z) => s + z.intensity, 0) / zoneDolorose.length)
+      : null;
     await window._submitToFirebase({
       energia: state.energia,
       dolore: state.dolore === 'si',
-      zoneDolorose: state.dolore === 'si' ? state.zone.map(z => ({ label: z, intensity: state.dolorePain })) : [],
-      intensitaDolore: state.dolore === 'si' ? state.dolorePain : null,
+      zoneDolorose: state.dolore === 'si' ? zoneDolorose : [],
+      intensitaDolore: state.dolore === 'si' ? intensitaMedia : null,
       sonno: state.sonno,
       stress: state.stress,
       esercizi: state.esercizi,
