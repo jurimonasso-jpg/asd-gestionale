@@ -4790,9 +4790,9 @@ function openClientDetail(clientId) {
               </div>
             </div>
             ${client.followUpEnabled ? `
-            <a class="btn btn-secondary btn-sm" href="${getFollowUpWaLink(` + client.id + `)}" target="_blank" rel="noreferrer" style="text-decoration:none;">
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();window.open(getFollowUpWaLink(${client.id}),'_blank','noopener,noreferrer')">
               💬 Invia su WhatsApp
-            </a>` : ''}
+            </button>` : ''}
           </div>
           ${client.followUpEnabled ? `
           <div>
@@ -11572,10 +11572,6 @@ function renderFollowUpBanner() {
             ? 'Ciao ' + (c.nome||c.name||'') + '! 💪\n\nCome ti sei sentito/a durante la seduta di ieri?\nCompila il tuo follow-up qui:\n\n' + linkPost
             : 'Ciao ' + (c.nome||c.name||'') + '! 👋\n\nCheck settimanale — come è andata questa settimana?\nCompila qui:\n\n' + linkSett;
           const waUrl2 = (tel ? 'https://wa.me/' + tel : 'https://wa.me/') + '?text=' + encodeURIComponent(waText);
-          const isAndroid2 = /android/i.test(navigator.userAgent);
-          const waLink = (isAndroid2 && tel)
-            ? 'intent://send/' + tel + '?text=' + encodeURIComponent(waText) + '#Intent;scheme=smsto;package=com.whatsapp;action=android.intent.action.SENDTO;end'
-            : waUrl2;
           const initials = ((c.nome||'')[0]||'') + ((c.cognome||'')[0]||'');
           return `
           <div id="fu-row-${c.id}-${type}" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">
@@ -11583,7 +11579,7 @@ function renderFollowUpBanner() {
             <div style="flex:1;min-width:0;">
               <div style="font-size:12px;font-weight:700;">${c.nome} ${c.cognome}</div>
               <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
-                <a href="${waLink}" target="_blank" rel="noreferrer" style="font-size:10px;font-family:DM Mono,monospace;color:#25D366;text-decoration:none;background:rgba(37,211,102,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(37,211,102,0.25);">💬 WhatsApp</a>
+                <button onclick="event.stopPropagation();window.open('${waUrl2}','_blank','noopener,noreferrer')" style="font-size:10px;font-family:DM Mono,monospace;color:#25D366;background:rgba(37,211,102,0.08);padding:2px 8px;border-radius:10px;border:1px solid rgba(37,211,102,0.25);cursor:pointer;">💬 WhatsApp</button>
                 <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--text3);">${label}</span>
               </div>
             </div>
@@ -11620,12 +11616,7 @@ function getFollowUpWaLink(clientId) {
   const linkPost = FOLLOWUP_BASE_URL + '/followup-post-seduta.html?clientId=' + clientId + '&nome=' + nome;
   const linkSett = FOLLOWUP_BASE_URL + '/followup-settimanale.html?clientId=' + clientId + '&nome=' + nome;
   const msg = 'Ciao ' + (c.nome || c.name) + '! 👋\n\nEcco i tuoi link di follow-up personali:\n\n📋 *Post seduta* (compila dopo ogni allenamento):\n' + linkPost + '\n\n📊 *Check settimanale* (compila una volta a settimana):\n' + linkSett + '\n\nGrazie! 💪';
-  const waUrl = (tel ? 'https://wa.me/' + tel : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
-  const isAndroid = /android/i.test(navigator.userAgent);
-  if (isAndroid && tel) {
-    return 'intent://send/' + tel + '?text=' + encodeURIComponent(msg) + '#Intent;scheme=smsto;package=com.whatsapp;action=android.intent.action.SENDTO;end';
-  }
-  return waUrl;
+  return (tel ? 'https://wa.me/' + tel : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
 }
 
 async function loadFollowupCharts(clientId) {
