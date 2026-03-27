@@ -11873,25 +11873,24 @@ async function loadFollowupCharts(clientId) {
     function fuBuildHistory(docs) {
       const reversed = [...docs].reverse().slice(0, 10);
       return reversed.map(d => {
-        const diff = d.difficolta ? DIFF_MAP[d.difficolta] : null;
+        const diff   = d.difficolta ? DIFF_MAP[d.difficolta] : null;
         const isPost = d.tipo === 'post' || d.difficolta;
-        const metrics = [
-          d.energia != null ? `⚡ ${d.energia}` : null,
-          d.sonno   != null ? `😴 ${d.sonno}`   : null,
-          d.stress  != null ? `😤 ${d.stress}`  : null,
-        ].filter(Boolean).join(' · ');
-        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-          <div style="width:8px;height:8px;border-radius:50%;background:${isPost?'var(--accent2)':'#6a1b9a'};flex-shrink:0;"></div>
-          <div style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;min-width:52px;">${d.date||'—'}</div>
+        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+          <div style="width:9px;height:9px;border-radius:50%;background:${isPost?'#1565c0':'#6a1b9a'};flex-shrink:0;"></div>
+          <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;min-width:38px;flex-shrink:0;">${(d.date||'—').slice(0,5).replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2')}</div>
           <div style="flex:1;">
-            <div style="font-size:12px;font-weight:600;">${isPost ? '⚡ Post-allenamento' : '📅 Check settimanale'}</div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px;">
-              ${diff ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:${diff.color}22;color:${diff.color};">${d.difficolta}</span>` : ''}
-              ${d.intensitaDolore > 0 ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--red-bg);color:var(--red);">⚠️ Dolore</span>` : ''}
-              ${d.esercizi ? `<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:var(--surface2);color:var(--text3);">🏠 ${d.esercizi}</span>` : ''}
+            <div style="font-size:13px;font-weight:700;">${isPost ? '⚡ Post-allenamento' : '📅 Check settimanale'}</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
+              ${diff ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${diff.color}22;color:${diff.color};">${d.difficolta}</span>` : ''}
+              ${d.intensitaDolore > 0 ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ffebee;color:#c62828;">⚠️ Dolore</span>` : ''}
+              ${d.esercizi && d.esercizi !== 'null' ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);">🏠 ${d.esercizi}</span>` : ''}
             </div>
           </div>
-          <div style="text-align:right;font-size:11px;color:var(--text3);font-family:DM Mono,monospace;white-space:nowrap;">${metrics}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
+            ${d.energia  != null ? `<div style="font-size:11px;color:var(--text3);">⚡ <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.energia}</b></div>` : ''}
+            ${d.sonno    != null ? `<div style="font-size:11px;color:var(--text3);">😴 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.sonno}</b></div>` : ''}
+            ${d.stress   != null ? `<div style="font-size:11px;color:var(--text3);">😤 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.stress}</b></div>` : ''}
+          </div>
         </div>`;
       }).join('');
     }
@@ -11903,36 +11902,123 @@ async function loadFollowupCharts(clientId) {
     const lastDate = allDocs[allDocs.length-1];
     const lastLbl  = lastDate?.date || lastDate?.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '—';
 
+    // ── semaforo calc ──
+    const recentVals = allDocs.slice(-4);
+    const lastEn  = recentVals.map(d=>d.energia).filter(v=>v!=null).slice(-1)[0] ?? 5;
+    const lastSn  = recentVals.map(d=>d.sonno).filter(v=>v!=null).slice(-1)[0] ?? 5;
+    const lastDol = recentVals.map(d=>d.intensitaDolore).filter(v=>v!=null).slice(-1)[0] ?? 0;
+    const enArr   = recentVals.map(d=>d.energia).filter(v=>v!=null);
+    const enTrend = enArr.length > 1 ? enArr[enArr.length-1] - enArr[enArr.length-2] : 0;
+    const snArr   = recentVals.map(d=>d.sonno).filter(v=>v!=null);
+    const snTrend = snArr.length > 1 ? snArr[snArr.length-1] - snArr[snArr.length-2] : 0;
+    let semColor, semEmoji, semTitle, semSub;
+    if (lastEn <= 4 || lastSn <= 4 || lastDol > 2 || (enTrend <= -2 && snTrend <= -1)) {
+      semColor='#fff5f5'; semEmoji='🔴'; semTitle='Attenzione'; semSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0?' · Dolore presente':''}`;
+    } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
+      semColor='#fffdf0'; semEmoji='⚠️'; semTitle='Monitorare'; semSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10`;
+    } else {
+      semColor='#f1f8f2'; semEmoji='🟢'; semTitle='In forma'; semSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
+    }
+
+    // ── last post-seduta doc ──
+    const lastPost = [...allDocs].reverse().find(d => d.tipo === 'post' || d.difficolta) || allDocs[allDocs.length-1];
+    const lpDate   = lastPost ? (fmtDateLong(lastPost.date || lastPost.timestamp?.toDate?.()?.toLocaleDateString('it-IT'))) : '—';
+    const lpEn     = lastPost?.energia ?? '—';
+    const lpSn     = lastPost?.sonno   ?? '—';
+    const lpDol    = lastPost?.intensitaDolore;
+    const lpDiff   = lastPost?.difficolta;
+    const lpDiffInfo = lpDiff ? DIFF_MAP[lpDiff] : null;
+
+    function fmtDateLong(s) {
+      if (!s) return '—';
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+        const d = new Date(s); return d.getDate() + ' ' + months[d.getMonth()];
+      }
+      if (/^\d{2}\/\d{2}/.test(s)) {
+        const months = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+        const parts = s.split('/'); return parseInt(parts[0]) + ' ' + months[parseInt(parts[1])-1];
+      }
+      return s;
+    }
+
     container.innerHTML = `
-      <div style="font-size:11px;color:var(--text3);font-family:DM Mono,monospace;margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:12px;">
         ${docs.length} risposte totali · ultima: ${lastLbl}
       </div>
 
-      <!-- FILTRI -->
-      <div style="display:flex;gap:4px;margin-bottom:10px;">
-        <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
-        <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
-        <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:'Outfit',sans-serif;">Settimanale</button>
+      <!-- SEMAFORO -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">⚡ Stato oggi</div>
+      <div style="background:${semColor};border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">
+        <div style="font-size:22px;flex-shrink:0;">${semEmoji}</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;">${semTitle}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px;">${semSub}</div>
+        </div>
       </div>
 
-      <!-- GRAFICO -->
-      <div id="fu-svg-${clientId}" style="margin-bottom:12px;padding-top:4px;"></div>
+      <!-- ULTIMA RISPOSTA SNAPSHOT -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📌 Ultima risposta — ${lpDate}</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;">
+          ${lastPost?.difficolta ? 'Post-allenamento' : 'Check settimanale'} · ${lpDate}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">⚡ Energia</div>
+            <div style="font-size:22px;font-weight:800;color:${lpEn<=4?'var(--red)':lpEn<=6?'var(--yellow)':'var(--green)'};">${lpEn}</div>
+            <div style="font-size:11px;color:var(--text3);">su 10</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🔥 Seduta</div>
+            ${lpDiffInfo
+              ? `<div style="margin-top:6px;"><span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:${lpDiffInfo.color}22;color:${lpDiffInfo.color};">${lpDiff}</span></div>`
+              : `<div style="font-size:13px;color:var(--text3);margin-top:4px;">—</div>`}
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;">percepita</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">😴 Sonno post</div>
+            <div style="font-size:22px;font-weight:800;color:${lpSn<=4?'var(--red)':lpSn<=6?'var(--yellow)':'var(--green)'};">${lpSn}</div>
+            <div style="font-size:11px;color:var(--text3);">su 10</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🦴 Dolore</div>
+            <div style="font-size:14px;font-weight:700;margin-top:4px;color:${lpDol>0?'var(--red)':'var(--green)'};">${lpDol>0?'⚠️ Sì':'✅ No'}</div>
+            <div style="font-size:11px;color:var(--text3);">a riposo</div>
+          </div>
+        </div>
+      </div>
 
-      <!-- LEGENDA -->
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-        <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--accent2);">● Energia</span>
-        <span style="font-size:10px;font-family:DM Mono,monospace;color:#6a1b9a;">● Sonno</span>
-        <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--accent);">● Dolore</span>
-        <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--yellow);">● Stress</span>
-        <span style="font-size:10px;font-family:DM Mono,monospace;color:var(--text3);">▲ Difficoltà seduta</span>
+      <!-- TREND GRAFICO -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📈 Trend</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;font-weight:700;">Andamento nel tempo</div>
+          <div style="display:flex;gap:4px;background:var(--surface2);border-radius:8px;padding:3px;">
+            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:none;background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
+            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
+            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Settimanale</button>
+          </div>
+        </div>
+        <div id="fu-svg-${clientId}" style="padding-top:2px;"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;">
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#1565c0;">● Energia</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#6a1b9a;">● Sonno</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e53935;">● Dolore</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e65100;">● Stress</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);">▲ Difficoltà seduta</span>
+        </div>
       </div>
 
       <!-- HEATMAP -->
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:6px;">🌡️ Heatmap per giorno</div>
-      <div style="margin-bottom:14px;">${fuBuildHeatmap(allDocs)}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">🌡️ Heatmap settimane</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Ultimi 4 settimane</div>
+        ${fuBuildHeatmap(allDocs)}
+      </div>
 
       <!-- STORICO -->
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:4px;">📅 Ultime risposte</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📅 Storico risposte</div>
       <div id="fu-history-${clientId}">${fuBuildHistory(allDocs)}</div>
     `;
 
