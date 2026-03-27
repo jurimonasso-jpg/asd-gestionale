@@ -9751,6 +9751,7 @@ function renderDashboard() {
   }
 
   // ── FOLLOW-UP BANNER ──────────────────────────────────────────────────────
+  autoArchivePassedFixedSlots();
   renderFollowUpBanner();
 
   // ── AGENDA OGGI nella dashboard ─────────────────────────────────────────
@@ -11525,13 +11526,12 @@ function renderFollowUpBanner() {
 
   const items = [];
 
-  // ── POST-SEDUTA: clienti che hanno avuto una seduta ieri (solo archiviate) ──
+  // ── POST-SEDUTA: sedute archiviate ieri con outcome 'done' ──────────────────
   const archive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]');
 
   fuClients.forEach(c => {
     const key = _fuDismissKey(c.id, 'post', yestStr);
-    if (localStorage.getItem(key)) return;
-    // Usa solo sessions_archive con outcome 'done' = sedute effettivamente svolte
+    if (localStorage.getItem(key)) return; // già segnato come inviato
     const hadSession = archive.some(s =>
       String(s.clientId) === String(c.id) &&
       s.date === yestStr &&
@@ -11567,11 +11567,12 @@ function renderFollowUpBanner() {
           const nome = encodeURIComponent(c.name || c.nome || '');
           const linkPost = FOLLOWUP_BASE + '/followup-post-seduta.html?clientId=' + c.id + '&nome=' + nome;
           const linkSett = FOLLOWUP_BASE + '/followup-settimanale.html?clientId=' + c.id + '&nome=' + nome;
-          const tel = (c.telefono || '').replace(/\s+/g, '');
+          const tel = (c.phone || c.telefono || '').replace(/[\s\-().]/g, '');
           const waText = type === 'post'
             ? 'Ciao ' + (c.nome||c.name||'') + '! 💪\n\nCome ti sei sentito/a durante la seduta di ieri?\nCompila il tuo follow-up qui:\n\n' + linkPost
             : 'Ciao ' + (c.nome||c.name||'') + '! 👋\n\nCheck settimanale — come è andata questa settimana?\nCompila qui:\n\n' + linkSett;
-          const waUrl2 = (tel ? 'https://wa.me/' + tel : 'https://wa.me/') + '?text=' + encodeURIComponent(waText);
+          const telClean = tel.startsWith('+') ? tel.slice(1) : tel.replace(/^00/, '');
+          const waUrl2 = (telClean ? 'https://wa.me/' + telClean : 'https://wa.me/') + '?text=' + encodeURIComponent(waText);
           const initials = ((c.nome||'')[0]||'') + ((c.cognome||'')[0]||'');
           return `
           <div id="fu-row-${c.id}-${type}" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.04);">
@@ -11611,12 +11612,13 @@ function toggleFollowUp(clientId) {
 function getFollowUpWaLink(clientId) {
   const c = clients.find(cl => cl.id === clientId);
   if (!c) return '#';
-  const tel = (c.telefono || '').replace(/\s+/g, '');
+  const tel = (c.phone || c.telefono || '').replace(/[\s\-().]/g, '');
+  const telClean = tel.startsWith('+') ? tel.slice(1) : tel.replace(/^00/, '');
   const nome = encodeURIComponent(c.nome || c.name || '');
   const linkPost = FOLLOWUP_BASE_URL + '/followup-post-seduta.html?clientId=' + clientId + '&nome=' + nome;
   const linkSett = FOLLOWUP_BASE_URL + '/followup-settimanale.html?clientId=' + clientId + '&nome=' + nome;
   const msg = 'Ciao ' + (c.nome || c.name) + '! 👋\n\nEcco i tuoi link di follow-up personali:\n\n📋 *Post seduta* (compila dopo ogni allenamento):\n' + linkPost + '\n\n📊 *Check settimanale* (compila una volta a settimana):\n' + linkSett + '\n\nGrazie! 💪';
-  return (tel ? 'https://wa.me/' + tel : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
+  return (telClean ? 'https://wa.me/' + telClean : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
 }
 
 async function loadFollowupCharts(clientId) {
