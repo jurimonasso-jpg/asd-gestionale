@@ -11738,8 +11738,8 @@ async function loadFollowupCharts(clientId) {
     };
 
     function fuBuildSvgChart(filteredDocs) {
-      const W = 320, H = 140;
-      const PAD = { top: 18, right: 12, bottom: 28, left: 26 };
+      const W = 340, H = 170;
+      const PAD = { top: 28, right: 14, bottom: 32, left: 28 };
       const cW = W - PAD.left - PAD.right;
       const cH = H - PAD.top - PAD.bottom;
       const n  = filteredDocs.length;
@@ -11747,39 +11747,48 @@ async function loadFollowupCharts(clientId) {
       const xPos = i => PAD.left + (n > 1 ? (i / (n-1)) * cW : cW / 2);
       const yPos = v => PAD.top + cH - (v / 10) * cH;
 
+      // Format date: accept dd/mm, yyyy-mm-dd, or timestamp
+      function fmtDate(d) {
+        const raw = d.date || '';
+        if (!raw) return '—';
+        // already dd/mm or dd/mm/yy
+        if (/^\d{2}\/\d{2}/.test(raw)) return raw.slice(0,5);
+        // yyyy-mm-dd
+        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(8,10) + '/' + raw.slice(5,7);
+        return raw.slice(0,5);
+      }
+
       let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;overflow:visible;">`;
 
-      // grid
+      // grid lines (subtle)
       [0,2,4,6,8,10].forEach(v => {
         const y = yPos(v);
-        svg += `<line x1="${PAD.left}" x2="${W-PAD.right}" y1="${y}" y2="${y}" stroke="var(--border)" stroke-width="1"/>`;
-        if (v % 2 === 0) svg += `<text x="${PAD.left-4}" y="${y+4}" text-anchor="end" font-size="8" fill="var(--text3)" font-family="DM Mono,monospace">${v}</text>`;
+        svg += `<line x1="${PAD.left}" x2="${W-PAD.right}" y1="${y}" y2="${y}" stroke="#e8eaed" stroke-width="1"/>`;
+        if (v % 2 === 0) svg += `<text x="${PAD.left-5}" y="${y+3.5}" text-anchor="end" font-size="8" fill="#bbb" font-family="DM Mono,monospace">${v}</text>`;
       });
 
-      // x labels + type badges
+      // x labels + type dots (below axis)
       filteredDocs.forEach((d, i) => {
-        const x  = xPos(i);
-        const lbl = d.date || '—';
-        svg += `<text x="${x}" y="${H-PAD.bottom+12}" text-anchor="middle" font-size="8" fill="var(--text3)" font-family="DM Mono,monospace">${lbl}</text>`;
-        // circle = post, diamond = weekly
+        const x = xPos(i);
+        svg += `<text x="${x}" y="${H-PAD.bottom+13}" text-anchor="middle" font-size="8" fill="#bbb" font-family="DM Mono,monospace">${fmtDate(d)}</text>`;
         if (d.tipo === 'post' || d.difficolta) {
-          svg += `<circle cx="${x}" cy="${H-PAD.bottom+3}" r="2.5" fill="var(--accent2)"/>`;
+          svg += `<circle cx="${x}" cy="${H-PAD.bottom+4}" r="2.5" fill="#1565c0"/>`;
         } else {
-          svg += `<rect x="${x-3}" y="${H-PAD.bottom}" width="6" height="6" transform="rotate(45,${x},${H-PAD.bottom+3})" fill="#6a1b9a"/>`;
+          svg += `<rect x="${x-3}" y="${H-PAD.bottom+1}" width="6" height="6" transform="rotate(45,${x},${H-PAD.bottom+4})" fill="#6a1b9a"/>`;
         }
       });
 
-      // lines
+      // series lines + dots
       const series = [
-        { key:'energia',         color:'var(--accent2)', vals: filteredDocs.map(d=>d.energia??null) },
-        { key:'sonno',           color:'#6a1b9a',        vals: filteredDocs.map(d=>d.sonno??null) },
-        { key:'intensitaDolore', color:'var(--accent)',  vals: filteredDocs.map(d=>d.intensitaDolore??null) },
-        { key:'stress',          color:'var(--yellow)',  vals: filteredDocs.map(d=>d.stress??null) },
+        { key:'energia',         color:'#1565c0', vals: filteredDocs.map(d=>d.energia??null) },
+        { key:'sonno',           color:'#6a1b9a', vals: filteredDocs.map(d=>d.sonno??null) },
+        { key:'intensitaDolore', color:'#e53935', vals: filteredDocs.map(d=>d.intensitaDolore??null) },
+        { key:'stress',          color:'#e65100', vals: filteredDocs.map(d=>d.stress??null) },
       ];
       series.forEach(({ vals, color }) => {
         const pts = vals.map((v,i) => v != null ? { x: xPos(i), y: yPos(v) } : null).filter(Boolean);
         if (pts.length < 2) {
-          pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" stroke="var(--surface)" stroke-width="1.5"/>`; });
+          pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/>`; });
           return;
         }
         let path = `M ${pts[0].x} ${pts[0].y}`;
@@ -11787,19 +11796,26 @@ async function loadFollowupCharts(clientId) {
           const cpx = (pts[i].x - pts[i-1].x) / 3;
           path += ` C ${pts[i-1].x+cpx} ${pts[i-1].y} ${pts[i].x-cpx} ${pts[i].y} ${pts[i].x} ${pts[i].y}`;
         }
-        svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
-        pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${color}" stroke="var(--surface)" stroke-width="1.5"/>`; });
+        svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+        pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/>`; });
       });
 
-      // difficulty markers (triangles on top)
+      // difficulty markers — bigger triangles at top, with white ring
       filteredDocs.forEach((d, i) => {
         if (!d.difficolta) return;
         const info = DIFF_MAP[d.difficolta];
         if (!info) return;
-        const x = xPos(i), y = PAD.top + 6, s = 5;
-        svg += `<polygon points="${x},${y-s} ${x-s},${y+s} ${x+s},${y+s}" fill="${info.color}" opacity="0.85" style="cursor:pointer;">
-          <title>${d.difficolta} · ${d.date||''}</title>
+        const x = xPos(i);
+        const y = PAD.top - 10; // above chart area
+        const s = 7;
+        // white halo
+        svg += `<polygon points="${x},${y-s-1} ${x-s-1},${y+s+1} ${x+s+1},${y+s+1}" fill="white"/>`;
+        // colored triangle
+        svg += `<polygon points="${x},${y-s} ${x-s},${y+s} ${x+s},${y+s}" fill="${info.color}">
+          <title>${d.difficolta} · ${fmtDate(d)}</title>
         </polygon>`;
+        // connector line from triangle to chart
+        svg += `<line x1="${x}" y1="${y+s+2}" x2="${x}" y2="${PAD.top}" stroke="${info.color}" stroke-width="1" stroke-dasharray="2,2" opacity="0.4"/>`;
       });
 
       svg += '</svg>';
@@ -11900,7 +11916,7 @@ async function loadFollowupCharts(clientId) {
       </div>
 
       <!-- GRAFICO -->
-      <div id="fu-svg-${clientId}" style="margin-bottom:12px;"></div>
+      <div id="fu-svg-${clientId}" style="margin-bottom:12px;padding-top:4px;"></div>
 
       <!-- LEGENDA -->
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
