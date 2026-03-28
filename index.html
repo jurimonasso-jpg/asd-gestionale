@@ -11625,15 +11625,21 @@ function renderFollowUpBanner() {
 
   // ── POST-SEDUTA: sedute archiviate ieri con outcome 'done' ──────────────────
   const archive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]');
+  const manualSessions = JSON.parse(localStorage.getItem('asd_manual_sessions') || '[]');
 
   fuClients.forEach(c => {
     const key = _fuDismissKey(c.id, 'post', yestStr);
     if (localStorage.getItem(key)) return; // già segnato come inviato
-    const hadSession = archive.some(s =>
-      String(s.clientId) === String(c.id) &&
-      s.date === yestStr &&
-      s.outcome === 'done'
-    );
+    const hadSession =
+      archive.some(s =>
+        String(s.clientId) === String(c.id) &&
+        s.date === yestStr &&
+        s.outcome === 'done'
+      ) ||
+      manualSessions.some(s =>
+        String(s.clientId) === String(c.id) &&
+        s.date === yestStr
+      );
     if (!hadSession) return;
     items.push({ client: c, type: 'post', dateStr: yestStr, label: 'Post-seduta ieri' });
   });
