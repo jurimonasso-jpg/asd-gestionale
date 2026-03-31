@@ -2814,14 +2814,60 @@ let clientData_global = [];
    MODULO 5a — SCORE / TREND / PROSSIMA DECISIONE
    ═══════════════════════════════════════════════════════════════════ */
 
-function scoreIC(freq, skips, periodDays) {
-  if (!freq.count) return 0;
-  const weeks = Math.max(periodDays/7, 1);
-  const freqScore = Math.min(freq.perWeek/1.0, 1)*6;
-  const consScore = Math.min(freq.consecutive/weeks, 1)*3;
-  const absences  = (skips||[]).filter(s=>s.who==='client').length;
-  const penalita  = Math.min(absences*0.5, 2);
-  return Math.round(Math.min(Math.max(freqScore+consScore-penalita, 0), 10)*10)/10;
+function scoreIC(freq, skips, periodDays, client, allWorkouts) {
+  if (!freq.count) return { score: 0, note: null };
+
+  // Slot fissi dichiarati
+  const slotSett = (client?.schedule?.length) || 0;
+
+  // Frequenza media storica (tutti i workout del cliente, non solo periodo)
+  let freqStorica = 0;
+  if (allWorkouts && allWorkouts.length >= 2) {
+    const sorted = [...allWorkouts].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+    const firstD = new Date(sorted[0].createdAt);
+    const lastD  = new Date(sorted[sorted.length-1].createdAt);
+    const totalDays = Math.max((lastD-firstD)/86400000, 7);
+    freqStorica = allWorkouts.length / (totalDays/7);
+  }
+
+  // Riferimento: slot fissi se presenti, altrimenti frequenza storica
+  const riferimento = slotSett > 0 ? slotSett : freqStorica;
+  if (!riferimento) return { score: 0, note: null };
+
+  // Periodo effettivo: usa i giorni reali coperti dai dati se < 50% del periodo selezionato
+  const sortedW = [...(freq._workouts||[])].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  let effectiveDays = periodDays;
+  let dataWarning = null;
+  if (allWorkouts && allWorkouts.length > 0) {
+    const firstDataDate = new Date(allWorkouts.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt))[0].createdAt);
+    const daysSinceFirst = Math.ceil((Date.now()-firstDataDate)/86400000);
+    if (daysSinceFirst < periodDays * 0.5) {
+      effectiveDays = daysSinceFirst;
+      dataWarning = `Dati disponibili: ${daysSinceFirst} giorni su ${periodDays} selezionati`;
+    }
+  }
+
+  const effectiveWeeks = Math.max(effectiveDays/7, 1);
+  const attese = riferimento * effectiveWeeks;
+  const fedeltaPct = Math.min(freq.count / attese, 1);
+
+  // Score base: fedeltà rispetto allo slot (0-8)
+  let score = fedeltaPct * 8;
+
+  // Bonus continuità: settimane consecutive rispetto alle settimane effettive (+2 max)
+  const consBonus = Math.min(freq.consecutive / effectiveWeeks, 1) * 2;
+  score += consBonus;
+
+  // Penalità assenze non giustificate (solo who==='client')
+  const absences = (skips||[]).filter(s=>s.who==='client').length;
+  score -= Math.min(absences*0.5, 1.5);
+
+  return {
+    score: Math.round(Math.min(Math.max(score, 0), 10)*10)/10,
+    note: dataWarning,
+    riferimento: slotSett > 0 ? `${slotSett}×/sett (slot fisso)` : `${Math.round(freqStorica*10)/10}×/sett (storico)`,
+    effectiveDays
+  };
 }
 
 function scoreIR(workouts, notes) {
@@ -3002,9 +3048,10 @@ function buildDecisioneHTML(dec) {
 
 function buildClientScoreSection(clientData, periodDays, skipsMap) {
   if (!clientData.length) return '';
-  return clientData.map(({c,w,notes,freq,energy})=>{
+  return clientData.map(({c,w,notes,freq,energy,allW})=>{
     const skips=skipsMap?.[c.id]||[];
-    const ic=scoreIC(freq,skips,periodDays);
+    const icResult=scoreIC(freq,skips,periodDays,c,allW);
+    const ic=icResult.score;
     const ir=scoreIR(w,notes);
     const ie=scoreIE(notes,energy);
     const trend4=computeTrend4(w,notes,periodDays);
@@ -3014,6 +3061,8 @@ function buildClientScoreSection(clientData, periodDays, skipsMap) {
     const avgArr=[ic,ir,ie].filter(v=>v!==null);
     const globalScore=avgArr.length?Math.round(avgArr.reduce((a,b)=>a+b,0)/avgArr.length*10)/10:null;
     const globalCol=globalScore===null?'var(--sub)':globalScore>=7?'var(--green)':globalScore>=5?'var(--amber)':'var(--red)';
+    const warningHTML=icResult.note?`<div style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--amber);background:var(--amber-s);padding:4px 8px;border-radius:2px;margin-bottom:10px">⚠ ${esc(icResult.note)}</div>`:'';
+    const riferimentoHTML=icResult.riferimento?`<div style="font-family:'DM Mono',monospace;font-size:.56rem;color:var(--sub);margin-top:3px">IC calcolato su: ${esc(icResult.riferimento)}</div>`:'';
     return `
     <div class="client-score-block reveal">
       <div class="csb-header">
@@ -3021,8 +3070,10 @@ function buildClientScoreSection(clientData, periodDays, skipsMap) {
         <div class="csb-meta">${c.profilo==='sportivo_giovane'?'sportivo':'adulto'} · ${c.goal||'—'}</div>
         ${globalScore!==null?`<div class="csb-global" style="color:${globalCol}">${globalScore}<span>/10</span></div>`:''}
       </div>
+      ${warningHTML}
       <div class="csb-scores">${buildScoreBadge(ic,'Continuità')}${buildScoreBadge(ir,'Recupero')}${buildScoreBadge(ie,'Engagement')}</div>
-      <div class="trend-row">${buildTrendRow(trend4)}</div>
+      ${riferimentoHTML}
+      <div class="trend-row" style="margin-top:10px">${buildTrendRow(trend4)}</div>
       <details class="dec-details"><summary class="dec-summary">▸ Prossima decisione</summary><div class="dec-content">${buildDecisioneHTML(dec)}</div></details>
     </div>`;
   }).join('');
