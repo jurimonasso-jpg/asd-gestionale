@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ASD Report Generator — Juri Monasso PT</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=DM+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300;1,600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 /* ─── RESET & BASE ─────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1009,7 +1010,7 @@ html, body {
   <div class="logo-mark">ASD</div>
   <div class="title-group">
     <h1>Report Generator</h1>
-    <div class="subtitle">ALLENATI SENZA DOLORI · JURI MONASSO PT · MODULO 1 — CARICAMENTO DATI</div>
+    <div class="subtitle">ALLENATI SENZA DOLORI · JURI MONASSO PT · MODULO 2 — REPORT PT</div>
   </div>
   <div class="header-status" id="headerStatus">
     <span class="dot"></span>nessun backup caricato
@@ -1717,7 +1718,7 @@ function updateCTA() {
   }
 }
 
-// ─── GENERATE (placeholder per moduli successivi) ─────────────────────
+// ─── GENERATE — ROUTING ──────────────────────────────────────────────
 function onGenerate() {
   if (!STATE.selectedClient || !STATE.reportType) return;
 
@@ -1733,15 +1734,770 @@ function onGenerate() {
     dateTo,
     mbti:       STATE.mbti,
     workouts:   filterByPeriod(STATE.workoutsMap[c.id] || [], 'createdAt', STATE.period, dateFrom, dateTo),
+    allWorkouts: STATE.workoutsMap[c.id] || [],
     notes:      filterByPeriod(STATE.notesMap[c.id] || [], 'date', STATE.period, dateFrom, dateTo),
     percorso:   STATE.percorsoMap[c.id] || null,
-    skips:      STATE.skipMap[c.id] || []
+    skips:      STATE.skipMap[c.id] || [],
+    allClients: STATE.clients,
+    allWorkoutsMap: STATE.workoutsMap,
+    allNotesMap: STATE.notesMap,
+    allPercorsoMap: STATE.percorsoMap,
+    allSkipMap: STATE.skipMap
   };
 
-  // Modulo 2 e 3 saranno attaccati qui
-  alert(`✅ Configurazione pronta!\n\nCliente: ${c.nome} ${c.cognome}\nReport: ${config.reportType.toUpperCase()}\nPeriodo: ${config.period}\nSedute trovate: ${config.workouts.length}\nNote trovate: ${config.notes.length}\nMBTI: ${config.mbti || 'default'}\n\n→ Moduli PDF in arrivo nel prossimo step!`);
+  if (STATE.reportType === 'pt') {
+    generatePTReport(config);
+  } else {
+    alert('Report Cliente in arrivo nel Modulo 3!');
+  }
+}
 
-  console.log('[ASD Report] Config pronta:', config);
+/* ═══════════════════════════════════════════════════════════════════
+   MODULO 2 — REPORT PT
+   ═══════════════════════════════════════════════════════════════════ */
+
+// ─── ANALYTICS HELPERS ───────────────────────────────────────────────
+
+function computeFreqData(workouts, periodDays) {
+  if (!workouts.length) return { count: 0, perWeek: 0, consecutive: 0, lastDate: null };
+  const sorted = [...workouts].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const lastDate = sorted[sorted.length - 1].createdAt;
+  const weeks = Math.max(periodDays / 7, 1);
+  const perWeek = workouts.length / weeks;
+
+  // consecutive weeks
+  const weekSet = new Set(sorted.map(w => {
+    const d = new Date(w.createdAt);
+    const jan1 = new Date(d.getFullYear(), 0, 1);
+    return d.getFullYear() + '-' + Math.ceil((((d - jan1) / 86400000) + jan1.getDay() + 1) / 7);
+  }));
+  let consecutive = 0;
+  const weekArr = [...weekSet].sort().reverse();
+  const now = new Date();
+  const jan1now = new Date(now.getFullYear(), 0, 1);
+  let curWeek = now.getFullYear() + '-' + Math.ceil((((now - jan1now) / 86400000) + jan1now.getDay() + 1) / 7);
+  for (const wk of weekArr) {
+    if (wk === curWeek || consecutive > 0) { consecutive++; }
+    else break;
+    const [yr, wn] = curWeek.split('-').map(Number);
+    const prevWn = wn - 1;
+    if (prevWn <= 0) curWeek = (yr - 1) + '-52';
+    else curWeek = yr + '-' + prevWn;
+  }
+  return { count: workouts.length, perWeek: Math.round(perWeek * 10) / 10, consecutive, lastDate };
+}
+
+function computeEnergyData(notes) {
+  const energie = notes.map(n => n.parsed ? n.parsed.energia : null).filter(e => e !== null);
+  if (!energie.length) return { mean: null, trend: null };
+  const mean = Math.round(energie.reduce((a, b) => a + b, 0) / energie.length * 10) / 10;
+  let trend = 'stabile';
+  if (energie.length >= 4) {
+    const half = Math.floor(energie.length / 2);
+    const first = energie.slice(0, half).reduce((a, b) => a + b, 0) / half;
+    const second = energie.slice(half).reduce((a, b) => a + b, 0) / (energie.length - half);
+    if (second - first > 0.8) trend = 'crescita';
+    else if (first - second > 0.8) trend = 'calo';
+  }
+  return { mean, trend, values: energie };
+}
+
+function getPeriodDays(period, dateFrom, dateTo) {
+  const now = new Date();
+  if (period === 'custom') {
+    const s = dateFrom ? new Date(dateFrom) : new Date(0);
+    const e = dateTo ? new Date(dateTo) : now;
+    return Math.max(1, Math.ceil((e - s) / 86400000));
+  }
+  return { '1m': 30, '3m': 90, '6m': 180, '1y': 365 }[period] || 90;
+}
+
+function getPeriodLabel(period, dateFrom, dateTo) {
+  if (period === 'custom' && dateFrom && dateTo) return `${dateFrom} → ${dateTo}`;
+  return { '1m': 'Ultimo mese', '3m': 'Ultimo trimestre', '6m': 'Ultimi 6 mesi', '1y': 'Ultimo anno' }[period] || period;
+}
+
+function computePainZones(workoutsArr) {
+  const zones = {};
+  workoutsArr.forEach(w => {
+    if (w.tipoSeduta === 'dolori' && Array.isArray(w.painStart)) {
+      w.painStart.forEach(p => {
+        if (p.label) zones[p.label] = (zones[p.label] || 0) + 1;
+      });
+    }
+  });
+  return Object.entries(zones).sort((a, b) => b[1] - a[1]);
+}
+
+function computePainDays(workoutsArr) {
+  const days = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  workoutsArr.forEach(w => {
+    if (w.tipoSeduta === 'dolori') {
+      const d = new Date(w.createdAt);
+      counts[d.getDay()]++;
+    }
+  });
+  return days.map((d, i) => ({ day: d, count: counts[i] }));
+}
+
+function computeTopExercises(workoutsArr) {
+  const ex = {};
+  workoutsArr.forEach(w => {
+    (w.blocchi || []).forEach(b => {
+      (b.esercizi || []).forEach(e => {
+        if (e.nome) ex[e.nome] = (ex[e.nome] || 0) + 1;
+      });
+    });
+  });
+  return Object.entries(ex).sort((a, b) => b[1] - a[1]).slice(0, 8);
+}
+
+function clientHasProgLog(workoutsArr) {
+  return workoutsArr.some(w =>
+    (w.blocchi || []).some(b =>
+      (b.esercizi || []).some(e => Array.isArray(e.prog) && e.prog.some(p => p.peso || p.reps))
+    )
+  );
+}
+
+function computeAlerts(clients, workoutsMap, notesMap, percorsoMap, period, dateFrom, dateTo) {
+  const periodDays = getPeriodDays(period, dateFrom, dateTo);
+  const now = new Date();
+  const twoWeeksAgo = new Date(now - 14 * 86400000);
+  const alerts = [];
+
+  clients.forEach(c => {
+    const allW = workoutsMap[c.id] || [];
+    const w = filterByPeriod(allW, 'createdAt', period, dateFrom, dateTo);
+    const notes = filterByPeriod(notesMap[c.id] || [], 'date', period, dateFrom, dateTo);
+    const name = `${c.nome} ${c.cognome}`;
+    const freq = computeFreqData(w, periodDays);
+    const energy = computeEnergyData(notes);
+    const percorso = percorsoMap[c.id] || null;
+
+    // HIGH: nessuna seduta ultime 2 settimane
+    const recentW = allW.filter(w2 => new Date(w2.createdAt) >= twoWeeksAgo);
+    if (allW.length > 0 && recentW.length === 0) {
+      alerts.push({ priority: 'HIGH', client: name, msg: 'Nessuna seduta nelle ultime 2 settimane' });
+    }
+
+    // HIGH: frequenza < 0.5/sett
+    if (w.length > 0 && freq.perWeek < 0.5) {
+      alerts.push({ priority: 'HIGH', client: name, msg: `Frequenza critica: ${freq.perWeek}×/sett` });
+    }
+
+    // HIGH: energia ≤4 ultime 2 note
+    if (notes.length >= 2) {
+      const sortedNotes = [...notes].sort((a, b) => new Date(b.date) - new Date(a.date));
+      const last2 = sortedNotes.slice(0, 2).map(n => n.parsed ? n.parsed.energia : null).filter(e => e !== null);
+      if (last2.length === 2 && last2[0] <= 4 && last2[1] <= 4) {
+        alerts.push({ priority: 'HIGH', client: name, msg: `Energia bassa: ${last2[1]}/10 → ${last2[0]}/10 (ultime 2 sedute)` });
+      }
+    }
+
+    // HIGH: dolore non seguito da seduta normale
+    const sortedW = [...w].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    for (let i = 0; i < sortedW.length - 1; i++) {
+      if (sortedW[i].tipoSeduta === 'dolori' && sortedW[i + 1].tipoSeduta === 'dolori') {
+        alerts.push({ priority: 'HIGH', client: name, msg: `Dolore consecutivo senza seduta normale (${formatDateIT(sortedW[i].createdAt)})` });
+        break;
+      }
+    }
+    if (sortedW.length > 0 && sortedW[sortedW.length - 1].tipoSeduta === 'dolori') {
+      alerts.push({ priority: 'HIGH', client: name, msg: `Ultima seduta in dolore — nessuna seduta normale successiva` });
+    }
+
+    // MEDIUM: frequenza 0.5-1/sett
+    if (w.length > 0 && freq.perWeek >= 0.5 && freq.perWeek < 1.0) {
+      alerts.push({ priority: 'MEDIUM', client: name, msg: `Frequenza bassa: ${freq.perWeek}×/sett` });
+    }
+
+    // MEDIUM: Percorso Fit < 30%
+    if (percorso && percorso.total > 0 && percorso.pct < 30) {
+      alerts.push({ priority: 'MEDIUM', client: name, msg: `Percorso Fit al ${percorso.pct}% (${percorso.done}/${percorso.total} step)` });
+    }
+
+    // MEDIUM: hashtag negativi ≥3
+    const allTags = notes.flatMap(n => n.parsed ? n.parsed.hashtags : []);
+    const negCount = allTags.filter(t => HASHTAG_NEGATIVE.includes(t)).length;
+    if (negCount >= 3) {
+      alerts.push({ priority: 'MEDIUM', client: name, msg: `${negCount} hashtag negativi nel periodo` });
+    }
+
+    // LOW: nessuno slot fisso
+    if (!c.schedule || c.schedule.length === 0) {
+      alerts.push({ priority: 'LOW', client: name, msg: 'Nessuno slot settimanale fisso' });
+    }
+
+    // LOW: PRT non confermato con dolore cronico
+    if (c.prt !== 'confermato' && c.profilo === 'dolore_adulto') {
+      alerts.push({ priority: 'LOW', client: name, msg: 'Profilo dolore adulto — PRT non ancora confermato' });
+    }
+  });
+
+  const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  return alerts.sort((a, b) => order[a.priority] - order[b.priority]);
+}
+
+// ─── PDF HELPERS ──────────────────────────────────────────────────────
+
+function ptPDF_setup() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, H = 297;
+  const ML = 13, MR = 10, MT = 24, MB = 16;
+  const CW = W - ML - MR; // content width
+  return { doc, W, H, ML, MR, MT, MB, CW };
+}
+
+function ptPDF_addFonts(doc) {
+  // Use built-in fonts; helvetica ≈ outfit, courier ≈ mono
+  doc.setFont('helvetica');
+}
+
+function ptPDF_header(doc, W, ML, MT, periodLabel, today) {
+  // Dark bar
+  doc.setFillColor(17, 17, 17);
+  doc.rect(0, 0, W, 14, 'F');
+  // Red accent stripe left
+  doc.setFillColor(229, 57, 53);
+  doc.rect(0, 0, 3.5, 14, 'F');
+  // White text
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('REPORT PT', ML + 4, 5.8);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.text('· ' + periodLabel, ML + 25, 5.8);
+  doc.setFontSize(6.5);
+  doc.text('Juri Monasso PT', W - MR - 28, 5.8);
+  doc.text(today, W - MR - 28, 10);
+  // Red divider below header
+  doc.setDrawColor(229, 57, 53);
+  doc.setLineWidth(0.4);
+  doc.line(0, 14, W, 14);
+}
+
+function ptPDF_footer(doc, W, H, ML, MR, MB, pageNum) {
+  doc.setDrawColor(229, 213, 195);
+  doc.setLineWidth(0.3);
+  doc.line(ML, H - MB + 2, W - MR, H - MB + 2);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(153, 153, 153);
+  doc.text('Juri Monasso PT · ASD Report Generator', ML, H - MB + 6);
+  doc.setFont('helvetica', 'bold');
+  doc.text(String(pageNum), W - MR, H - MB + 6, { align: 'right' });
+}
+
+function ptPDF_newPage(doc, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef) {
+  pageNumRef.n++;
+  doc.addPage();
+  ptPDF_header(doc, W, ML, MT, periodLabel, today);
+  ptPDF_footer(doc, W, H, ML, MR, MB, pageNumRef.n);
+  return MT + 4;
+}
+
+function ptPDF_sectionTitle(doc, text, num, x, y, CW) {
+  doc.setFillColor(245, 240, 232);
+  doc.rect(x - 2, y - 4.5, CW + 4, 8, 'F');
+  doc.setFillColor(229, 57, 53);
+  doc.rect(x - 2, y - 4.5, 3, 8, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(153, 153, 153);
+  doc.text(num, x + 3, y);
+  doc.setFontSize(8.5);
+  doc.setTextColor(17, 17, 17);
+  doc.text(text, x + 11, y);
+  return y + 8;
+}
+
+function ptPDF_checkPage(doc, y, needed, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef) {
+  if (y + needed > H - MB - 4) {
+    return ptPDF_newPage(doc, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+  }
+  return y;
+}
+
+function ptPDF_kpiGrid(doc, kpis, x, y, CW) {
+  const cols = Math.min(kpis.length, 4);
+  const cellW = (CW) / cols;
+  kpis.forEach((kpi, i) => {
+    const cx = x + i * cellW;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(229, 213, 195);
+    doc.setLineWidth(0.3);
+    doc.rect(cx, y, cellW - 2, 20, 'FD');
+    // accent top
+    doc.setFillColor(...kpi.color);
+    doc.rect(cx, y, cellW - 2, 1.8, 'F');
+    // value
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(...kpi.color);
+    doc.text(String(kpi.value), cx + (cellW - 2) / 2, y + 11, { align: 'center' });
+    // label
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(85, 85, 85);
+    doc.text(kpi.label, cx + (cellW - 2) / 2, y + 16, { align: 'center' });
+    // sub
+    if (kpi.sub) {
+      doc.setFontSize(6);
+      doc.setTextColor(153, 153, 153);
+      doc.text(kpi.sub, cx + (cellW - 2) / 2, y + 19, { align: 'center' });
+    }
+  });
+  return y + 24;
+}
+
+function ptPDF_alertBox(doc, alert, x, y, CW) {
+  const colors = {
+    HIGH: [229, 57, 53],
+    MEDIUM: [230, 81, 0],
+    LOW: [153, 153, 153]
+  };
+  const bgColors = {
+    HIGH: [253, 236, 234],
+    MEDIUM: [255, 243, 224],
+    LOW: [245, 245, 245]
+  };
+  const col = colors[alert.priority];
+  const bg = bgColors[alert.priority];
+  const h = 9;
+  doc.setFillColor(...bg);
+  doc.rect(x, y, CW, h, 'F');
+  doc.setFillColor(...col);
+  doc.rect(x, y, 2.5, h, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(...col);
+  doc.text(alert.priority, x + 5, y + 3.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(17, 17, 17);
+  doc.text(alert.client, x + 18, y + 3.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.8);
+  doc.setTextColor(85, 85, 85);
+  doc.text(alert.msg, x + 18, y + 7, { maxWidth: CW - 20 });
+  return y + h + 1.5;
+}
+
+function ptPDF_tableHeader(doc, cols, x, y) {
+  doc.setFillColor(245, 240, 232);
+  const totalH = 7;
+  const totalW = cols.reduce((a, c) => a + c.w, 0);
+  doc.rect(x, y, totalW, totalH, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6);
+  doc.setTextColor(153, 153, 153);
+  let cx = x;
+  cols.forEach(col => {
+    doc.text(col.label.toUpperCase(), cx + 2, y + 4.5);
+    cx += col.w;
+  });
+  return y + totalH;
+}
+
+function ptPDF_tableRow(doc, cells, cols, x, y, rowColor) {
+  if (rowColor) {
+    doc.setFillColor(...rowColor);
+    doc.rect(x, y, cols.reduce((a, c) => a + c.w, 0), 8.5, 'F');
+  }
+  doc.setDrawColor(237, 232, 223);
+  doc.setLineWidth(0.2);
+  doc.line(x, y + 8.5, x + cols.reduce((a, c) => a + c.w, 0), y + 8.5);
+  let cx = x;
+  cols.forEach((col, i) => {
+    const cell = cells[i] || {};
+    const txt = String(cell.text ?? '');
+    doc.setFont('helvetica', cell.bold ? 'bold' : 'normal');
+    doc.setFontSize(cell.mono ? 7 : 7.5);
+    doc.setTextColor(...(cell.color || [17, 17, 17]));
+    // left-accent dot for semaforo
+    if (cell.semaforo) {
+      doc.setFillColor(...cell.semaforo);
+      doc.circle(cx + 3, y + 4.3, 1.5, 'F');
+      doc.text(txt, cx + 7, y + 5.5);
+    } else {
+      doc.text(txt, cx + 2, y + 5.5, { maxWidth: col.w - 4 });
+    }
+    cx += col.w;
+  });
+  return y + 8.5;
+}
+
+// ─── GENERATE PT REPORT ───────────────────────────────────────────────
+
+function generatePTReport(config) {
+  const { jsPDF } = window.jspdf;
+  if (!jsPDF) { alert('Errore: libreria jsPDF non caricata.'); return; }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.textContent = '⏳ Generazione...';
+  btn.disabled = true;
+
+  setTimeout(() => {
+    try {
+      _doPTReport(config);
+    } catch(err) {
+      console.error(err);
+      alert('Errore nella generazione: ' + err.message);
+    } finally {
+      btn.textContent = '⬇ Genera PDF';
+      btn.disabled = false;
+    }
+  }, 50);
+}
+
+function _doPTReport(config) {
+  const { doc, W, H, ML, MR, MT, MB, CW } = ptPDF_setup();
+  const periodLabel = getPeriodLabel(config.period, config.dateFrom, config.dateTo);
+  const periodDays  = getPeriodDays(config.period, config.dateFrom, config.dateTo);
+  const today = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
+  const pageNumRef = { n: 1 };
+
+  // ── PAGINA 1 ──
+  ptPDF_header(doc, W, ML, MT, periodLabel, today);
+  ptPDF_footer(doc, W, H, ML, MR, MB, 1);
+  let y = MT + 4;
+
+  const clients = config.allClients;
+  const workoutsMap = config.allWorkoutsMap;
+  const notesMap = config.allNotesMap;
+  const percorsoMap = config.allPercorsoMap;
+
+  // Raccolta dati periodo per tutti i clienti
+  const clientData = clients.map(c => {
+    const allW = workoutsMap[c.id] || [];
+    const w = filterByPeriod(allW, 'createdAt', config.period, config.dateFrom, config.dateTo);
+    const n = filterByPeriod(notesMap[c.id] || [], 'date', config.period, config.dateFrom, config.dateTo);
+    const freq = computeFreqData(w, periodDays);
+    const energy = computeEnergyData(n);
+    return { c, w, n, allW, freq, energy };
+  });
+
+  // ────────────────────────────────────────────────
+  // SEZ 1: ALERT PRIORITARI
+  // ────────────────────────────────────────────────
+  y = ptPDF_sectionTitle(doc, 'ALERT PRIORITARI', '01', ML, y, CW);
+  y += 2;
+
+  const alerts = computeAlerts(clients, workoutsMap, notesMap, percorsoMap, config.period, config.dateFrom, config.dateTo);
+
+  if (!alerts.length) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(153, 153, 153);
+    doc.text('Nessun alert nel periodo selezionato. Studio in ottima forma!', ML, y + 4);
+    y += 10;
+  } else {
+    // Raggruppa per priorità con header
+    const groups = [
+      { key: 'HIGH', label: 'ALTA PRIORITÀ', color: [229, 57, 53] },
+      { key: 'MEDIUM', label: 'MEDIA PRIORITÀ', color: [230, 81, 0] },
+      { key: 'LOW', label: 'BASSA PRIORITÀ', color: [153, 153, 153] }
+    ];
+
+    groups.forEach(g => {
+      const gAlerts = alerts.filter(a => a.priority === g.key);
+      if (!gAlerts.length) return;
+
+      y = ptPDF_checkPage(doc, y, 14, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+      // Group label
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...g.color);
+      doc.text('▸ ' + g.label + ` (${gAlerts.length})`, ML, y);
+      y += 4;
+
+      gAlerts.forEach(a => {
+        y = ptPDF_checkPage(doc, y, 12, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+        y = ptPDF_alertBox(doc, a, ML, y, CW);
+      });
+      y += 3;
+    });
+  }
+
+  // ────────────────────────────────────────────────
+  // SEZ 2: PANORAMICA STUDIO
+  // ────────────────────────────────────────────────
+  y = ptPDF_checkPage(doc, y, 36, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+  y = ptPDF_sectionTitle(doc, 'PANORAMICA STUDIO', '02', ML, y, CW);
+  y += 4;
+
+  const totalSedute = clients.reduce((sum, c) => {
+    return sum + filterByPeriod(workoutsMap[c.id] || [], 'createdAt', config.period, config.dateFrom, config.dateTo).length;
+  }, 0);
+  const seduteConDolore = clients.reduce((sum, c) => {
+    return sum + filterByPeriod(workoutsMap[c.id] || [], 'createdAt', config.period, config.dateFrom, config.dateTo).filter(w => w.tipoSeduta === 'dolori').length;
+  }, 0);
+  const pctDolore = totalSedute > 0 ? Math.round(seduteConDolore / totalSedute * 100) : 0;
+  const slotOccupati = clients.reduce((sum, c) => sum + (c.schedule ? c.schedule.length : 0), 0);
+
+  const kpis = [
+    { label: 'Clienti attivi', value: clients.length, sub: 'escluso Juri', color: [229, 57, 53] },
+    { label: 'Sedute nel periodo', value: totalSedute, sub: periodLabel, color: [21, 101, 192] },
+    { label: '% sedute con dolore', value: pctDolore + '%', sub: seduteConDolore + ' sedute', color: pctDolore > 30 ? [230, 81, 0] : [46, 125, 50] },
+    { label: 'Slot settimanali fissi', value: slotOccupati, sub: 'totale studio', color: [17, 17, 17] }
+  ];
+
+  y = ptPDF_kpiGrid(doc, kpis, ML, y, CW);
+  y += 4;
+
+  // ────────────────────────────────────────────────
+  // SEZ 3: FREQUENZA PER CLIENTE
+  // ────────────────────────────────────────────────
+  y = ptPDF_checkPage(doc, y, 20, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+  y = ptPDF_sectionTitle(doc, 'FREQUENZA PER CLIENTE', '03', ML, y, CW);
+  y += 4;
+
+  const freqCols = [
+    { label: 'Cliente', w: 55 },
+    { label: 'Sedute', w: 22 },
+    { label: '×/sett', w: 22 },
+    { label: 'Sett. consecutive', w: 40 },
+    { label: 'Ultima seduta', w: CW - 55 - 22 - 22 - 40 }
+  ];
+  y = ptPDF_tableHeader(doc, freqCols, ML, y);
+
+  clientData.sort((a, b) => b.freq.perWeek - a.freq.perWeek).forEach(({ c, w, freq }) => {
+    y = ptPDF_checkPage(doc, y, 10, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+    const semColor = freq.perWeek >= 1 ? [46, 125, 50] : freq.perWeek >= 0.5 ? [230, 81, 0] : [229, 57, 53];
+    const rowBg = freq.perWeek < 0.5 && w.length > 0 ? [253, 236, 234] : null;
+    y = ptPDF_tableRow(doc, [
+      { text: c.nome + ' ' + c.cognome, bold: true },
+      { text: String(w.length), mono: true, color: [17, 17, 17] },
+      { text: freq.perWeek > 0 ? freq.perWeek + '×' : '—', mono: true, semaforo: semColor, bold: true },
+      { text: freq.consecutive > 0 ? freq.consecutive + ' sett.' : '—', mono: true },
+      { text: freq.lastDate ? formatDateIT(freq.lastDate) : '—', mono: true }
+    ], freqCols, ML, y, rowBg);
+  });
+  y += 6;
+
+  // ────────────────────────────────────────────────
+  // SEZ 4: ENERGIA E BENESSERE
+  // ────────────────────────────────────────────────
+  y = ptPDF_checkPage(doc, y, 20, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+  y = ptPDF_sectionTitle(doc, 'ENERGIA E BENESSERE', '04', ML, y, CW);
+  y += 4;
+
+  const energyCols = [
+    { label: 'Cliente', w: 55 },
+    { label: 'Media', w: 22 },
+    { label: 'Trend', w: 22 },
+    { label: 'Note analizzate', w: 35 },
+    { label: 'Hashtag negativi', w: CW - 55 - 22 - 22 - 35 }
+  ];
+  y = ptPDF_tableHeader(doc, energyCols, ML, y);
+
+  clientData.sort((a, b) => {
+    const am = a.energy.mean ?? 0;
+    const bm = b.energy.mean ?? 0;
+    return am - bm;
+  }).forEach(({ c, n, energy }) => {
+    y = ptPDF_checkPage(doc, y, 10, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+    const mean = energy.mean;
+    const energyColor = mean === null ? [153, 153, 153] : mean >= 7 ? [46, 125, 50] : mean >= 5 ? [230, 81, 0] : [229, 57, 53];
+    const trendArrow = energy.trend === 'crescita' ? '↑' : energy.trend === 'calo' ? '↓' : '→';
+    const trendColor = energy.trend === 'crescita' ? [46, 125, 50] : energy.trend === 'calo' ? [229, 57, 53] : [85, 85, 85];
+    const negTags = n.flatMap(note => note.parsed ? note.parsed.hashtags : []).filter(t => HASHTAG_NEGATIVE.includes(t));
+    const negCount = negTags.length;
+    const rowBg = mean !== null && mean <= 4 ? [253, 236, 234] : null;
+
+    y = ptPDF_tableRow(doc, [
+      { text: c.nome + ' ' + c.cognome, bold: true },
+      { text: mean !== null ? mean + '/10' : '—', mono: true, color: energyColor, bold: !!mean },
+      { text: mean !== null ? trendArrow : '—', mono: true, color: trendColor, bold: true },
+      { text: String(n.filter(nt => nt.parsed && nt.parsed.energia !== null).length), mono: true },
+      { text: negCount > 0 ? negCount + ' (' + [...new Set(negTags)].slice(0, 2).join(', ') + ')' : '—', color: negCount >= 3 ? [230, 81, 0] : [85, 85, 85] }
+    ], energyCols, ML, y, rowBg);
+  });
+  y += 6;
+
+  // ────────────────────────────────────────────────
+  // SEZ 5: PATTERN DOLORE
+  // ────────────────────────────────────────────────
+  y = ptPDF_checkPage(doc, y, 20, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+  y = ptPDF_sectionTitle(doc, 'PATTERN DOLORE', '05', ML, y, CW);
+  y += 4;
+
+  const allPeriodWorkouts = clients.flatMap(c => filterByPeriod(workoutsMap[c.id] || [], 'createdAt', config.period, config.dateFrom, config.dateTo));
+  const painZones = computePainZones(allPeriodWorkouts);
+  const painDays = computePainDays(allPeriodWorkouts);
+  const totalPainW = allPeriodWorkouts.filter(w => w.tipoSeduta === 'dolori').length;
+
+  // Zona dolore più frequente — bar chart testuale
+  if (painZones.length) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(153, 153, 153);
+    doc.text('ZONE PIÙ FREQUENTI', ML, y);
+    y += 4;
+    const maxZ = painZones[0][1];
+    painZones.slice(0, 6).forEach(([zone, count]) => {
+      y = ptPDF_checkPage(doc, y, 8, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+      const barW = Math.max(2, (count / maxZ) * (CW * 0.5));
+      doc.setFillColor(229, 57, 53);
+      doc.roundedRect(ML + 48, y, barW, 5, 0.5, 0.5, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(17, 17, 17);
+      doc.text(zone, ML, y + 4);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(229, 57, 53);
+      doc.text(String(count), ML + 50 + barW, y + 4);
+      y += 7;
+    });
+  } else {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    doc.setTextColor(153, 153, 153);
+    doc.text('Nessun dato dolore nel periodo', ML, y + 4);
+    y += 10;
+  }
+
+  // Giorno settimana
+  y += 3;
+  y = ptPDF_checkPage(doc, y, 18, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(153, 153, 153);
+  doc.text('SEDUTE CON DOLORE PER GIORNO', ML, y);
+  y += 4;
+  const maxDay = Math.max(...painDays.map(d => d.count), 1);
+  const dayBarW = Math.min(20, (CW - 10) / 7);
+  painDays.forEach((d, i) => {
+    const bx = ML + i * (dayBarW + 2);
+    const bh = d.count > 0 ? Math.max(2, (d.count / maxDay) * 16) : 1;
+    doc.setFillColor(d.count > 0 ? 229 : 229, d.count > 0 ? 57 : 213, d.count > 0 ? 53 : 195);
+    doc.rect(bx, y + (16 - bh), dayBarW, bh, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    doc.setTextColor(85, 85, 85);
+    doc.text(d.day, bx + dayBarW / 2, y + 20, { align: 'center' });
+    if (d.count > 0) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.setTextColor(229, 57, 53);
+      doc.text(String(d.count), bx + dayBarW / 2, y + (16 - bh) - 1, { align: 'center' });
+    }
+  });
+  y += 24;
+
+  // % risoluzione: seduta dolore → seduta normale successiva
+  const resolutions = [];
+  clients.forEach(c => {
+    const cw = filterByPeriod(workoutsMap[c.id] || [], 'createdAt', config.period, config.dateFrom, config.dateTo)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    let resolved = 0, unresolved = 0;
+    for (let i = 0; i < cw.length - 1; i++) {
+      if (cw[i].tipoSeduta === 'dolori') {
+        if (cw[i + 1].tipoSeduta === 'normale') resolved++;
+        else unresolved++;
+      }
+    }
+    if (resolved + unresolved > 0) {
+      resolutions.push({ nome: c.nome + ' ' + c.cognome, resolved, unresolved, pct: Math.round(resolved / (resolved + unresolved) * 100) });
+    }
+  });
+
+  if (resolutions.length) {
+    y = ptPDF_checkPage(doc, y, 14, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(153, 153, 153);
+    doc.text('RISOLUZIONE DOLORE (seduta normale dopo dolore)', ML, y);
+    y += 4;
+    resolutions.forEach(r => {
+      y = ptPDF_checkPage(doc, y, 8, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+      const barColor = r.pct >= 70 ? [46, 125, 50] : r.pct >= 40 ? [230, 81, 0] : [229, 57, 53];
+      const bw = Math.max(2, (r.pct / 100) * (CW * 0.45));
+      doc.setFillColor(...barColor);
+      doc.roundedRect(ML + 52, y, bw, 5, 0.5, 0.5, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(17, 17, 17);
+      doc.text(r.nome, ML, y + 4);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...barColor);
+      doc.text(r.pct + '%', ML + 54 + bw, y + 4);
+      y += 7;
+    });
+  }
+  y += 4;
+
+  // ────────────────────────────────────────────────
+  // SEZ 6: PROGRESSIONE TECNICA
+  // ────────────────────────────────────────────────
+  y = ptPDF_checkPage(doc, y, 20, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+  y = ptPDF_sectionTitle(doc, 'PROGRESSIONE TECNICA', '06', ML, y, CW);
+  y += 4;
+
+  // Top esercizi
+  const topEx = computeTopExercises(allPeriodWorkouts);
+
+  if (topEx.length) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(153, 153, 153);
+    doc.text('ESERCIZI PIÙ USATI NEL PERIODO', ML, y);
+    y += 4;
+    const maxEx = topEx[0][1];
+    topEx.forEach(([nome, count], idx) => {
+      y = ptPDF_checkPage(doc, y, 8, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+      const bw = Math.max(2, (count / maxEx) * (CW * 0.48));
+      const barColor = [21, 101, 192];
+      doc.setFillColor(...barColor);
+      doc.roundedRect(ML + 60, y, bw, 4.5, 0.5, 0.5, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(17, 17, 17);
+      doc.text((idx + 1) + '. ' + nome, ML, y + 3.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...barColor);
+      doc.text(count + '×', ML + 62 + bw, y + 3.5);
+      y += 6.5;
+    });
+    y += 3;
+  }
+
+  // Clienti con/senza progressione loggata
+  y = ptPDF_checkPage(doc, y, 16, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(153, 153, 153);
+  doc.text('LOG PROGRESSIONE (peso/reps)', ML, y);
+  y += 4;
+
+  const progCols = [
+    { label: 'Cliente', w: 60 },
+    { label: 'Progr. loggata', w: 40 },
+    { label: 'Note', w: CW - 100 }
+  ];
+  y = ptPDF_tableHeader(doc, progCols, ML, y);
+
+  clientData.forEach(({ c, w }) => {
+    y = ptPDF_checkPage(doc, y, 10, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef);
+    const hasLog = clientHasProgLog(w);
+    const blocksUsed = [...new Set(w.flatMap(wk => (wk.blocchi || []).map(b => b.tipo)))].filter(Boolean);
+    y = ptPDF_tableRow(doc, [
+      { text: c.nome + ' ' + c.cognome, bold: true },
+      { text: hasLog ? '✓ Sì' : '— No', color: hasLog ? [46, 125, 50] : [153, 153, 153], bold: hasLog },
+      { text: blocksUsed.length ? blocksUsed.join(', ') : '—', mono: true }
+    ], progCols, ML, y, null);
+  });
+
+  // ── salva ──
+  const fileName = `ASD_ReportPT_${getPeriodLabel(config.period, config.dateFrom, config.dateTo).replace(/\s+/g, '_')}_${today.replace(/\s/g, '')}.pdf`;
+  doc.save(fileName);
 }
 
 // ─── RESET ────────────────────────────────────────────────────────────
@@ -1777,4 +2533,3 @@ function resetAll() {
 
 </body>
 </html>
- 
