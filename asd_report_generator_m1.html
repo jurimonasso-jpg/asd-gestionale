@@ -1119,6 +1119,10 @@ html, body {
               <div class="rt-title">📄 Report Cliente</div>
               <div class="rt-sub">Documento emotivo · da stampare</div>
             </div>
+            <div class="report-type-btn" id="rtWrapped" onclick="selectReportType('wrapped')">
+              <div class="rt-title">🎁 Wrapped Annuale</div>
+              <div class="rt-sub">Anno solare · celebrativo</div>
+            </div>
           </div>
         </div>
 
@@ -1130,6 +1134,12 @@ html, body {
             <option value="6m">Ultimi 6 mesi</option>
             <option value="1y">Ultimo anno</option>
             <option value="custom">Periodo personalizzato</option>
+          </select>
+        </div>
+
+        <div class="sel-group" id="wrappedYearSection" style="display:none">
+          <label>Anno solare</label>
+          <select id="wrappedYearSelect" onchange="STATE.wrappedYear = parseInt(this.value); updateCTA()">
           </select>
         </div>
 
@@ -1249,7 +1259,8 @@ const STATE = {
   period: '3m',
   mbti: '',
   filter: 'all',
-  filteredClients: []
+  filteredClients: [],
+  wrappedYear: new Date().getFullYear()
 };
 
 // ─── HASHTAG CLASSIFICATION ──────────────────────────────────────────
@@ -1538,9 +1549,17 @@ function selectReportType(type) {
   STATE.reportType = type;
   document.getElementById('rtPT').classList.toggle('selected', type === 'pt');
   document.getElementById('rtCliente').classList.toggle('selected', type === 'cliente');
+  document.getElementById('rtWrapped').classList.toggle('selected', type === 'wrapped');
 
-  // MBTI only for cliente
-  document.getElementById('mbtiSection').classList.toggle('visible', type === 'cliente');
+  // MBTI only for cliente + wrapped
+  document.getElementById('mbtiSection').classList.toggle('visible', type === 'cliente' || type === 'wrapped');
+
+  // Period selector: hide for wrapped, show for others
+  document.getElementById('periodoSelect').closest('.sel-group').style.display = type === 'wrapped' ? 'none' : '';
+  document.getElementById('wrappedYearSection').style.display = type === 'wrapped' ? '' : 'none';
+
+  // Populate year dropdown from available workouts data
+  if (type === 'wrapped') _populateWrappedYears();
 
   updateCTA();
 }
@@ -1714,8 +1733,11 @@ function updateCTA() {
   } else if (!STATE.reportType) {
     document.getElementById('ctaInfo').innerHTML = `<strong>${STATE.selectedClient.nome} ${STATE.selectedClient.cognome}</strong> selezionato — scegli il tipo di report`;
   } else {
-    const periodoLabel = { '1m': 'ultimo mese', '3m': 'ultimo trimestre', '6m': 'ultimi 6 mesi', '1y': 'ultimo anno', 'custom': 'periodo personalizzato' }[STATE.period] || STATE.period;
-    document.getElementById('ctaInfo').innerHTML = `<strong>${STATE.selectedClient.nome} ${STATE.selectedClient.cognome}</strong> · <strong>${STATE.reportType === 'pt' ? 'Report PT' : 'Report Cliente'}</strong> · ${periodoLabel}${STATE.mbti ? ' · MBTI ' + STATE.mbti : ''}`;
+    const periodoLabel = STATE.reportType === 'wrapped'
+      ? `Anno ${STATE.wrappedYear}`
+      : ({ '1m': 'ultimo mese', '3m': 'ultimo trimestre', '6m': 'ultimi 6 mesi', '1y': 'ultimo anno', 'custom': 'periodo personalizzato' }[STATE.period] || STATE.period);
+    const typeLabel = { pt: 'Report PT', cliente: 'Report Cliente', wrapped: '🎁 Wrapped' }[STATE.reportType] || STATE.reportType;
+    document.getElementById('ctaInfo').innerHTML = `<strong>${STATE.selectedClient.nome} ${STATE.selectedClient.cognome}</strong> · <strong>${typeLabel}</strong> · ${periodoLabel}${STATE.mbti ? ' · MBTI ' + STATE.mbti : ''}`;
   }
 }
 
@@ -1748,6 +1770,8 @@ function onGenerate() {
 
   if (STATE.reportType === 'pt') {
     generatePTReport(config);
+  } else if (STATE.reportType === 'wrapped') {
+    generateWrappedReport(config);
   } else {
     generateClienteReport(config);
   }
@@ -3293,6 +3317,907 @@ setTimeout(()=>{
   a.click();
   URL.revokeObjectURL(a.href);
 }
+/* ═══════════════════════════════════════════════════════════════════
+   MODULO 4 — WRAPPED ANNUALE (PDF celebrativo anno solare)
+   ═══════════════════════════════════════════════════════════════════ */
+
+// ─── POPULATE YEAR DROPDOWN ───────────────────────────────────────────
+function _populateWrappedYears() {
+  const sel = document.getElementById('wrappedYearSelect');
+  const allW = STATE.workouts;
+  const years = new Set();
+  allW.forEach(w => { const y = new Date(w.createdAt).getFullYear(); if (y >= 2020) years.add(y); });
+  if (!years.size) years.add(new Date().getFullYear());
+  const sorted = [...years].sort((a,b) => b-a);
+  sel.innerHTML = sorted.map(y => `<option value="${y}" ${y===STATE.wrappedYear?'selected':''}>${y}</option>`).join('');
+  STATE.wrappedYear = sorted[0];
+}
+
+// ─── WRAPPED ANALYTICS ───────────────────────────────────────────────
+
+function getQuarter(dateStr, year) {
+  const d = new Date(dateStr.slice(0,10));
+  if (d.getFullYear() !== year) return null;
+  return Math.floor(d.getMonth() / 3) + 1; // 1-4
+}
+
+function filterByYear(list, dateField, year) {
+  return list.filter(item => new Date((item[dateField]||'').slice(0,10)).getFullYear() === year);
+}
+
+function computeProgressions(workouts) {
+  // Returns { exerciseName: { first: {peso,reps}, last: {peso,reps}, count } }
+  const exMap = {};
+  const sorted = [...workouts].sort((a,b) => new Date(a.createdAt)-new Date(b.createdAt));
+  sorted.forEach(w => {
+    (w.blocchi||[]).forEach(b => {
+      (b.esercizi||[]).forEach(e => {
+        if (!e.nome) return;
+        const progs = (e.prog||[]).filter(p => p.peso || p.reps);
+        if (!progs.length) return;
+        if (!exMap[e.nome]) exMap[e.nome] = { entries: [], sets: 0 };
+        progs.forEach(p => exMap[e.nome].entries.push({ date: w.createdAt, peso: p.peso, reps: p.reps }));
+        exMap[e.nome].sets += progs.length;
+      });
+    });
+  });
+  const result = {};
+  Object.entries(exMap).forEach(([nome, data]) => {
+    if (data.entries.length < 2) return;
+    result[nome] = {
+      first: data.entries[0],
+      last:  data.entries[data.entries.length-1],
+      count: data.sets
+    };
+  });
+  return result;
+}
+
+function computeTopExercises(workouts) {
+  const freq = {};
+  workouts.forEach(w => {
+    (w.blocchi||[]).forEach(b => {
+      (b.esercizi||[]).forEach(e => {
+        if (e.nome) freq[e.nome] = (freq[e.nome]||0) + 1;
+      });
+    });
+  });
+  return Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,8);
+}
+
+function computeBlockTypes(workouts) {
+  const BLOCK_LABELS = {
+    'fase1':   'Forza base',
+    'fase2':   'Potenza / controllo',
+    'fase3':   'Condizionamento',
+    'mobilita':'Mobilità & release',
+    'workout': 'Workout',
+    'core':    'Core & stabilità'
+  };
+  const freq = {};
+  workouts.forEach(w => {
+    (w.blocchi||[]).forEach(b => {
+      if (b.tipo) freq[b.tipo] = (freq[b.tipo]||0)+1;
+    });
+  });
+  return Object.entries(freq)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([tipo, n]) => ({ tipo, label: BLOCK_LABELS[tipo]||tipo, n }));
+}
+
+function bestMomentsYear(notes, max) {
+  const sorted = [...notes].sort((a,b) => new Date(a.date)-new Date(b.date));
+  const withProgress = sorted.filter(n => n.parsed.positivi.length && n.parsed.hashtags.includes('#progresso'));
+  const withPositive = sorted.filter(n => n.parsed.positivi.length);
+  const pool = withProgress.length >= max ? withProgress : [...withProgress, ...withPositive.filter(n => !withProgress.includes(n))];
+  return pool.slice(0, max).map(n => ({
+    date: n.date,
+    text: n.parsed.positivi[0],
+    energia: n.parsed.energia,
+    hashtags: n.parsed.hashtags
+  }));
+}
+
+function topHashtagsYear(notes) {
+  const freq = {};
+  notes.forEach(n => n.parsed.hashtags.forEach(t => { freq[t]=(freq[t]||0)+1; }));
+  const pos = Object.entries(freq).filter(([t])=>HASHTAG_POSITIVE.includes(t)).sort((a,b)=>b[1]-a[1]);
+  const neg = Object.entries(freq).filter(([t])=>HASHTAG_NEGATIVE.includes(t)).sort((a,b)=>b[1]-a[1]);
+  const all = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  return { pos, neg, all, wordOfYear: pos[0]?.[0] || null };
+}
+
+function computeQuarterData(workouts, notes, year) {
+  const qs = [1,2,3,4].map(q => {
+    const start = new Date(year, (q-1)*3, 1);
+    const end   = new Date(year, q*3, 0, 23,59,59);
+    const w = workouts.filter(x => { const d=new Date(x.createdAt); return d>=start&&d<=end; });
+    const n = notes.filter(x => { const d=new Date(x.date); return d>=start&&d<=end; });
+    const energy = computeEnergy(n);
+    const freq   = computeFreq(w, Math.ceil((end-start)/86400000));
+    const progs  = computeProgressions(w);
+    const progCount = Object.keys(progs).length;
+    // best note for quarter
+    const best = bestMomentsYear(n, 1)[0] || null;
+    return { q, w, n, energy, freq, progs, progCount, best, start, end };
+  });
+  return qs;
+}
+
+function computeYearOverview(workouts, notes, year) {
+  const w = filterByYear(workouts, 'createdAt', year);
+  const n = filterByYear(notes, 'date', year).map(note => ({
+    ...note,
+    parsed: note.parsed || parseNote(note.text||'')
+  }));
+  return {
+    workouts: w,
+    notes: n,
+    totalSedute: w.length,
+    seduteConDolore: w.filter(x=>x.tipoSeduta==='dolori').length,
+    energy: computeEnergy(n),
+    freq: computeFreq(w, 365),
+    progressions: computeProgressions(w),
+    topExercises: computeTopExercises(w),
+    blockTypes: computeBlockTypes(w),
+    moments: bestMomentsYear(n, 3),
+    hashtags: topHashtagsYear(n),
+    quarterData: computeQuarterData(w, n, year)
+  };
+}
+
+// ─── WRAPPED TEXT GENERATORS ─────────────────────────────────────────
+
+function wrappedOpeningText(c, overview, tone, year) {
+  const nome = c.nome;
+  const n = overview.totalSedute;
+  const goal = (c.goal||'il tuo benessere').toLowerCase();
+
+  const openers = {
+    emotivo:   `${nome}, il ${year} è stato un anno che ha lasciato il segno. Non per i numeri — ma per le scelte. Ogni volta che sei entrato in palestra hai scelto te stesso, e questo si vede.`,
+    energico:  `${nome}, che anno. ${n} sedute, un sacco di lavoro fatto sul serio, e ancora voglia di andare avanti. Questo è il tuo ${year}.`,
+    diretto:   `${nome}, il ${year} in numeri: ${n} sedute, obiettivo ${goal}. Risultati concreti da un lavoro serio.`,
+    analitico: `${nome}, questo documento raccoglie i dati dell'anno ${year}. ${n} sedute analizzate, progressioni tracciate, trend identificati.`,
+    delicato:  `${nome}, il ${year} è stato un percorso. Fatto di piccoli passi, di giorni facili e giorni difficili. Tutto conta.`,
+    caldo:     `${nome}, guardare indietro a un anno intero è sempre un momento speciale. Il ${year} ha avuto le sue sfide — e tu le hai affrontate.`,
+    concreto:  `${nome}, ${year}: ${n} sedute completate. Ecco il resoconto completo dell'anno.`,
+    bilanciato:`${nome}, il ${year} è stato un anno di costruzione. ${n} sedute, una direzione chiara, e un percorso che vale la pena celebrare.`
+  };
+  return openers[tone] || openers.bilanciato;
+}
+
+function wrappedWordOfYearText(word, tone) {
+  if (!word) return null;
+  const clean = word.replace('#','');
+  const map = {
+    '#progresso':        'Questo è stato il tuo anno del progresso.',
+    '#tecnica-ok':       'Questo è stato l\'anno in cui la tecnica è diventata la tua firma.',
+    '#motivazione-alta': 'Questo è stato l\'anno dell\'energia alta.',
+    '#motivazione-bassa':'Questo è stato l\'anno della resilienza — hai continuato anche quando era difficile.',
+    '#stress':           'Questo è stato un anno impegnativo fuori dalla palestra. Eppure sei rimasto.',
+    '#pocosonno':        'Questo è stato un anno di recupero difficile. Ma non hai mollato.'
+  };
+  return map[word] || `La parola che ha caratterizzato il tuo ${clean} è stata protagonista di questo anno.`;
+}
+
+function wrappedClosingText(c, overview, tone, year) {
+  const nome = c.nome;
+  const nextYear = year + 1;
+  const closers = {
+    emotivo:   `Il ${nextYear} può essere ancora meglio — non perché devi fare di più, ma perché sai già come farlo. Grazie per la fiducia, ${nome}. Sul serio.`,
+    energico:  `${nextYear} — pronti? Hai le basi, hai il ritmo. Adesso si accelera.`,
+    diretto:   `Obiettivi ${nextYear} già definiti. Avanti.`,
+    analitico: `I dati del ${year} forniscono una base solida per la programmazione del ${nextYear}. La direzione è chiara.`,
+    delicato:  `Il ${nextYear} porta con sé nuove possibilità. Ci andiamo con la stessa cura di sempre, insieme.`,
+    caldo:     `Grazie per questo anno, ${nome}. Il ${nextYear} ci aspetta — con più energia e più chiarezza di dove vogliamo arrivare.`,
+    concreto:  `Anno chiuso. ${nextYear}: stessi obiettivi, più intensità.`,
+    bilanciato:`Il ${year} ha costruito le fondamenta. Il ${nextYear} è dove si costruisce in altezza. Ci sono.`
+  };
+  return closers[tone] || closers.bilanciato;
+}
+
+// ─── jsPDF WRAPPED HELPERS ────────────────────────────────────────────
+
+function wPdfHeader(doc, nome, year, accent, WHITE, SUB) {
+  doc.setFillColor(17,17,17);
+  doc.rect(0, 0, 210, 18, 'F');
+  doc.setFillColor(...accent);
+  doc.rect(0, 0, 3.5, 18, 'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...WHITE);
+  doc.text(nome.toUpperCase(), 16, 11);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(180,180,180);
+  doc.text(`Wrapped ${year}  ·  Juri Monasso PT`, 200, 11, { align:'right' });
+}
+
+function wPdfFooter(doc, pn, accent, LINE, SUB) {
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.3);
+  doc.line(14, 279, 200, 279);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(...SUB);
+  doc.text('Juri Monasso · Allenati Senza Dolori', 14, 285);
+  doc.text(String(pn), 200, 285, { align:'right' });
+}
+
+function wSecLabel(doc, y, num, title, accent, LINE, INK) {
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(6);
+  doc.setTextColor(...accent);
+  doc.text(`0${num} ·`, 14, y);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(...INK);
+  doc.text(title, 22, y);
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.25);
+  doc.line(14, y+2.5, 200, y+2.5);
+  return y + 9;
+}
+
+function wKpiChip(doc, x, y, w, h, label, value, sub, valColor, bgColor, SUB) {
+  doc.setFillColor(...bgColor);
+  doc.rect(x, y, w, h, 'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(20);
+  doc.setTextColor(...valColor);
+  doc.text(String(value), x + w/2, y + h*0.52, { align:'center' });
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(5.5);
+  doc.setTextColor(...SUB);
+  doc.text(label.toUpperCase(), x + w/2, y + h*0.78, { align:'center' });
+  if (sub) {
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(5);
+    doc.text(sub, x + w/2, y + h*0.91, { align:'center' });
+  }
+}
+
+function wBar(doc, x, y, label, value, maxValue, barW, color, INK, LINE) {
+  const trackW = barW;
+  const fillW  = maxValue > 0 ? Math.max(2, Math.round(value/maxValue * trackW)) : 0;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...INK);
+  doc.text(label, x, y + 3.5);
+  doc.setFillColor(...LINE);
+  doc.rect(x + 60, y, trackW, 5, 'F');
+  if (fillW > 0) {
+    doc.setFillColor(...color);
+    doc.rect(x + 60, y, fillW, 5, 'F');
+  }
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(7);
+  doc.setTextColor(...color);
+  doc.text(String(value), x + 60 + trackW + 3, y + 4);
+  return y + 8;
+}
+
+// ─── MAIN WRAPPED BUILDER ─────────────────────────────────────────────
+
+function generateWrappedReport(config) {
+  STATE.wrappedYear = parseInt(document.getElementById('wrappedYearSelect')?.value || STATE.wrappedYear);
+  const btn = document.getElementById('btnGenerate');
+  btn.textContent = '⏳ Generazione Wrapped...';
+  btn.disabled = true;
+  setTimeout(() => {
+    try { _buildWrappedPDF(config); }
+    catch(err) { console.error(err); alert('Errore Wrapped: ' + err.message); }
+    finally { btn.textContent = '⬇ Genera PDF'; btn.disabled = false; }
+  }, 50);
+}
+
+function _buildWrappedPDF(config) {
+  const { jsPDF } = window.jspdf;
+  if (!jsPDF) throw new Error('jsPDF non caricato.');
+
+  const c    = config.client;
+  const year = STATE.wrappedYear;
+  const mbti = config.mbti || '';
+  const cfg  = getMBTICfg(mbti);
+  const tone = cfg.tone;
+  const accent = cfg.accent;
+
+  // ─ Gather all client data (full history, filter to year inside) ─
+  const allWorkouts = config.allWorkouts || [];
+  const allNotes    = (STATE.notesMap[c.id] || []).map(n => ({
+    ...n, parsed: n.parsed || parseNote(n.text||'')
+  }));
+
+  const ov = computeYearOverview(allWorkouts, allNotes, year);
+  if (!ov.totalSedute) throw new Error(`Nessuna seduta trovata per ${c.nome} nel ${year}.`);
+
+  // ─ Colors ─
+  const INK   = [17,17,17];
+  const MID   = [85,85,85];
+  const SUB   = [153,153,153];
+  const LINE  = [229,224,213];
+  const WHITE = [255,255,255];
+  const WARM  = [245,240,232];
+  const GREEN = [46,125,50];
+  const AMBER = [230,81,0];
+  const RED   = [229,57,53];
+  const BLUE  = [21,101,192];
+
+  const PW=210, PH=297, ML=14, MR=10, MT=24, MB=20;
+  const CW = PW-ML-MR;
+
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  let pageNum = 1;
+
+  const addPage = () => {
+    wPdfFooter(doc, pageNum, accent, LINE, SUB);
+    doc.addPage();
+    pageNum++;
+    wPdfHeader(doc, c.nome, year, accent, WHITE, SUB);
+  };
+
+  // ══════════════════════════════════════════════════════
+  // PAGINA 1 — COVER
+  // ══════════════════════════════════════════════════════
+
+  // Full dark cover
+  doc.setFillColor(...INK);
+  doc.rect(0, 0, PW, PH, 'F');
+
+  // Accent stripe left
+  doc.setFillColor(...accent);
+  doc.rect(0, 0, 4, PH, 'F');
+
+  // Ghost year — huge background number
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(120);
+  doc.setTextColor(40, 40, 40);
+  doc.text(String(year), PW/2, 170, { align:'center' });
+
+  // Eyebrow
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...accent);
+  doc.text('ALLENATI SENZA DOLORI  ·  WRAPPED', ML+6, 42);
+
+  // Big name
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(42);
+  doc.setTextColor(...WHITE);
+  const nameFits = doc.splitTextToSize(c.nome.toUpperCase(), CW - 10);
+  doc.text(nameFits, ML+6, 70);
+
+  // Subtitle
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(11);
+  doc.setTextColor(120,120,120);
+  doc.text(`Il tuo anno in palestra`, ML+6, 86);
+
+  // 3 cover stats
+  const coverStats = [
+    { val: String(ov.totalSedute),                           label: 'sedute' },
+    { val: ov.energy.mean ? ov.energy.mean+'/10' : '—',      label: 'energia media' },
+    { val: ov.quarterData.filter(q=>q.freq.count>0).length+'Q', label: 'trimestri attivi' }
+  ];
+  const statW = (CW-10) / 3;
+  coverStats.forEach((s, i) => {
+    const sx = ML + 6 + i*(statW+2);
+    doc.setFillColor(30,30,30);
+    doc.rect(sx, 200, statW, 22, 'F');
+    doc.setFillColor(...accent);
+    doc.rect(sx, 200, statW, 1.5, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(18);
+    doc.setTextColor(...WHITE);
+    doc.text(s.val, sx + statW/2, 213, { align:'center' });
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(6);
+    doc.setTextColor(120,120,120);
+    doc.text(s.label.toUpperCase(), sx + statW/2, 218, { align:'center' });
+  });
+
+  // Opening text
+  const openText = wrappedOpeningText(c, ov, tone, year);
+  const openLines = doc.splitTextToSize(openText, CW-16);
+  doc.setFont('helvetica','italic');
+  doc.setFontSize(8.5);
+  doc.setTextColor(160,160,160);
+  doc.text(openLines, ML+6, 240);
+
+  // Footer on cover
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(6);
+  doc.setTextColor(60,60,60);
+  doc.text(`Juri Monasso PT  ·  ${new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'})}`, ML+6, 285);
+
+  // ══════════════════════════════════════════════════════
+  // PAGINA 2 — I TUOI NUMERI
+  // ══════════════════════════════════════════════════════
+  addPage();
+  let y = MT + 6;
+
+  y = wSecLabel(doc, y, 1, 'I tuoi numeri del '+year, accent, LINE, INK);
+
+  // KPI row — 4 chips
+  const kW = (CW-6)/4;
+  const energyCol = ov.energy.mean===null ? SUB : ov.energy.mean>=7 ? GREEN : ov.energy.mean>=5 ? AMBER : RED;
+  const freqCol   = ov.freq.perWeek>=1 ? GREEN : ov.freq.perWeek>=0.5 ? AMBER : RED;
+
+  wKpiChip(doc, ML,           y, kW, 20, 'Sedute',        ov.totalSedute,                                 'anno solare',  INK,   WARM, SUB);
+  wKpiChip(doc, ML+kW+2,      y, kW, 20, 'Energia media', ov.energy.mean ? ov.energy.mean+'/10' : '—',   ov.notes.length+' note', energyCol, WARM, SUB);
+  wKpiChip(doc, ML+kW*2+4,    y, kW, 20, 'Freq. media',   ov.freq.perWeek>0?ov.freq.perWeek+'×/sett':'—','nel periodo',  freqCol, WARM, SUB);
+  wKpiChip(doc, ML+kW*3+6,    y, kW, 20, 'Sedute dolore', ov.seduteConDolore,                             ov.totalSedute>0?Math.round(ov.seduteConDolore/ov.totalSedute*100)+'%':'', ov.seduteConDolore>0?AMBER:GREEN, WARM, SUB);
+  y += 24;
+
+  // Barchart trimestri
+  y = wSecLabel(doc, y, 2, 'Sedute per trimestre', accent, LINE, INK);
+  const qLabels = ['Q1 · Gen–Mar','Q2 · Apr–Giu','Q3 · Lug–Set','Q4 · Ott–Dic'];
+  const qMax = Math.max(...ov.quarterData.map(q=>q.freq.count), 1);
+  ov.quarterData.forEach((q, i) => {
+    const col = q.freq.count === Math.max(...ov.quarterData.map(x=>x.freq.count)) ? accent : MID;
+    y = wBar(doc, ML, y, qLabels[i], q.freq.count, qMax, 90, col, INK, LINE);
+  });
+  y += 4;
+
+  // Giorno preferito
+  const dowCounts = [0,0,0,0,0,0,0];
+  ov.workouts.forEach(w => { const d=(new Date(w.createdAt).getDay()+6)%7; dowCounts[d]++; });
+  const dowLabels = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const bestDow = dowCounts.indexOf(Math.max(...dowCounts));
+  const dowMax  = Math.max(...dowCounts,1);
+
+  y = wSecLabel(doc, y, 3, 'Il tuo giorno preferito', accent, LINE, INK);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...accent);
+  doc.text(`${dowLabels[bestDow]} — ${dowCounts[bestDow]} sedute`, ML, y+5);
+  y += 9;
+  // Mini dow bars
+  const dowBarW = Math.floor((CW-4)/7);
+  dowCounts.forEach((n, i) => {
+    const bx = ML + i*(dowBarW+1);
+    const fillH = n>0 ? Math.round(n/dowMax*14) : 1;
+    const barColor = i===bestDow ? accent : LINE;
+    doc.setFillColor(barColor[0], barColor[1], barColor[2]);
+    doc.rect(bx, y+14-fillH, dowBarW, fillH, 'F');
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(5.5);
+    doc.setTextColor(...SUB);
+    doc.text(dowLabels[i].slice(0,3).toUpperCase(), bx+dowBarW/2, y+18, { align:'center' });
+    if (n>0) {
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(5.5);
+      doc.setTextColor(...INK);
+      doc.text(String(n), bx+dowBarW/2, y+12-fillH, { align:'center' });
+    }
+  });
+  y += 24;
+
+  // Progressioni overview
+  const progKeys = Object.keys(ov.progressions);
+  if (progKeys.length) {
+    y = wSecLabel(doc, y, 4, 'Progressioni registrate', accent, LINE, INK);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...MID);
+    doc.text(`${progKeys.length} esercizi con progressione loggata nell'anno`, ML, y+4);
+    y += 9;
+    // Top 5 progressions with before/after
+    progKeys.slice(0,5).forEach(nome => {
+      const p = ov.progressions[nome];
+      const beforeTxt = [p.first.peso,p.first.reps].filter(Boolean).join(' × ') || '—';
+      const afterTxt  = [p.last.peso, p.last.reps ].filter(Boolean).join(' × ') || '—';
+      // row bg
+      doc.setFillColor(...WARM);
+      doc.rect(ML, y, CW, 7, 'F');
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...INK);
+      doc.text(nome, ML+2, y+5);
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(...SUB);
+      doc.text(beforeTxt, ML+80, y+5);
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(...MID);
+      doc.text('→', ML+105, y+5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...accent);
+      doc.text(afterTxt, ML+112, y+5);
+      y += 8;
+    });
+    y += 4;
+  }
+
+  // ══════════════════════════════════════════════════════
+  // PAGINA 3 — I MOMENTI CHE CONTANO
+  // ══════════════════════════════════════════════════════
+  addPage();
+  y = MT + 6;
+
+  y = wSecLabel(doc, y, 5, 'I momenti che contano', accent, LINE, INK);
+
+  // Top 3 moments
+  ov.moments.forEach((m, i) => {
+    const dateLabel = new Date(m.date).toLocaleDateString('it-IT',{day:'2-digit',month:'long'});
+    // Date chip
+    doc.setFillColor(...accent);
+    doc.rect(ML, y, 28, 6, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...WHITE);
+    doc.text(dateLabel.toUpperCase(), ML+14, y+4.2, { align:'center' });
+    if (m.energia) {
+      doc.setFillColor(30,30,30);
+      doc.rect(ML+30, y, 18, 6, 'F');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...WHITE);
+      doc.text(`⚡ ${m.energia}/10`, ML+39, y+4.2, { align:'center' });
+    }
+    y += 8;
+    const mLines = doc.splitTextToSize(`"${m.text}"`, CW-6);
+    const mH = mLines.length*5.5 + 8;
+    doc.setFillColor(248,246,242);
+    doc.rect(ML, y, CW, mH, 'F');
+    doc.setFillColor(...accent);
+    doc.rect(ML, y, 2.5, mH, 'F');
+    doc.setFont('helvetica','italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...INK);
+    doc.text(mLines, ML+6, y+7);
+    y += mH + 6;
+  });
+
+  // Hashtag year
+  y = wSecLabel(doc, y, 6, 'Le parole del tuo anno', accent, LINE, INK);
+
+  // Word of the year
+  if (ov.hashtags.wordOfYear) {
+    const woyText = wrappedWordOfYearText(ov.hashtags.wordOfYear, tone);
+    const woyLines = doc.splitTextToSize(woyText, CW-6);
+    const woyH = woyLines.length*5.5+8;
+    doc.setFillColor(...accent);
+    doc.rect(ML, y, CW, woyH, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...WHITE);
+    doc.text(woyLines, ML+4, y+7);
+    y += woyH + 8;
+  }
+
+  // Hashtag pills grid — positives + negatives
+  const drawHashtagSection = (tags, color, bgRgb, title) => {
+    if (!tags.length) return;
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...color);
+    doc.text(title, ML, y);
+    y += 6;
+    let px = ML;
+    tags.slice(0,8).forEach(([tag, count]) => {
+      const label = `${tag}  ×${count}`;
+      const tw = doc.getTextWidth(label) + 8;
+      if (px + tw > PW - MR) { px = ML; y += 9; }
+      doc.setFillColor(...bgRgb);
+      doc.rect(px, y-5, tw, 7, 'F');
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...color);
+      doc.text(label, px+4, y);
+      px += tw + 3;
+    });
+    y += 12;
+  };
+
+  drawHashtagSection(ov.hashtags.pos, GREEN, [232,245,233], '✓ Positivi');
+  drawHashtagSection(ov.hashtags.neg, AMBER, [255,243,224], '⚠ Da monitorare');
+
+  // Esercizi più frequenti
+  if (ov.topExercises.length) {
+    y = wSecLabel(doc, y, 7, 'Gli esercizi del tuo anno', accent, LINE, INK);
+    const exMax = ov.topExercises[0][1];
+    ov.topExercises.slice(0,6).forEach(([nome, n]) => {
+      y = wBar(doc, ML, y, nome, n, exMax, 80, accent, INK, LINE);
+    });
+    y += 4;
+  }
+
+  // Block types
+  if (ov.blockTypes.length) {
+    y = wSecLabel(doc, y, 8, 'Come hai allenato', accent, LINE, INK);
+    const btMax = ov.blockTypes[0].n;
+    ov.blockTypes.slice(0,5).forEach(bt => {
+      y = wBar(doc, ML, y, bt.label, bt.n, btMax, 80, BLUE, INK, LINE);
+    });
+    y += 4;
+  }
+
+  // ══════════════════════════════════════════════════════
+  // PAGINA 4 — TRIMESTRE PER TRIMESTRE
+  // ══════════════════════════════════════════════════════
+  addPage();
+  y = MT + 6;
+
+  y = wSecLabel(doc, y, 9, 'Il tuo anno trimestre per trimestre', accent, LINE, INK);
+
+  // Table header
+  const cols = { name:ML, sedute:ML+44, energia:ML+68, prog:ML+100, tendenza:ML+130, nota:ML+152 };
+  doc.setFillColor(...INK);
+  doc.rect(ML, y, CW, 7, 'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(6);
+  doc.setTextColor(...WHITE);
+  doc.text('TRIMESTRE',   cols.name+2,     y+4.5);
+  doc.text('SEDUTE',      cols.sedute+2,   y+4.5);
+  doc.text('ENERGIA',     cols.energia+2,  y+4.5);
+  doc.text('PROGRESS.',   cols.prog+2,     y+4.5);
+  doc.text('TENDENZA',    cols.tendenza+2, y+4.5);
+  doc.text('NOTA CHIAVE', cols.nota+2,     y+4.5);
+  y += 7;
+
+  const qNames = ['Q1 · Gen–Mar','Q2 · Apr–Giu','Q3 · Lug–Set','Q4 · Ott–Dic'];
+  const trendArrow = t => t==='crescita'?'↑':t==='calo'?'↓':'→';
+  const trendColor = t => t==='crescita'?GREEN:t==='calo'?RED:MID;
+
+  ov.quarterData.forEach((q, i) => {
+    const rowH = q.best ? 14 : 9;
+    doc.setFillColor(i%2===0?250:245, i%2===0?249:244, i%2===0?246:241);
+    doc.rect(ML, y, CW, rowH, 'F');
+
+    // Q label with accent if most active
+    const isBest = q.freq.count === Math.max(...ov.quarterData.map(x=>x.freq.count));
+    if (isBest) { doc.setFillColor(...accent); doc.rect(ML, y, 2.5, rowH, 'F'); }
+
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(isBest ? accent[0] : INK[0], isBest ? accent[1] : INK[1], isBest ? accent[2] : INK[2]);
+    doc.text(qNames[i], cols.name+4, y+6);
+
+    doc.setFont('helvetica', q.freq.count>0?'bold':'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...(q.freq.count>0 ? INK : SUB));
+    doc.text(String(q.freq.count), cols.sedute+2, y+6);
+
+    if (q.energy.mean !== null) {
+      const ec = q.energy.mean>=7?GREEN:q.energy.mean>=5?AMBER:RED;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...ec);
+      doc.text(q.energy.mean+'/10', cols.energia+2, y+6);
+    } else {
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...SUB);
+      doc.text('—', cols.energia+2, y+6);
+    }
+
+    const pc = Object.keys(q.progs).length;
+    doc.setFont('helvetica', pc>0?'bold':'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...(pc>0?GREEN:SUB));
+    doc.text(pc>0?`${pc} esercizi`:'—', cols.prog+2, y+6);
+
+    if (q.energy.trend) {
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(8);
+      doc.setTextColor(...trendColor(q.energy.trend));
+      doc.text(trendArrow(q.energy.trend)+' '+q.energy.trend, cols.tendenza+2, y+6);
+    } else {
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...SUB);
+      doc.text('—', cols.tendenza+2, y+6);
+    }
+
+    if (q.best) {
+      const noteSnip = doc.splitTextToSize(q.best.text.slice(0,60), 44);
+      doc.setFont('helvetica','italic');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...MID);
+      doc.text(noteSnip[0]+(q.best.text.length>60?'…':''), cols.nota+2, y+6);
+    }
+
+    y += rowH + 1;
+  });
+
+  y += 8;
+
+  // Q1→Q4 trend narrative
+  const firstQ = ov.quarterData.find(q=>q.freq.count>0);
+  const lastQ  = [...ov.quarterData].reverse().find(q=>q.freq.count>0);
+  if (firstQ && lastQ && firstQ !== lastQ) {
+    const trend = lastQ.freq.count > firstQ.freq.count ? 'crescita' :
+                  lastQ.freq.count < firstQ.freq.count ? 'calo' : 'stabile';
+    const trendText = {
+      crescita: `La frequenza è cresciuta nel corso dell'anno: da ${firstQ.freq.count} sedute nel primo trimestre attivo a ${lastQ.freq.count} nell'ultimo. Un segnale positivo.`,
+      calo:     `La frequenza ha avuto un calo nel corso dell'anno. È normale che ci siano periodi di minor presenza — l'importante è riprendere il ritmo.`,
+      stabile:  `La frequenza è rimasta stabile durante l'anno — segno di continuità e regolarità. È una delle qualità più difficili da mantenere.`
+    }[trend];
+    const tLines = doc.splitTextToSize(trendText, CW-6);
+    const tH = tLines.length*5.5+8;
+    const tColor = trend==='crescita' ? [232,245,233] : trend==='calo' ? [255,243,224] : [245,240,232];
+    const tStroke = trend==='crescita' ? GREEN : trend==='calo' ? AMBER : MID;
+    doc.setFillColor(...tColor);
+    doc.rect(ML, y, CW, tH, 'F');
+    doc.setFillColor(...tStroke);
+    doc.rect(ML, y, 3, tH, 'F');
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...INK);
+    doc.text(tLines, ML+6, y+7);
+    y += tH + 8;
+  }
+
+  // Progressions Q comparison — top 3 exercises with multi-quarter data
+  const yearProgs = ov.progressions;
+  const progEntries = Object.entries(yearProgs).slice(0,3);
+  if (progEntries.length) {
+    y = wSecLabel(doc, y, 10, 'Progressioni anno — prima vs dopo', accent, LINE, INK);
+
+    // Header
+    doc.setFillColor(...INK);
+    doc.rect(ML, y, CW, 6.5, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(6);
+    doc.setTextColor(...WHITE);
+    doc.text('ESERCIZIO',    ML+2,         y+4.5);
+    doc.text('INIZIO ANNO',  ML+CW*0.45,   y+4.5);
+    doc.text('FINE ANNO',    ML+CW*0.68,   y+4.5);
+    doc.text('SERIE LOG.',   ML+CW*0.86,   y+4.5);
+    y += 6.5;
+
+    progEntries.forEach(([nome, p], i) => {
+      const rowH = 8;
+      doc.setFillColor(i%2===0?250:245, i%2===0?249:244, i%2===0?246:241);
+      doc.rect(ML, y, CW, rowH, 'F');
+      const beforeTxt = [p.first.peso,p.first.reps].filter(Boolean).join(' × ')||'—';
+      const afterTxt  = [p.last.peso, p.last.reps].filter(Boolean).join(' × ')||'—';
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...INK);
+      doc.text(nome, ML+2, y+5.5);
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(...MID);
+      doc.text(beforeTxt, ML+CW*0.45, y+5.5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...accent);
+      doc.text(afterTxt, ML+CW*0.68, y+5.5);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...SUB);
+      doc.text(String(p.count), ML+CW*0.86, y+5.5);
+      y += rowH+1;
+    });
+    y += 6;
+  }
+
+  // ══════════════════════════════════════════════════════
+  // PAGINA 5 — COME SEI CAMBIATO + IL PROSSIMO ANNO
+  // ══════════════════════════════════════════════════════
+  addPage();
+  y = MT + 6;
+
+  // Come sei cambiato — before/after year
+  y = wSecLabel(doc, y, 11, 'Come sei cambiato', accent, LINE, INK);
+
+  // Compare first workout of year vs last
+  const sortedW = [...ov.workouts].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  const firstW = sortedW[0];
+  const lastW  = sortedW[sortedW.length-1];
+
+  const baRows = [];
+  // Continuità
+  if (ov.freq.consecutive >= 4) {
+    baRows.push({ label:'Continuità', prima:'Variabile', dopo:`${ov.freq.consecutive} settimane con sedute` });
+  }
+  // Energia Q1 vs Q4
+  const q1e = ov.quarterData[0].energy.mean;
+  const q4e = ov.quarterData[3].energy.mean || ov.quarterData[2].energy.mean;
+  if (q1e && q4e) {
+    const diff = Math.round((q4e - q1e)*10)/10;
+    const symbol = diff>0?'↑':diff<0?'↓':'=';
+    baRows.push({ label:'Energia (Q1→Q4)', prima: q1e+'/10', dopo: q4e+'/10 '+symbol });
+  }
+  // Pain management
+  const resolvedPain = ov.workouts.filter((w,i,arr) => w.tipoSeduta==='dolori' && arr[i+1]?.tipoSeduta==='normale').length;
+  if (resolvedPain > 0) {
+    baRows.push({ label:'Gestione dolore', prima:'Episodi in seduta', dopo:`${resolvedPain} episodi migliorati ✓` });
+  }
+  // Progressions
+  const np = Object.keys(ov.progressions).length;
+  if (np > 0) {
+    baRows.push({ label:'Progressioni log.', prima:'–', dopo:`${np} esercizi tracciati` });
+  }
+  // PainPoints resolved on profile
+  const resolvedPP = (c.painPoints||[]).filter(p=>p.stato==='risolto'||p.stato==='miglioramento');
+  if (resolvedPP.length) {
+    baRows.push({ label:'Zone dolore', prima:resolvedPP.slice(0,2).map(p=>p.label).join(', '), dopo:'In miglioramento ✓' });
+  }
+
+  if (baRows.length) {
+    // Table header
+    doc.setFillColor(...INK);
+    doc.rect(ML, y, CW, 6.5, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(6);
+    doc.setTextColor(...WHITE);
+    doc.text('ASPETTO',   ML+2,       y+4.5);
+    doc.text('INIZIO',    ML+CW*0.4,  y+4.5);
+    doc.text('OGGI',      ML+CW*0.68, y+4.5);
+    y += 6.5;
+    baRows.forEach((row, i) => {
+      const rH = 8;
+      doc.setFillColor(i%2===0?250:245, i%2===0?249:244, i%2===0?246:241);
+      doc.rect(ML, y, CW, rH, 'F');
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...INK);
+      doc.text(row.label, ML+2, y+5.5);
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(...MID);
+      doc.text(row.prima, ML+CW*0.4, y+5.5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...accent);
+      doc.text(row.dopo, ML+CW*0.68, y+5.5);
+      y += rH+1;
+    });
+    y += 8;
+  }
+
+  // IL PROSSIMO ANNO
+  y = wSecLabel(doc, y, 12, `Gli obiettivi del ${year+1}`, accent, LINE, INK);
+
+  const obiettivi = generateObiettiviProssimoTrimestre(c, { freq: ov.freq, energy: ov.energy }, tone);
+  // Add year-specific objective
+  const yearObj = np > 0
+    ? `· Continuare a loggare le progressioni — hai già ${np} esercizi tracciati`
+    : `· Iniziare a loggare pesi e reps — i dati di progresso sono il tuo specchio`;
+  const allObj = [...obiettivi, yearObj];
+
+  const objH = allObj.length * 9 + 8;
+  doc.setFillColor(248,246,242);
+  doc.rect(ML, y, CW, objH, 'F');
+  doc.setFillColor(...accent);
+  doc.rect(ML, y, 3, objH, 'F');
+  allObj.forEach((obj, i) => {
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...INK);
+    doc.text(obj, ML+6, y+8+i*9);
+  });
+  y += objH + 10;
+
+  // Closing text
+  const closingText = wrappedClosingText(c, ov, tone, year);
+  const closingLines = doc.splitTextToSize(closingText, CW-4);
+  const closingH = closingLines.length*5.5+8;
+  doc.setFillColor(...INK);
+  doc.rect(ML, y, CW, closingH, 'F');
+  doc.setFillColor(...accent);
+  doc.rect(ML, y, 3, closingH, 'F');
+  doc.setFont('helvetica','italic');
+  doc.setFontSize(9);
+  doc.setTextColor(...WHITE);
+  doc.text(closingLines, ML+6, y+8);
+  y += closingH + 8;
+
+  // Signature
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...accent);
+  doc.text('Juri Monasso', ML, y);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...SUB);
+  doc.text('Personal Trainer · Allenati Senza Dolori', ML, y+5);
+
+  // Footer last page
+  wPdfFooter(doc, pageNum, accent, LINE, SUB);
+
+  // ─ Save ─
+  const safeName = `${c.nome}_${c.cognome}`.replace(/\s+/g,'_');
+  doc.save(`ASD_Wrapped_${safeName}_${year}.pdf`);
+}
+
 // ─── RESET ────────────────────────────────────────────────────────────
 function resetAll() {
   STATE.raw = null;
@@ -3320,6 +4245,8 @@ function resetAll() {
   document.querySelectorAll('.mbti-btn').forEach(b => b.classList.remove('selected'));
   document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
   document.getElementById('mbtiSection').classList.remove('visible');
+  document.getElementById('wrappedYearSection').style.display = 'none';
+  document.getElementById('periodoSelect').closest('.sel-group').style.display = '';
   document.getElementById('btnGenerate').classList.remove('ready');
 }
 </script>
