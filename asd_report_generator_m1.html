@@ -2810,6 +2810,224 @@ function buildJuriSectionHTML(juriClient, juriWorkouts, juriNotes) {
 // global reference for Juri section avg calc
 let clientData_global = [];
 
+/* ═══════════════════════════════════════════════════════════════════
+   MODULO 5a — SCORE / TREND / PROSSIMA DECISIONE
+   ═══════════════════════════════════════════════════════════════════ */
+
+function scoreIC(freq, skips, periodDays) {
+  if (!freq.count) return 0;
+  const weeks = Math.max(periodDays/7, 1);
+  const freqScore = Math.min(freq.perWeek/1.0, 1)*6;
+  const consScore = Math.min(freq.consecutive/weeks, 1)*3;
+  const absences  = (skips||[]).filter(s=>s.who==='client').length;
+  const penalita  = Math.min(absences*0.5, 2);
+  return Math.round(Math.min(Math.max(freqScore+consScore-penalita, 0), 10)*10)/10;
+}
+
+function scoreIR(workouts, notes) {
+  if (!workouts.length) return null;
+  let score = 8;
+  const seduteConDolore = workouts.filter(w=>w.tipoSeduta==='dolori').length;
+  const pctDolore = seduteConDolore/workouts.length;
+  score -= Math.min(pctDolore*8, 4);
+  const sorted = [...workouts].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  let resolved = 0;
+  for (let i=0;i<sorted.length-1;i++) {
+    if (sorted[i].tipoSeduta==='dolori' && sorted[i+1]?.tipoSeduta==='normale') resolved++;
+  }
+  score += Math.min(resolved, 2);
+  const fisiologici = ['#pocosonno','#stress','#preciclo','#ciclo','#stresslavoro'];
+  const negFisio = notes.flatMap(n=>n.parsed?.hashtags||[]).filter(t=>fisiologici.includes(t)).length;
+  score -= Math.min(negFisio*0.5, 2);
+  if (sorted.length && sorted[sorted.length-1].tipoSeduta==='dolori') score -= 1;
+  return Math.round(Math.min(Math.max(score, 0), 10)*10)/10;
+}
+
+function scoreIE(notes, energy) {
+  if (!notes.length) return null;
+  let score = 5;
+  if (energy.mean !== null) score += (energy.mean-5)*0.4;
+  const allTags = notes.flatMap(n=>n.parsed?.hashtags||[]);
+  const posCount = allTags.filter(t=>HASHTAG_POSITIVE.includes(t)).length;
+  const negCount = allTags.filter(t=>HASHTAG_NEGATIVE.includes(t)).length;
+  score += Math.min(Math.max((posCount-negCount)*0.3, -2), 2);
+  if (energy.trend==='crescita') score += 1;
+  else if (energy.trend==='calo') score -= 1;
+  return Math.round(Math.min(Math.max(score, 0), 10)*10)/10;
+}
+
+function computeTrend4(workouts, notes, periodDays) {
+  const sortedW = [...workouts].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  const sortedN = [...notes].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const half  = Math.floor(sortedW.length/2);
+  const halfN = Math.floor(sortedN.length/2);
+  const halfDays = Math.max(periodDays/2, 1);
+  const w1=sortedW.slice(0,half), w2=sortedW.slice(half);
+  const n1=sortedN.slice(0,halfN), n2=sortedN.slice(halfN);
+  const pain1 = w1.length ? w1.filter(w=>w.tipoSeduta==='dolori').length/w1.length : 0;
+  const pain2 = w2.length ? w2.filter(w=>w.tipoSeduta==='dolori').length/w2.length : 0;
+  const painTrend = pain2<pain1-0.1?'miglioramento':pain2>pain1+0.1?'peggioramento':'stabile';
+  const e1=computeEnergy(n1), e2=computeEnergy(n2);
+  let energiaTrend='stabile';
+  if (e1.mean!==null && e2.mean!==null) {
+    if (e2.mean-e1.mean>0.8) energiaTrend='crescita';
+    else if (e1.mean-e2.mean>0.8) energiaTrend='calo';
+  }
+  const freq1=w1.length/halfDays*7, freq2=w2.length/halfDays*7;
+  const contTrend = freq2>freq1+0.3?'crescita':freq2<freq1-0.3?'calo':'stabile';
+  return {
+    dolore:     {trend:painTrend,    label:'Dolore'},
+    energia:    {trend:energiaTrend, label:'Energia'},
+    continuita: {trend:contTrend,    label:'Continuità'},
+    frequenza:  {trend:contTrend,    label:'Frequenza'}
+  };
+}
+
+function generateDecisione(c, freq, energy, scores, trend4, workouts, notes, percorso) {
+  const sortedW = [...workouts].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  const lastW   = sortedW[sortedW.length-1];
+  const seduteConDolore = workouts.filter(w=>w.tipoSeduta==='dolori').length;
+  const pctDolore = workouts.length ? seduteConDolore/workouts.length : 0;
+  const allTags  = notes.flatMap(n=>n.parsed?.hashtags||[]);
+  const posCount = allTags.filter(t=>HASHTAG_POSITIVE.includes(t)).length;
+  const negCount = allTags.filter(t=>HASHTAG_NEGATIVE.includes(t)).length;
+  const topNegTag = (()=>{ const f={}; allTags.filter(t=>HASHTAG_NEGATIVE.includes(t)).forEach(t=>{f[t]=(f[t]||0)+1;}); return Object.entries(f).sort((a,b)=>b[1]-a[1])[0]?.[0]||null; })();
+  const giorniDaUltima = lastW ? Math.round((Date.now()-new Date(lastW.createdAt))/86400000) : 999;
+
+  // FOCUS
+  const worstScore = [{k:'IC',v:scores.ic,label:'continuità'},{k:'IR',v:scores.ir,label:'recupero e dolore'},{k:'IE',v:scores.ie,label:'motivazione ed energia'}]
+    .filter(s=>s.v!==null).sort((a,b)=>a.v-b.v)[0];
+  let focus = worstScore && worstScore.v<5
+    ? `Priorità su ${worstScore.label} — è il punto più debole del periodo (score ${worstScore.v}/10).`
+    : freq.perWeek<1
+      ? `Aumentare la frequenza a 1×/sett. È la leva principale.`
+      : pctDolore>0.3
+        ? `Gestione dolore: ${Math.round(pctDolore*100)}% sedute con dolore. Valutare la programmazione.`
+        : energy.mean!==null && energy.mean<6
+          ? `Lavorare sul recupero — energia media ${energy.mean}/10.`
+          : `Consolidare i progressi — tutti gli indicatori sono nella norma.`;
+
+  // RISCHIO
+  let rischio = giorniDaUltima>21
+    ? `Drop-out imminente — ultima seduta ${giorniDaUltima} giorni fa. Contattare subito.`
+    : lastW?.tipoSeduta==='dolori'
+      ? `Ultima seduta in dolore non seguita da una normale — episodio aperto.`
+      : (trend4.energia.trend==='calo' && trend4.continuita.trend==='calo')
+        ? `Doppio calo: energia e continuità in discesa. Segnale di sovraccarico o demotivazione.`
+        : topNegTag==='#motivazione-bassa'
+          ? `Motivazione bassa ricorrente — verificare se il programma è stimolante.`
+          : (topNegTag==='#stress'||topNegTag==='#stresslavoro')
+            ? `Stress extraseduta presente — il recupero potrebbe essere compromesso.`
+            : !c.schedule?.length
+              ? `Nessuno slot fisso — proporre orario stabile.`
+              : `Nessun segnale critico. Continuare a monitorare.`;
+
+  // FUNZIONA
+  let funziona = posCount>negCount && posCount>0
+    ? (()=>{ const f={}; allTags.filter(t=>HASHTAG_POSITIVE.includes(t)).forEach(t=>{f[t]=(f[t]||0)+1;}); const top=Object.entries(f).sort((a,b)=>b[1]-a[1])[0]?.[0]; return `Note prevalentemente positive${top?' ('+top+' ricorrente)':''} — il cliente risponde bene.`; })()
+    : freq.consecutive>=4
+      ? `Continuità eccellente: ${freq.consecutive} sett. consecutive. Da valorizzare.`
+      : energy.trend==='crescita'
+        ? `Energia in crescita — il carico è ben calibrato.`
+        : pctDolore<0.1 && workouts.length>3
+          ? `Quasi nessuna seduta con dolore — il lavoro preventivo funziona.`
+          : `La frequenza si mantiene stabile. Base solida.`;
+
+  // NON CAMBIARE
+  const progEsercizi=[];
+  workouts.forEach(w=>{(w.blocchi||[]).forEach(b=>{(b.esercizi||[]).forEach(e=>{if((e.prog||[]).filter(p=>p.peso||p.reps).length>=2&&e.nome)progEsercizi.push(e.nome);});});});
+  const topProg=[...new Set(progEsercizi)][0];
+  let nonCambiare = topProg
+    ? `Mantenere ${topProg} nel programma — più dati di progressione loggati.`
+    : freq.perWeek>=1
+      ? `Non cambiare la cadenza (${freq.perWeek}×/sett) — è quella giusta.`
+      : `Mantenere l'approccio graduale — stabilità prima di intensità.`;
+
+  // STEP
+  let step = percorso && percorso.pct<30
+    ? `Attivare il Percorso Fit (${percorso.pct}% completato) — priorità strutturale.`
+    : freq.perWeek<0.5
+      ? `Chiamata di verifica entro 3 giorni.`
+      : freq.perWeek<1
+        ? `Proporre un secondo slot settimanale.`
+        : energy.mean!==null && energy.mean>=7 && freq.perWeek>=1
+          ? `Aumentare il carico progressivamente — energia e frequenza supportano l'avanzamento.`
+          : pctDolore>0.4
+            ? `Revisione programmazione: troppo dolore. Valutare deload o focus mobilità.`
+            : `Continuare il programma e rivalutare tra 4 settimane.`;
+
+  return { focus, rischio, funziona, nonCambiare, step };
+}
+
+function buildScoreBadge(val, label) {
+  if (val===null) return `<div class="score-chip score-na"><div class="sc-val">—</div><div class="sc-label">${label}</div></div>`;
+  const col = val>=7?'green':val>=5?'amber':'red';
+  return `<div class="score-chip score-${col}"><div class="sc-val">${val}</div><div class="sc-label">${label}</div></div>`;
+}
+
+function buildTrendRow(trend4) {
+  const items=[{k:'dolore',icon:'🩹'},{k:'energia',icon:'⚡'},{k:'continuita',icon:'📅'},{k:'frequenza',icon:'🔄'}];
+  const arrowMap={miglioramento:'↓ ',crescita:'↑ ',calo:'↓ ',stabile:'→ ',peggioramento:'↑ '};
+  const colorMap={
+    dolore:{miglioramento:'green',stabile:'amber',peggioramento:'red'},
+    energia:{crescita:'green',stabile:'amber',calo:'red'},
+    continuita:{crescita:'green',stabile:'amber',calo:'red'},
+    frequenza:{crescita:'green',stabile:'amber',calo:'red'}
+  };
+  const labelMap={
+    dolore:{miglioramento:'in miglioramento',stabile:'stabile',peggioramento:'peggiorato'},
+    energia:{crescita:'in crescita',stabile:'stabile',calo:'in calo'},
+    continuita:{crescita:'in crescita',stabile:'stabile',calo:'in calo'},
+    frequenza:{crescita:'in crescita',stabile:'stabile',calo:'in calo'}
+  };
+  return items.map(({k,icon})=>{
+    const t=trend4[k];
+    const col=colorMap[k]?.[t.trend]||'amber';
+    const lbl=labelMap[k]?.[t.trend]||t.trend;
+    const arrow=arrowMap[t.trend]||'→ ';
+    return `<div class="trend-item trend-${col}"><span class="trend-icon">${icon}</span><span class="trend-label">${t.label}</span><span class="trend-arrow">${arrow}</span><span class="trend-val">${lbl}</span></div>`;
+  }).join('');
+}
+
+function buildDecisioneHTML(dec) {
+  const fields=[
+    {icon:'🎯',label:'Focus prossimo periodo',val:dec.focus,     col:'ink'},
+    {icon:'⚠️',label:'Rischio principale',    val:dec.rischio,   col:'red'},
+    {icon:'✅',label:'Cosa sta funzionando',  val:dec.funziona,  col:'green'},
+    {icon:'🔒',label:'Cosa non cambiare',     val:dec.nonCambiare,col:'amber'},
+    {icon:'➡️',label:'Prossimo step',         val:dec.step,      col:'blue'}
+  ];
+  return fields.map(f=>`<div class="dec-row dec-${f.col}"><div class="dec-icon">${f.icon}</div><div class="dec-body"><div class="dec-label">${f.label}</div><div class="dec-text">${esc(f.val)}</div></div></div>`).join('');
+}
+
+function buildClientScoreSection(clientData, periodDays, skipsMap) {
+  if (!clientData.length) return '';
+  return clientData.map(({c,w,notes,freq,energy})=>{
+    const skips=skipsMap?.[c.id]||[];
+    const ic=scoreIC(freq,skips,periodDays);
+    const ir=scoreIR(w,notes);
+    const ie=scoreIE(notes,energy);
+    const trend4=computeTrend4(w,notes,periodDays);
+    const scores={ic,ir,ie};
+    const percorso=STATE.percorsoMap[c.id]||null;
+    const dec=generateDecisione(c,freq,energy,scores,trend4,w,notes,percorso);
+    const avgArr=[ic,ir,ie].filter(v=>v!==null);
+    const globalScore=avgArr.length?Math.round(avgArr.reduce((a,b)=>a+b,0)/avgArr.length*10)/10:null;
+    const globalCol=globalScore===null?'var(--sub)':globalScore>=7?'var(--green)':globalScore>=5?'var(--amber)':'var(--red)';
+    return `
+    <div class="client-score-block reveal">
+      <div class="csb-header">
+        <div class="csb-name">${esc(c.nome+' '+c.cognome)}</div>
+        <div class="csb-meta">${c.profilo==='sportivo_giovane'?'sportivo':'adulto'} · ${c.goal||'—'}</div>
+        ${globalScore!==null?`<div class="csb-global" style="color:${globalCol}">${globalScore}<span>/10</span></div>`:''}
+      </div>
+      <div class="csb-scores">${buildScoreBadge(ic,'Continuità')}${buildScoreBadge(ir,'Recupero')}${buildScoreBadge(ie,'Engagement')}</div>
+      <div class="trend-row">${buildTrendRow(trend4)}</div>
+      <details class="dec-details"><summary class="dec-summary">▸ Prossima decisione</summary><div class="dec-content">${buildDecisioneHTML(dec)}</div></details>
+    </div>`;
+  }).join('');
+}
+
 // ─── MAIN REPORT BUILDER ──────────────────────────────────────────────
 
 function generatePTReport(config) {
@@ -2870,6 +3088,9 @@ function _buildPTReportHTML(config) {
   // Clients with retention
   const retained2w = clientData.filter(d=>d.freq.consecutive>=2).length;
 
+  // ── M5: pre-compute score section ──
+  const scoresSectionHTML = buildClientScoreSection(clientData, periodDays, STATE.skipMap);
+
   const html = `<!DOCTYPE html>
 <html lang="it">
 <head>
@@ -2886,9 +3107,35 @@ function _buildPTReportHTML(config) {
   --red:#e53935;--red-s:rgba(229,57,53,.07);--red-m:rgba(229,57,53,.18);
   --green:#2e7d32;--green-s:rgba(46,125,50,.07);--green-m:rgba(46,125,50,.18);
   --amber:#e65100;--amber-s:rgba(230,81,0,.07);--amber-m:rgba(230,81,0,.15);
+  --blue:#1565c0;--blue-s:rgba(21,101,192,.07);
 }
 html{scroll-behavior:smooth}
 body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--ink);line-height:1.6;overflow-x:hidden}
+.client-score-block{background:var(--white);border:1px solid var(--line);border-radius:2px;padding:22px 24px;margin-bottom:2px;transition:background .15s}
+.client-score-block:hover{background:var(--warm)}
+.csb-header{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.csb-name{font-size:1rem;font-weight:700;color:var(--ink)}
+.csb-meta{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--sub);letter-spacing:.06em}
+.csb-global{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:700;line-height:1;margin-left:auto}
+.csb-global span{font-size:.9rem;color:var(--sub)}
+.csb-scores{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.score-chip{text-align:center;border-radius:2px;padding:8px 16px;min-width:72px}
+.sc-val{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:700;line-height:1}
+.sc-label{font-family:'DM Mono',monospace;font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;margin-top:3px;opacity:.7}
+.score-green{background:var(--green-s);color:var(--green)}.score-amber{background:var(--amber-s);color:var(--amber)}.score-red{background:var(--red-s);color:var(--red)}.score-na{background:var(--line2);color:var(--sub)}
+.trend-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.trend-item{display:flex;align-items:center;gap:5px;font-size:.75rem;padding:4px 10px;border-radius:2px;font-family:'DM Mono',monospace}
+.trend-icon{font-size:.8rem}.trend-label{font-weight:500;color:var(--ink)}.trend-arrow{font-weight:700;font-size:.9rem}.trend-val{font-size:.65rem;letter-spacing:.04em}
+.trend-green{background:var(--green-s);color:var(--green)}.trend-amber{background:var(--amber-s);color:var(--amber)}.trend-red{background:var(--red-s);color:var(--red)}
+.dec-details{border-top:1px solid var(--line2);padding-top:10px}
+.dec-summary{font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.08em;color:var(--red);cursor:pointer;list-style:none;user-select:none}
+.dec-summary::-webkit-details-marker{display:none}
+.dec-content{padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.dec-row{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:2px}
+.dec-icon{font-size:.9rem;flex-shrink:0;margin-top:1px}
+.dec-label{font-family:'DM Mono',monospace;font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px;opacity:.7}
+.dec-text{font-size:.82rem;line-height:1.5;color:var(--ink)}
+.dec-ink{background:var(--warm)}.dec-red{background:var(--red-s)}.dec-green{background:var(--green-s)}.dec-amber{background:var(--amber-s)}.dec-blue{background:var(--blue-s)}
 
 /* REVEAL */
 .reveal{opacity:0;transform:translateY(20px);transition:opacity .55s ease,transform .55s ease}
@@ -3254,6 +3501,18 @@ ${juriAll && juriW.length>0 ? buildJuriSectionHTML(juriAll, juriW, juriN) : ''}
       }).join('')||'<div class="empty-note">Nessun Percorso Fit attivato</div>'}
     </div>
   </div>
+</div>
+
+<!-- §06 SCORE · TREND · DECISIONE -->
+<div class="section">
+  <div class="s-head reveal">
+    <span class="s-num">${juriAll && juriW.length>0?'06':'05'} ·</span>
+    <h2 class="s-title">Score · trend · <em>prossima decisione</em></h2>
+  </div>
+  <div class="c c-white reveal" style="margin-bottom:1px;padding:14px 24px">
+    <div class="c-tag c-tag-m" style="margin-bottom:0">Per ogni cliente: Indice Continuità · Indice Recupero · Indice Engagement · 4 trend · cosa fare adesso</div>
+  </div>
+  ${scoresSectionHTML}
 </div>
 
 </div>
