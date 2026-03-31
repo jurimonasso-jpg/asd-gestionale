@@ -1954,7 +1954,7 @@ function ptPDF_addFonts(doc) {
   doc.setFont('helvetica');
 }
 
-function ptPDF_header(doc, W, ML, MT, periodLabel, today) {
+function ptPDF_header(doc, W, ML, MR, MT, periodLabel, today) {
   // Dark bar
   doc.setFillColor(17, 17, 17);
   doc.rect(0, 0, W, 14, 'F');
@@ -1993,7 +1993,7 @@ function ptPDF_footer(doc, W, H, ML, MR, MB, pageNum) {
 function ptPDF_newPage(doc, W, H, ML, MR, MT, MB, periodLabel, today, pageNumRef) {
   pageNumRef.n++;
   doc.addPage();
-  ptPDF_header(doc, W, ML, MT, periodLabel, today);
+  ptPDF_header(doc, W, ML, MR, MT, periodLabel, today);
   ptPDF_footer(doc, W, H, ML, MR, MB, pageNumRef.n);
   return MT + 4;
 }
@@ -2161,7 +2161,7 @@ function _doPTReport(config) {
   const pageNumRef = { n: 1 };
 
   // ── PAGINA 1 ──
-  ptPDF_header(doc, W, ML, MT, periodLabel, today);
+  ptPDF_header(doc, W, ML, MR, MT, periodLabel, today);
   ptPDF_footer(doc, W, H, ML, MR, MB, 1);
   let y = MT + 4;
 
