@@ -1943,12 +1943,10 @@ function computeAlerts(clients, workoutsMap, notesMap, percorsoMap, period, date
 // ─── PDF HELPERS ──────────────────────────────────────────────────────
 
 function ptPDF_setup() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210, H = 297;
   const ML = 13, MR = 10, MT = 24, MB = 16;
-  const CW = W - ML - MR; // content width
-  return { doc, W, H, ML, MR, MT, MB, CW };
+  const CW = W - ML - MR;
+  return { W, H, ML, MR, MT, MB, CW };
 }
 
 function ptPDF_addFonts(doc) {
@@ -2134,8 +2132,7 @@ function ptPDF_tableRow(doc, cells, cols, x, y, rowColor) {
 // ─── GENERATE PT REPORT ───────────────────────────────────────────────
 
 function generatePTReport(config) {
-  const { jsPDF } = window.jspdf;
-  if (!jsPDF) { alert('Errore: libreria jsPDF non caricata.'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { alert('Errore: libreria jsPDF non caricata. Ricarica la pagina.'); return; }
 
   const btn = document.getElementById('btnGenerate');
   btn.textContent = '⏳ Generazione...';
@@ -2155,7 +2152,9 @@ function generatePTReport(config) {
 }
 
 function _doPTReport(config) {
-  const { doc, W, H, ML, MR, MT, MB, CW } = ptPDF_setup();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const { W, H, ML, MR, MT, MB, CW } = ptPDF_setup();
   const periodLabel = getPeriodLabel(config.period, config.dateFrom, config.dateTo);
   const periodDays  = getPeriodDays(config.period, config.dateFrom, config.dateTo);
   const today = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
