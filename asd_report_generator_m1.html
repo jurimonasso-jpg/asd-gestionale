@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ASD Report Generator — Juri Monasso PT</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=DM+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300;1,600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
 /* ─── RESET & BASE ─────────────────────────────────────────────── */
@@ -1748,8 +1749,640 @@ function onGenerate() {
   if (STATE.reportType === 'pt') {
     generatePTReport(config);
   } else {
-    alert('Report Cliente in arrivo nel Modulo 3!');
+    generateClienteReport(config);
   }
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODULO 3 — REPORT CLIENTE (PDF via jsPDF)
+   ═══════════════════════════════════════════════════════════════════ */
+
+// ─── MBTI CONFIG ─────────────────────────────────────────────────────
+const MBTI_CONFIG = {
+  // GOLD — narrativi, emotivi, valoriali
+  ENFJ: { accent:[160,112,48], tone:'emotivo', label:'Protagonista' },
+  INFJ: { accent:[160,112,48], tone:'emotivo', label:'Avvocato' },
+  ENFP: { accent:[160,112,48], tone:'energico', label:'Attivista' },
+  INFP: { accent:[21,101,192], tone:'delicato', label:'Mediatore' },
+  // RED — diretti, dati, obiettivi
+  ENTJ: { accent:[229,57,53],  tone:'diretto',  label:'Comandante' },
+  INTJ: { accent:[229,57,53],  tone:'analitico',label:'Architetto' },
+  ESTJ: { accent:[229,57,53],  tone:'diretto',  label:'Dirigente' },
+  ESTP: { accent:[229,57,53],  tone:'diretto',  label:'Dinamico' },
+  ISTP: { accent:[229,57,53],  tone:'concreto', label:'Virtuoso' },
+  // BLUE — analitici, profondi
+  INTP: { accent:[21,101,192], tone:'analitico',label:'Logico' },
+  ENTP: { accent:[21,101,192], tone:'analitico',label:'Dibattitore' },
+  ISTJ: { accent:[21,101,192], tone:'concreto', label:'Logistico' },
+  // GREEN — caldi, celebrativi
+  ESFP: { accent:[46,125,50],  tone:'energico', label:'Intrattenitore' },
+  ISFJ: { accent:[46,125,50],  tone:'caldo',    label:'Difensore' },
+  ESFJ: { accent:[46,125,50],  tone:'caldo',    label:'Console' },
+  ISFP: { accent:[46,125,50],  tone:'delicato', label:'Avventuriero' },
+  // DEFAULT
+  '':   { accent:[229,57,53],  tone:'bilanciato',label:'' }
+};
+
+// ─── TEXT GENERATORS ─────────────────────────────────────────────────
+
+function getMBTICfg(mbti) {
+  return MBTI_CONFIG[mbti] || MBTI_CONFIG[''];
+}
+
+function getPeriodLabelShort(period, dateFrom, dateTo) {
+  if (period === 'custom' && dateFrom && dateTo) {
+    const s = new Date(dateFrom), e = new Date(dateTo);
+    return s.toLocaleDateString('it-IT',{day:'2-digit',month:'short'}) + ' – ' + e.toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});
+  }
+  const map = { '1m':'Ultimo mese', '3m':'Ultimo trimestre', '6m':'Ultimi 6 mesi', '1y':'Ultimo anno' };
+  return map[period] || 'Periodo selezionato';
+}
+
+function generateApertura(c, stats, mbti, tone) {
+  const nome = c.nome;
+  const freq = stats.freq;
+  const goal = c.goal || 'il tuo benessere';
+
+  const starters = {
+    emotivo: [
+      `${nome}, ci sono periodi che lasciano il segno. Questo è uno di quelli.`,
+      `${nome}, guardando indietro a queste settimane, una cosa è chiara: hai scelto di esserci.`
+    ],
+    energico: [
+      `${nome}, bello fare il punto insieme. Hai messo dentro lavoro serio.`,
+      `${nome}, il numero che conta di più non è sulle pagine di questo report — è che sei tornato ogni volta.`
+    ],
+    diretto: [
+      `${nome}, i dati parlano chiaro: hai lavorato bene in questo periodo.`,
+      `${nome}, andiamo dritti al punto — questo trimestre ha prodotto risultati concreti.`
+    ],
+    analitico: [
+      `${nome}, questo report sintetizza i dati delle ultime settimane di lavoro insieme.`,
+      `${nome}, i numeri di questo periodo raccontano una storia chiara. Vale la pena leggerla con attenzione.`
+    ],
+    delicato: [
+      `${nome}, ogni volta che vieni in palestra porti con te qualcosa di importante. Questo periodo lo conferma.`,
+      `${nome}, il lavoro fatto insieme non si misura solo in sedute — si misura in presenza e in fiducia.`
+    ],
+    caldo: [
+      `${nome}, è bello guardare indietro e vedere quanto hai costruito in questo periodo.`,
+      `${nome}, questo report è per te — perché il tuo impegno merita di essere visto chiaramente.`
+    ],
+    concreto: [
+      `${nome}, ecco il resoconto di quello che abbiamo fatto in questo periodo.`,
+      `${nome}, risultati concreti da un lavoro concreto. Andiamo a vederli.`
+    ],
+    bilanciato: [
+      `${nome}, questo report raccoglie quello che abbiamo costruito insieme in questo periodo.`,
+      `${nome}, ci sono settimane che non sembrano nulla di speciale — poi le guardi da fuori e capisci che stavano costruendo qualcosa.`
+    ]
+  };
+
+  const toneStarters = starters[tone] || starters.bilanciato;
+  const opener = toneStarters[freq.count % toneStarters.length];
+
+  if (tone === 'emotivo') {
+    return `${opener} Ogni seduta che hai scelto di non saltare è un mattone messo sul percorso verso ${goal.toLowerCase()}. Non è scontato, non è automatico — è una scelta. E tu quella scelta la fai.`;
+  }
+  if (tone === 'diretto') {
+    return `${opener} ${freq.count} sedute completate, continuità mantenuta, obiettivo chiaro: ${goal.toLowerCase()}. Il lavoro che resta lo affrontiamo con la stessa chiarezza.`;
+  }
+  if (tone === 'energico') {
+    return `${opener} ${freq.count} sedute nel periodo — ogni volta che sei entrato in palestra con la testa giusta, si è visto. L'obiettivo è ${goal.toLowerCase()} e la strada è tracciata.`;
+  }
+  if (tone === 'analitico') {
+    return `${opener} In questo documento trovi una sintesi strutturata dei progressi nel periodo analizzato, con particolare attenzione a ${goal.toLowerCase()}. I dati sono estratti direttamente dalle sedute registrate.`;
+  }
+  if (tone === 'delicato') {
+    return `${opener} In questo periodo abbiamo lavorato insieme con cura. Ogni seduta porta con sé qualcosa — qualche volta fatica, qualche volta una piccola vittoria. Tutte contano.`;
+  }
+  if (tone === 'caldo') {
+    return `${opener} Guardando i numeri di questo periodo, c'è una cosa che mi colpisce: la costanza. Non è la più spettacolare delle qualità, ma è quella che costruisce risultati veri.`;
+  }
+  if (tone === 'concreto') {
+    return `${opener} Di seguito i dati principali del periodo. Lavoro fatto, obiettivi monitorati, prossimi passi definiti.`;
+  }
+  return `${opener} In questo periodo hai messo dentro ${freq.count} sedute, ciascuna un passo verso ${goal.toLowerCase()}. Vale la pena fermarsi un momento a guardare quello che si è costruito.`;
+}
+
+function generateMomentoMigliore(notes, mbti, tone) {
+  // Find best note: ✅ + #progresso
+  const sorted = [...notes].sort((a,b) => new Date(a.date)-new Date(b.date));
+  let best = null;
+  for (const n of sorted) {
+    const p = n.parsed;
+    if (p.positivi.length && p.hashtags.includes('#progresso')) {
+      best = { date: n.date, text: p.positivi[0], hashtags: p.hashtags };
+      break;
+    }
+  }
+  // Fallback: first note with ✅
+  if (!best) {
+    for (const n of sorted) {
+      const p = n.parsed;
+      if (p.positivi.length) {
+        best = { date: n.date, text: p.positivi[0], hashtags: p.hashtags };
+        break;
+      }
+    }
+  }
+  if (!best) return null;
+
+  const dateLabel = new Date(best.date).toLocaleDateString('it-IT',{day:'2-digit',month:'long'});
+  const rawText = best.text.trim();
+
+  const intros = {
+    emotivo:   `Il momento che mi è rimasto più impresso`,
+    energico:  `Il momento top del periodo`,
+    diretto:   `Il risultato tecnico più significativo`,
+    analitico: `L'evidenza di progresso più rilevante`,
+    delicato:  `Il momento che ha significato di più`,
+    caldo:     `Un momento da ricordare`,
+    concreto:  `Il progresso più concreto`,
+    bilanciato:`Il momento che vale di più`
+  };
+  const intro = intros[tone] || intros.bilanciato;
+
+  return { dateLabel, rawText, intro };
+}
+
+function generateAttenzione(notes, mbti, tone) {
+  const sorted = [...notes].sort((a,b) => new Date(b.date)-new Date(a.date));
+  // Last note with ⚠️
+  for (const n of sorted) {
+    if (n.parsed.attenzione.length) {
+      return n.parsed.attenzione[0].trim();
+    }
+  }
+  // Fallback: most frequent negative hashtag
+  const negs = sorted.flatMap(n => n.parsed.hashtags.filter(t => HASHTAG_NEGATIVE.includes(t)));
+  if (negs.length) {
+    const freq = {};
+    negs.forEach(t => { freq[t] = (freq[t]||0)+1; });
+    const top = Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0];
+    const tagMap = {
+      '#motivazione-bassa': 'la motivazione in alcune sedute è stata più bassa del solito',
+      '#stress':            'lo stress extra-palestra ha influito su alcune sedute',
+      '#pocosonno':         'il recupero e il sonno sono stati un fattore da gestire',
+      '#regressione':       'alcune sedute hanno mostrato un calo tecnico temporaneo',
+      '#preciclo':          'il ciclo ha influito sul rendimento in alcune sedute',
+      '#ciclo':             'il ciclo ha influito sul rendimento in alcune sedute',
+      '#stresslavoro':      'lo stress lavorativo ha pesato su alcune sedute'
+    };
+    return tagMap[top] || 'ci sono stati alcuni momenti di calo da tenere monitorati';
+  }
+  return null;
+}
+
+function generateBeforeAfter(c, workouts, notes, freq, energy) {
+  const rows = [];
+  // Continuità
+  if (freq.consecutive >= 2) {
+    rows.push({ label:'Continuità', prima:'Variabile / incostante', dopo:`${freq.consecutive} settimane consecutive` });
+  } else if (freq.count > 0) {
+    rows.push({ label:'Presenze', prima:'–', dopo:`${freq.count} sedute nel periodo` });
+  }
+  // Energia
+  if (energy.mean !== null) {
+    const trendLabel = energy.trend==='crescita'?'in crescita ↑':energy.trend==='calo'?'in calo ↓':'stabile →';
+    rows.push({ label:'Energia media', prima:'–', dopo:`${energy.mean}/10 · ${trendLabel}` });
+  }
+  // Dolore risolto
+  const sortedW = [...workouts].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  let resolved = 0;
+  for (let i=0; i<sortedW.length-1; i++) {
+    if (sortedW[i].tipoSeduta==='dolori' && sortedW[i+1]?.tipoSeduta==='normale') resolved++;
+  }
+  if (resolved > 0) {
+    rows.push({ label:'Gestione dolore', prima:'Episodi non gestiti', dopo:`${resolved} episodi migliorati ✓` });
+  }
+  // PainPoints resolved
+  const resolvedPP = (c.painPoints||[]).filter(p => p.stato === 'risolto' || p.stato === 'miglioramento');
+  if (resolvedPP.length) {
+    rows.push({ label:'Zone dolore', prima:resolvedPP.map(p=>p.label).join(', '), dopo:'In miglioramento ✓' });
+  }
+  return rows;
+}
+
+function generateObiettiviProssimoTrimestre(c, stats, tone) {
+  const goal = c.goal || 'Benessere generale';
+  const freq = stats.freq;
+  const energy = stats.energy;
+
+  const base = [];
+
+  // Frequency goal
+  if (freq.perWeek < 1) {
+    base.push('Portare la frequenza a 1 seduta/settimana in modo stabile');
+  } else if (freq.perWeek >= 1 && freq.perWeek < 1.5) {
+    base.push('Mantenere la frequenza attuale e consolidare la continuità');
+  } else {
+    base.push('Continuare con la frequenza attuale — la base è solida');
+  }
+
+  // Energy goal
+  if (energy.mean !== null && energy.mean < 6) {
+    base.push('Migliorare il recupero e l\'energia nelle sedute (target: 7/10)');
+  } else if (energy.mean !== null && energy.mean >= 7) {
+    base.push('Mantenere i livelli di energia — sono su buoni livelli');
+  }
+
+  // Goal-specific
+  if (goal.includes('dolore')) {
+    base.push('Lavorare sulla gestione del dolore residuo e sulla mobilità');
+  } else if (goal.includes('Performance')) {
+    base.push('Progredire sul carico e sulla qualità tecnica degli esercizi chiave');
+  } else {
+    base.push('Continuare a costruire la base di movimento e benessere');
+  }
+
+  // MBTI-tinted framing
+  if (tone === 'emotivo') return base.map(b => `→ ${b}`);
+  if (tone === 'diretto') return base.map(b => `▸ ${b}`);
+  if (tone === 'energico') return base.map(b => `⚡ ${b}`);
+  return base.map(b => `· ${b}`);
+}
+
+// ─── jsPDF HELPERS ────────────────────────────────────────────────────
+
+function pdfWrapText(doc, text, x, maxWidth, lineHeight) {
+  const lines = doc.splitTextToSize(text, maxWidth);
+  const totalH = lines.length * lineHeight;
+  return { lines, totalH };
+}
+
+function pdfCheckPage(doc, y, needed, pageH, margin, drawHeaderFn) {
+  if (y + needed > pageH - margin) {
+    doc.addPage();
+    drawHeaderFn(doc);
+    return margin + 24;
+  }
+  return y;
+}
+
+// ─── MAIN PDF BUILDER ─────────────────────────────────────────────────
+
+function generateClienteReport(config) {
+  const btn = document.getElementById('btnGenerate');
+  btn.textContent = '⏳ Generazione PDF...';
+  btn.disabled = true;
+
+  setTimeout(() => {
+    try { _buildClientePDF(config); }
+    catch(err) { console.error(err); alert('Errore nella generazione PDF: ' + err.message); }
+    finally { btn.textContent = '⬇ Genera PDF'; btn.disabled = false; }
+  }, 50);
+}
+
+function _buildClientePDF(config) {
+  const { jsPDF } = window.jspdf;
+  if (!jsPDF) throw new Error('jsPDF non caricato. Verifica la connessione internet.');
+
+  const c       = config.client;
+  const mbti    = config.mbti || '';
+  const period  = config.period;
+  const dateFrom= config.dateFrom;
+  const dateTo  = config.dateTo;
+  const notes   = config.notes; // already period-filtered, each has .parsed
+  const workouts= config.workouts;
+  const percorso= config.percorso;
+
+  const cfg  = getMBTICfg(mbti);
+  const tone = cfg.tone;
+  const accent = cfg.accent; // [r,g,b]
+
+  // ─ Stats ─
+  const periodDays = (() => {
+    if (period === 'custom') {
+      const s = dateFrom ? new Date(dateFrom) : new Date(0);
+      const e = dateTo   ? new Date(dateTo)   : new Date();
+      return Math.max(1, Math.ceil((e-s)/86400000));
+    }
+    return { '1m':30,'3m':90,'6m':180,'1y':365 }[period]||90;
+  })();
+
+  const freq   = computeFreq(workouts, periodDays);
+  const energy = computeEnergy(notes);
+  const nome   = c.nome;
+  const cognome= c.cognome;
+  const periodLabel = getPeriodLabelShort(period, dateFrom, dateTo);
+  const today  = new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'});
+
+  // ─ Texts ─
+  const testoApertura   = generateApertura(c, { freq, energy }, mbti, tone);
+  const momentoObj      = generateMomentoMigliore(notes, mbti, tone);
+  const testoAttenzione = generateAttenzione(notes, mbti, tone);
+  const beforeAfterRows = generateBeforeAfter(c, workouts, notes, freq, energy);
+  const obiettiviList   = generateObiettiviProssimoTrimestre(c, { freq, energy }, tone);
+
+  // ─ jsPDF Setup ─
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const PW = 210, PH = 297;
+  const ML = 14, MR = 10, MT = 28, MB = 18;
+  const CW = PW - ML - MR; // content width = 186mm
+
+  // ─ Colors ─
+  const INK    = [17,17,17];
+  const MID    = [85,85,85];
+  const SUB    = [153,153,153];
+  const LINE   = [229,224,213];
+  const WHITE  = [255,255,255];
+  const BG     = [250,249,246];
+  const GREEN  = [46,125,50];
+  const AMBER  = [230,81,0];
+  const RED    = [229,57,53];
+
+  let pageNum = 1;
+
+  // ─ Draw page header (called on each new page) ─
+  function drawPageHeader(d) {
+    // Dark top bar
+    d.setFillColor(...INK);
+    d.rect(0, 0, PW, 18, 'F');
+    // Accent stripe left
+    d.setFillColor(...accent);
+    d.rect(0, 0, 3.5, 18, 'F');
+    // Name
+    d.setFont('helvetica','bold');
+    d.setFontSize(7.5);
+    d.setTextColor(...WHITE);
+    d.text(`${nome.toUpperCase()} ${cognome.toUpperCase()}`, ML + 2, 11);
+    // Period + PT name right
+    d.setFont('helvetica','normal');
+    d.setFontSize(6.5);
+    d.setTextColor(180,180,180);
+    d.text(`${periodLabel}  ·  Juri Monasso PT`, PW - MR, 11, { align:'right' });
+    if (mbti) {
+      d.setFontSize(6);
+      d.setTextColor(...accent);
+      const mbtiLabel = mbti + (cfg.label ? ' · ' + cfg.label : '');
+      d.text(mbtiLabel, ML + 2, 16);
+    }
+  }
+
+  // ─ Draw page footer ─
+  function drawPageFooter(d, pn) {
+    d.setDrawColor(...LINE);
+    d.setLineWidth(0.3);
+    d.line(ML, PH - MB + 2, PW - MR, PH - MB + 2);
+    d.setFont('helvetica','normal');
+    d.setFontSize(6.5);
+    d.setTextColor(...SUB);
+    d.text('Juri Monasso · Allenati Senza Dolori', ML, PH - MB + 8);
+    d.text(`${pn}`, PW - MR, PH - MB + 8, { align:'right' });
+  }
+
+  // ─ Helper: section label ─
+  function drawSectionLabel(d, y, num, title) {
+    d.setFont('helvetica','bold');
+    d.setFontSize(6);
+    d.setTextColor(...accent);
+    d.text(`0${num} ·`, ML, y);
+    d.setFont('helvetica','bold');
+    d.setFontSize(10);
+    d.setTextColor(...INK);
+    d.text(title, ML + 8, y);
+    d.setDrawColor(...LINE);
+    d.setLineWidth(0.25);
+    d.line(ML, y + 2.5, ML + CW, y + 2.5);
+    return y + 9;
+  }
+
+  // ─ Helper: accent stripe box ─
+  function drawBox(d, x, y, w, h, stripeColor, bgColor) {
+    d.setFillColor(...bgColor);
+    d.rect(x, y, w, h, 'F');
+    d.setFillColor(...stripeColor);
+    d.rect(x, y, 3, h, 'F');
+  }
+
+  // ─ Helper: kpi chip ─
+  function drawKPI(d, x, y, w, label, value, sub, color) {
+    d.setFillColor(245, 240, 232); // warm
+    d.rect(x, y, w, 18, 'F');
+    d.setFont('helvetica','bold');
+    d.setFontSize(17);
+    d.setTextColor(...color);
+    d.text(value, x + w/2, y + 11, { align:'center' });
+    d.setFont('helvetica','bold');
+    d.setFontSize(5.5);
+    d.setTextColor(...SUB);
+    d.text(label.toUpperCase(), x + w/2, y + 15.5, { align:'center' });
+    if (sub) {
+      d.setFont('helvetica','normal');
+      d.setFontSize(5);
+      d.setTextColor(...SUB);
+      d.text(sub, x + w/2, y + 18.5, { align:'center' });
+    }
+  }
+
+  // ═══════════════════════════════════
+  // PAGE 1
+  // ═══════════════════════════════════
+  drawPageHeader(doc);
+
+  let y = MT + 4;
+
+  // ── COVER AREA ── nome grande
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(28);
+  doc.setTextColor(...INK);
+  doc.text(nome, ML, y + 10);
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...MID);
+  doc.text(`Report personale · ${periodLabel}`, ML, y + 17);
+
+  // Accent line under name
+  doc.setFillColor(...accent);
+  doc.rect(ML, y + 19, 30, 1, 'F');
+
+  y += 26;
+
+  // ── KPI ROW ──
+  const kpiW = (CW - 6) / 4; // 4 chips with 2mm gap each
+  const kpiY = y;
+
+  const energyColor = energy.mean===null ? SUB : energy.mean>=7 ? GREEN : energy.mean>=5 ? AMBER : RED;
+  const freqColor   = freq.perWeek>=1 ? GREEN : freq.perWeek>=0.5 ? AMBER : RED;
+
+  drawKPI(doc, ML,             kpiY, kpiW, 'Sedute',        String(freq.count),         'nel periodo',       INK);
+  drawKPI(doc, ML+kpiW+2,      kpiY, kpiW, 'Energia media', energy.mean ? energy.mean+'/10' : '—', notes.length ? notes.length+' rilevaz.' : '', energyColor);
+  drawKPI(doc, ML+kpiW*2+4,    kpiY, kpiW, 'Continuità',    freq.consecutive+' sett.',  freq.consecutive>=4?'ottima!':'', freq.consecutive>=4?GREEN:INK);
+  drawKPI(doc, ML+kpiW*3+6,    kpiY, kpiW, 'Freq. media',   freq.perWeek>0?freq.perWeek+'×/sett':'—', '', freqColor);
+
+  y += 22;
+
+  // ── §1 APERTURA ──
+  y = drawSectionLabel(doc, y, 1, 'Una parola per te');
+
+  const aperturaWrapped = doc.splitTextToSize(testoApertura, CW);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9.5);
+  doc.setTextColor(...MID);
+
+  // box with accent stripe
+  const aperturaH = aperturaWrapped.length * 5.2 + 10;
+  drawBox(doc, ML, y, CW, aperturaH, accent, [250,249,246]);
+  doc.text(aperturaWrapped, ML + 6, y + 7);
+  y += aperturaH + 6;
+
+  // ── §2 MOMENTO MIGLIORE ──
+  if (momentoObj) {
+    y = drawSectionLabel(doc, y, 2, momentoObj.intro);
+
+    const dateChipW = 28;
+    doc.setFillColor(...accent);
+    doc.rect(ML, y, dateChipW, 6, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...WHITE);
+    doc.text(momentoObj.dateLabel.toUpperCase(), ML + dateChipW/2, y + 4.2, { align:'center' });
+
+    y += 8;
+    const momLines = doc.splitTextToSize(`"${momentoObj.rawText}"`, CW - 4);
+    const momH = momLines.length * 5.5 + 8;
+    doc.setFillColor(245, 240, 232);
+    doc.rect(ML, y, CW, momH, 'F');
+    doc.setFont('helvetica','italic');
+    doc.setFontSize(9);
+    doc.setTextColor(...INK);
+    doc.text(momLines, ML + 4, y + 7);
+    y += momH + 6;
+  }
+
+  // ── §3 COME SEI CAMBIATO ──
+  if (beforeAfterRows.length) {
+    y = drawSectionLabel(doc, y, 3, 'Come sei cambiato');
+
+    // Table header
+    const col1 = ML, col2 = ML + CW * 0.32, col3 = ML + CW * 0.65;
+    const colW1 = CW * 0.30, colW2 = CW * 0.32, colW3 = CW * 0.35;
+
+    doc.setFillColor(...INK);
+    doc.rect(ML, y, CW, 6.5, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(6);
+    doc.setTextColor(...WHITE);
+    doc.text('ASPETTO', col1 + 2, y + 4.5);
+    doc.text('PRIMA', col2 + 2, y + 4.5);
+    doc.text('ORA', col3 + 2, y + 4.5);
+    y += 6.5;
+
+    beforeAfterRows.forEach((row, i) => {
+      const rowH = 7;
+      doc.setFillColor(i % 2 === 0 ? 250 : 245, i % 2 === 0 ? 249 : 244, i % 2 === 0 ? 246 : 241);
+      doc.rect(ML, y, CW, rowH, 'F');
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...INK);
+      doc.text(row.label, col1 + 2, y + 5);
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(...MID);
+      doc.text(row.prima, col2 + 2, y + 5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...accent);
+      doc.text(row.dopo, col3 + 2, y + 5);
+      y += rowH;
+    });
+    y += 6;
+  }
+
+  // ═══════════════════════════════════
+  // CHECK — force page 2 if < 60mm left
+  // ═══════════════════════════════════
+  const remainingP1 = PH - MB - y;
+  if (remainingP1 < 60 || y > PH - MB - 30) {
+    drawPageFooter(doc, pageNum);
+    doc.addPage();
+    pageNum++;
+    drawPageHeader(doc);
+    y = MT + 6;
+  }
+
+  // ── §4 UNA COSA SU CUI STIAMO LAVORANDO ──
+  if (testoAttenzione) {
+    y = drawSectionLabel(doc, y, 4, 'Una cosa su cui stiamo lavorando');
+
+    const attenTone = {
+      emotivo:   `C'è qualcosa che voglio dirti con onestà, perché ti rispetto: `,
+      diretto:   `Un punto su cui lavorare nel prossimo periodo: `,
+      energico:  `C'è una cosa che possiamo spingere ancora di più: `,
+      analitico: `Un elemento da ottimizzare nel prossimo ciclo: `,
+      delicato:  `Con rispetto e senza pressione, c'è qualcosa da tenere d'occhio: `,
+      caldo:     `Un piccolo lavoro in più che farà la differenza: `,
+      concreto:  `Un punto su cui agire concretamente: `,
+      bilanciato:`Un aspetto su cui voglio essere onesto con te: `
+    };
+    const intro = attenTone[tone] || attenTone.bilanciato;
+    const fullText = intro + testoAttenzione + '. Non è una critica — è la prossima opportunità di crescita.';
+    const attenLines = doc.splitTextToSize(fullText, CW - 6);
+    const attenH = attenLines.length * 5.2 + 10;
+
+    doc.setFillColor(255,243,224); // amber-dim
+    doc.rect(ML, y, CW, attenH, 'F');
+    doc.setFillColor(...AMBER);
+    doc.rect(ML, y, 3, attenH, 'F');
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(100,50,0);
+    doc.text(attenLines, ML + 6, y + 7);
+    y += attenH + 6;
+  }
+
+  // ── §5 COSA TI ASPETTA ──
+  y = drawSectionLabel(doc, y, 5, 'Cosa ti aspetta');
+
+  const obiettiviH = obiettiviList.length * 7 + 8;
+  drawBox(doc, ML, y, CW, obiettiviH, accent, [250,249,246]);
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...INK);
+  obiettiviList.forEach((item, i) => {
+    doc.text(item, ML + 6, y + 7 + i * 7);
+  });
+  y += obiettiviH + 8;
+
+  // ── §6 FIRMA ──
+  const firmaT = {
+    emotivo:   `A presto — e grazie per la fiducia.`,
+    diretto:   `Avanti. Ci vediamo in palestra.`,
+    energico:  `Forza — il lavoro continua!`,
+    analitico: `Ci vediamo alla prossima seduta. I dati sono buoni.`,
+    delicato:  `Con stima e rispetto per il lavoro che stai facendo.`,
+    caldo:     `Grazie per esserci. Ci vediamo presto.`,
+    concreto:  `Obiettivi chiari, lavoro serio. Avanti.`,
+    bilanciato:`A presto — continua così.`
+  };
+
+  const firmaLine = (firmaT[tone] || firmaT.bilanciato);
+
+  doc.setFont('helvetica','italic');
+  doc.setFontSize(9);
+  doc.setTextColor(...MID);
+  doc.text(firmaLine, ML, y);
+  y += 6;
+
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...accent);
+  doc.text('Juri Monasso', ML, y);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...SUB);
+  doc.text('Personal Trainer · Allenati Senza Dolori', ML, y + 4.5);
+  doc.text(today, ML, y + 9);
+
+  drawPageFooter(doc, pageNum);
+
+  // ─ Save ─
+  const safeName = `${nome}_${cognome}`.replace(/\s+/g,'_');
+  const periodSafe = periodLabel.replace(/[\s·–→\/]+/g,'_');
+  doc.save(`ASD_Report_${safeName}_${periodSafe}.pdf`);
 }
 
 
