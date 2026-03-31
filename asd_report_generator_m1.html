@@ -998,11 +998,111 @@ html, body {
   .app-body { padding: 24px 16px 48px; }
 }
 
-/* ─── SCROLLBAR ──────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
-</style>
+/* ─── PERIOD BAR ─────────────────────────────────────────────────── */
+.period-bar {
+  position: sticky; top: 0; z-index: 90;
+  background: var(--white);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 2px 8px rgba(0,0,0,.05);
+}
+.period-bar-inner {
+  max-width: 1100px; margin: 0 auto;
+  padding: 10px 32px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.period-label {
+  font-family: var(--f-mono); font-size: .62rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--sub);
+}
+.period-btns { display: flex; gap: 3px; }
+.period-btn {
+  font-family: var(--f-mono); font-size: .65rem; font-weight: 500;
+  letter-spacing: .06em; padding: 6px 14px; border-radius: 2px;
+  border: 1px solid var(--line); background: var(--white);
+  color: var(--mid); cursor: pointer; transition: all .13s;
+}
+.period-btn:hover { border-color: var(--ink); color: var(--ink); }
+.period-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.period-custom { display: flex; align-items: center; gap: 8px; }
+.period-custom input { font-family: var(--f-mono); font-size: .65rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: 2px; background: var(--white); }
+.period-kpis { display: flex; gap: 16px; margin-left: auto; flex-wrap: wrap; }
+.pkpi { display: flex; flex-direction: column; align-items: flex-end; }
+.pkpi-val { font-family: var(--f-mono); font-size: .88rem; font-weight: 500; color: var(--ink); }
+.pkpi-lbl { font-family: var(--f-mono); font-size: .52rem; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); }
+
+/* ─── DASHBOARD BODY ─────────────────────────────────────────────── */
+.dashboard-body { max-width: 1100px; margin: 0 auto; padding: 32px 32px 80px; }
+.db-section { margin-bottom: 40px; }
+.db-section-head {
+  display: flex; align-items: baseline; gap: 12px;
+  padding-bottom: 12px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.db-sec-num { font-family: var(--f-mono); font-size: .58rem; letter-spacing: .15em; color: var(--red); }
+.db-sec-title { font-size: 1.1rem; font-weight: 700; color: var(--ink); }
+.db-grid { display: grid; gap: 1px; background: var(--line); margin-bottom: 1px; }
+.db-grid-2 { grid-template-columns: 1fr 1fr; }
+.db-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.db-grid-60-40 { grid-template-columns: 1.5fr 1fr; }
+.db-cell { background: var(--bg); padding: 22px 24px; }
+.db-cell:hover { background: var(--white); }
+.db-cell-white { background: var(--white); }
+.db-cell-ink { background: var(--ink); color: #fff; }
+.db-cell-red { background: var(--red); color: #fff; }
+.db-ctag { font-family: var(--f-mono); font-size: .54rem; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 10px; color: var(--sub); }
+.db-bignum { font-family: var(--f-serif); font-size: 4rem; font-weight: 700; line-height: .9; letter-spacing: -.04em; color: var(--ink); }
+.db-bignum-white { color: #fff; }
+.db-bignum-red { color: var(--red); }
+.db-unit { font-family: var(--f-mono); font-size: .54rem; letter-spacing: .1em; text-transform: uppercase; color: var(--sub); margin-top: 8px; }
+.db-unit-white { color: rgba(255,255,255,.5); }
+.db-body { font-size: .82rem; color: var(--mid); margin-top: 12px; line-height: 1.6; }
+.db-body-white { color: rgba(255,255,255,.7); }
+/* inline bars */
+.db-br { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.db-br-l { font-size: .78rem; color: var(--ink); min-width: 100px; }
+.db-br-track { flex: 1; height: 4px; background: var(--line2); border-radius: 2px; overflow: hidden; }
+.db-br-fill { height: 100%; border-radius: 2px; transition: width .4s ease; width: 0; }
+.db-br-v { font-family: var(--f-mono); font-size: .65rem; color: var(--mid); min-width: 28px; text-align: right; }
+
+/* ─── MODAL ──────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  z-index: 200; display: flex; align-items: center; justify-content: center;
+  animation: fadeUp .15s ease;
+}
+.modal-box {
+  background: var(--white); border-radius: 3px;
+  padding: 28px; width: 480px; max-width: 95vw;
+  box-shadow: 0 16px 48px rgba(0,0,0,.2);
+}
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.modal-title { font-size: 1rem; font-weight: 700; color: var(--ink); }
+.modal-close { background: none; border: none; font-size: 1rem; color: var(--sub); cursor: pointer; padding: 4px 8px; }
+.modal-close:hover { color: var(--ink); }
+.modal-sub { font-family: var(--f-mono); font-size: .62rem; color: var(--sub); letter-spacing: .06em; margin-bottom: 16px; }
+.modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+.modal-btn-generate {
+  background: var(--red); color: #fff;
+  font-family: var(--f-mono); font-size: .72rem; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 12px 28px; border: none; border-radius: 2px; cursor: pointer;
+  transition: all .13s;
+}
+.modal-btn-generate:hover { background: #c62828; }
+
+/* ─── INLINE ACTION BUTTONS IN MATRIX ───────────────────────────── */
+.pm-actions { display: flex; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line2); flex-wrap: wrap; }
+.pm-btn {
+  font-family: var(--f-mono); font-size: .62rem; font-weight: 500;
+  letter-spacing: .06em; text-transform: uppercase;
+  padding: 7px 16px; border-radius: 2px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--white);
+  color: var(--ink); transition: all .13s;
+}
+.pm-btn:hover { border-color: var(--ink); }
+.pm-btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+.pm-btn-primary:hover { background: #333; }
+.pm-wrapped-year { font-family: var(--f-mono); font-size: .62rem; padding: 7px 10px; border: 1px solid var(--line); border-radius: 2px; background: var(--white); color: var(--ink); }</style>
 </head>
 <body>
 
@@ -1011,7 +1111,7 @@ html, body {
   <div class="logo-mark">ASD</div>
   <div class="title-group">
     <h1>Report Generator</h1>
-    <div class="subtitle">ALLENATI SENZA DOLORI · JURI MONASSO PT · MODULO 2 — REPORT PT</div>
+    <div class="subtitle">ALLENATI SENZA DOLORI · JURI MONASSO PT</div>
   </div>
   <div class="header-status" id="headerStatus">
     <span class="dot"></span>nessun backup caricato
@@ -1023,16 +1123,13 @@ html, body {
 
   <!-- UPLOAD -->
   <section class="upload-section">
-    <div class="section-label">01 · Carica backup</div>
-
     <div class="drop-zone" id="dropZone">
       <span class="drop-icon">📂</span>
       <div class="drop-title">Trascina qui il backup JSON</div>
-      <div class="drop-sub">FILE · asd_backup_YYYY-MM-DD.json · ESPORTATO DAL GESTIONALE ASD</div>
+      <div class="drop-sub">asd_backup_YYYY-MM-DD.json · esportato dal gestionale ASD</div>
       <button class="btn-upload" onclick="document.getElementById('fileInput').click()">Scegli file</button>
       <input type="file" id="fileInput" accept=".json">
     </div>
-
     <div class="file-loaded-bar" id="fileLoadedBar">
       <span class="file-name" id="fileNameDisplay">—</span>
       <span class="file-meta" id="fileMetaDisplay">—</span>
@@ -1040,201 +1137,66 @@ html, body {
     </div>
   </section>
 
-  <!-- STATS BAR -->
-  <div class="stats-bar" id="statsBar">
-    <div class="stat-card accent-red">
-      <div class="stat-label">Clienti attivi</div>
-      <div class="stat-value" id="statClienti">—</div>
-      <div class="stat-sub">escluso Juri</div>
+  <!-- DASHBOARD (visibile dopo caricamento) -->
+  <div id="dashboardSection" style="display:none">
+
+    <!-- PERIODO STICKY BAR -->
+    <div class="period-bar" id="periodBar">
+      <div class="period-bar-inner">
+        <span class="period-label">Periodo</span>
+        <div class="period-btns">
+          <button class="period-btn" data-period="1m" onclick="onPeriodSelect('1m',this)">1 mese</button>
+          <button class="period-btn active" data-period="3m" onclick="onPeriodSelect('3m',this)">3 mesi</button>
+          <button class="period-btn" data-period="6m" onclick="onPeriodSelect('6m',this)">6 mesi</button>
+          <button class="period-btn" data-period="1y" onclick="onPeriodSelect('1y',this)">1 anno</button>
+          <button class="period-btn" data-period="custom" onclick="onPeriodSelect('custom',this)">Custom</button>
+        </div>
+        <div class="period-custom" id="periodCustom" style="display:none">
+          <input type="date" id="dateFrom" onchange="onDashboardRefresh()">
+          <span style="color:var(--sub)">→</span>
+          <input type="date" id="dateTo" onchange="onDashboardRefresh()">
+        </div>
+        <div class="period-kpis" id="periodKpis"></div>
+      </div>
     </div>
-    <div class="stat-card accent-blue">
-      <div class="stat-label">Sedute totali</div>
-      <div class="stat-value" id="statSedute">—</div>
-      <div class="stat-sub">workout loggati</div>
-    </div>
-    <div class="stat-card accent-amber">
-      <div class="stat-label">Note seduta</div>
-      <div class="stat-value" id="statNote">—</div>
-      <div class="stat-sub">con clienti</div>
-    </div>
-    <div class="stat-card accent-green">
-      <div class="stat-label">Esportato</div>
-      <div class="stat-value" id="statExport" style="font-size:1.1rem; padding-top:6px">—</div>
-      <div class="stat-sub" id="statExportTime">—</div>
-    </div>
+
+    <!-- DASHBOARD CONTENT -->
+    <div class="dashboard-body" id="dashboardBody"></div>
+
   </div>
 
-  <!-- CLIENTI -->
-  <section class="clients-section" id="clientsSection">
-    <div class="clients-header">
-      <div class="section-label" style="margin-bottom:0">02 · Seleziona cliente</div>
-      <div class="clients-count" id="clientsCount">—</div>
-    </div>
-
-    <div class="filter-row" id="filterRow">
-      <button class="filter-btn active" data-filter="all" onclick="applyFilter('all', this)">Tutti</button>
-      <button class="filter-btn" data-filter="dolore_adulto" onclick="applyFilter('dolore_adulto', this)">Dolore adulto</button>
-      <button class="filter-btn" data-filter="sportivo_giovane" onclick="applyFilter('sportivo_giovane', this)">Sportivo giovane</button>
-      <button class="filter-btn" data-filter="prt" onclick="applyFilter('prt', this)">PRT confermato</button>
-      <button class="filter-btn" data-filter="no_schedule" onclick="applyFilter('no_schedule', this)">Senza slot fisso</button>
-      <button class="filter-btn filter-btn-io" data-filter="sonoIo" onclick="applyFilter('sonoIo', this)">⚡ IO</button>
-    </div>
-
-    <div class="io-banner" id="ioBanner">
-      <span class="io-banner-icon">⚡</span>
-      <span class="io-banner-text">Stai visualizzando il tuo profilo personale. <strong>I dati studio non vengono influenzati.</strong> Puoi generare report PT o Cliente per te stesso.</span>
-    </div>
-    <div class="client-table-wrap">
-      <table class="client-table">
-        <thead>
-          <tr>
-            <th>Cliente</th>
-            <th>Profilo</th>
-            <th>Obiettivo</th>
-            <th>Slot settimanali</th>
-            <th>Sedute</th>
-            <th>Note</th>
-            <th>PRT</th>
-          </tr>
-        </thead>
-        <tbody id="clientTableBody">
-          <tr><td colspan="7" class="empty-state">Carica un backup per vedere i clienti</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- SELECTION PANEL -->
-    <div class="selection-panel" id="selectionPanel">
-      <div class="sel-panel-title">Configura report per <span id="selClientName">—</span></div>
-
-      <div class="sel-grid">
-        <div class="sel-group">
-          <label>Tipo report</label>
-          <div class="sel-report-type">
-            <div class="report-type-btn" id="rtPT" onclick="selectReportType('pt')">
-              <div class="rt-title">📊 Report PT</div>
-              <div class="rt-sub">Analisi interna · dati operativi</div>
-            </div>
-            <div class="report-type-btn" id="rtCliente" onclick="selectReportType('cliente')">
-              <div class="rt-title">📄 Report Cliente</div>
-              <div class="rt-sub">Documento emotivo · da stampare</div>
-            </div>
-            <div class="report-type-btn" id="rtWrapped" onclick="selectReportType('wrapped')">
-              <div class="rt-title">🎁 Wrapped Annuale</div>
-              <div class="rt-sub">Anno solare · celebrativo</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="sel-group">
-          <label>Periodo di analisi</label>
-          <select id="periodoSelect" onchange="onPeriodChange()">
-            <option value="1m">Ultimo mese (30 gg)</option>
-            <option value="3m" selected>Ultimo trimestre (90 gg)</option>
-            <option value="6m">Ultimi 6 mesi</option>
-            <option value="1y">Ultimo anno</option>
-            <option value="custom">Periodo personalizzato</option>
-          </select>
-        </div>
-
-        <div class="sel-group" id="wrappedYearSection" style="display:none">
-          <label>Anno solare</label>
-          <select id="wrappedYearSelect" onchange="STATE.wrappedYear = parseInt(this.value); updateCTA()">
-          </select>
-        </div>
-
-        <div class="sel-group mbti-section" id="mbtiSection">
-          <label>Personalità MBTI <span style="color:var(--sub); font-size:0.6rem">(opzionale)</span></label>
-          <button class="mbti-trigger" id="mbtiTrigger" onclick="toggleMbtiPanel()">
-            <span class="mbti-trigger-label" id="mbtiTriggerLabel">— Nessuna selezionata</span>
-            <span class="mbti-trigger-arrow" id="mbtiTriggerArrow">▾</span>
-          </button>
-          <div class="mbti-panel" id="mbtiPanel"><div class="mbti-panel-inner">
-            <div class="mbti-grid" id="mbtiGrid">
-              <button class="mbti-btn selected" data-mbti="" onclick="selectMBTI('', this)">
-                Default<span class="mbti-desc">bilanciato</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ENFJ" onclick="selectMBTI('ENFJ', this)">
-                ENFJ<span class="mbti-desc">Protagonista</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ENTJ" onclick="selectMBTI('ENTJ', this)">
-                ENTJ<span class="mbti-desc">Comandante</span>
-              </button>
-              <button class="mbti-btn" data-mbti="INFJ" onclick="selectMBTI('INFJ', this)">
-                INFJ<span class="mbti-desc">Avvocato</span>
-              </button>
-              <button class="mbti-btn" data-mbti="INFP" onclick="selectMBTI('INFP', this)">
-                INFP<span class="mbti-desc">Mediatore</span>
-              </button>
-              <button class="mbti-btn" data-mbti="INTP" onclick="selectMBTI('INTP', this)">
-                INTP<span class="mbti-desc">Logico</span>
-              </button>
-              <button class="mbti-btn" data-mbti="INTJ" onclick="selectMBTI('INTJ', this)">
-                INTJ<span class="mbti-desc">Architetto</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ENFP" onclick="selectMBTI('ENFP', this)">
-                ENFP<span class="mbti-desc">Attivista</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ENTP" onclick="selectMBTI('ENTP', this)">
-                ENTP<span class="mbti-desc">Dibattitore</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ISFJ" onclick="selectMBTI('ISFJ', this)">
-                ISFJ<span class="mbti-desc">Difensore</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ISFP" onclick="selectMBTI('ISFP', this)">
-                ISFP<span class="mbti-desc">Avventuriero</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ESFJ" onclick="selectMBTI('ESFJ', this)">
-                ESFJ<span class="mbti-desc">Console</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ESFP" onclick="selectMBTI('ESFP', this)">
-                ESFP<span class="mbti-desc">Intrattenitore</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ESTJ" onclick="selectMBTI('ESTJ', this)">
-                ESTJ<span class="mbti-desc">Dirigente</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ESTP" onclick="selectMBTI('ESTP', this)">
-                ESTP<span class="mbti-desc">Dinamico</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ISTP" onclick="selectMBTI('ISTP', this)">
-                ISTP<span class="mbti-desc">Virtuoso</span>
-              </button>
-              <button class="mbti-btn" data-mbti="ISTJ" onclick="selectMBTI('ISTJ', this)">
-                ISTJ<span class="mbti-desc">Logistico</span>
-              </button>
-            </div>
-          </div></div>
-        </div>
+  <!-- MODAL MBTI (per report cliente) -->
+  <div class="modal-overlay" id="mbtiModal" style="display:none" onclick="closeMbtiModal(event)">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">Report Cliente</div>
+        <button class="modal-close" onclick="closeMbtiModal()">✕</button>
       </div>
-
-      <div class="custom-dates" id="customDates">
-        <div class="sel-group">
-          <label>Data inizio</label>
-          <input type="date" id="dateFrom">
-        </div>
-        <div class="sel-group">
-          <label>Data fine</label>
-          <input type="date" id="dateTo">
-        </div>
+      <div class="modal-sub">Personalità MBTI <span style="color:var(--sub);font-size:0.6rem">(opzionale)</span></div>
+      <div class="mbti-grid" id="modalMbtiGrid">
+        <button class="mbti-btn selected" data-mbti="" onclick="modalSelectMBTI('',this)">Default<span class="mbti-desc">bilanciato</span></button>
+        <button class="mbti-btn" data-mbti="ENFJ" onclick="modalSelectMBTI('ENFJ',this)">ENFJ<span class="mbti-desc">Protagonista</span></button>
+        <button class="mbti-btn" data-mbti="ENTJ" onclick="modalSelectMBTI('ENTJ',this)">ENTJ<span class="mbti-desc">Comandante</span></button>
+        <button class="mbti-btn" data-mbti="INFJ" onclick="modalSelectMBTI('INFJ',this)">INFJ<span class="mbti-desc">Avvocato</span></button>
+        <button class="mbti-btn" data-mbti="INFP" onclick="modalSelectMBTI('INFP',this)">INFP<span class="mbti-desc">Mediatore</span></button>
+        <button class="mbti-btn" data-mbti="INTP" onclick="modalSelectMBTI('INTP',this)">INTP<span class="mbti-desc">Logico</span></button>
+        <button class="mbti-btn" data-mbti="INTJ" onclick="modalSelectMBTI('INTJ',this)">INTJ<span class="mbti-desc">Architetto</span></button>
+        <button class="mbti-btn" data-mbti="ENFP" onclick="modalSelectMBTI('ENFP',this)">ENFP<span class="mbti-desc">Attivista</span></button>
+        <button class="mbti-btn" data-mbti="ENTP" onclick="modalSelectMBTI('ENTP',this)">ENTP<span class="mbti-desc">Dibattitore</span></button>
+        <button class="mbti-btn" data-mbti="ISFJ" onclick="modalSelectMBTI('ISFJ',this)">ISFJ<span class="mbti-desc">Difensore</span></button>
+        <button class="mbti-btn" data-mbti="ISFP" onclick="modalSelectMBTI('ISFP',this)">ISFP<span class="mbti-desc">Avventuriero</span></button>
+        <button class="mbti-btn" data-mbti="ESFJ" onclick="modalSelectMBTI('ESFJ',this)">ESFJ<span class="mbti-desc">Console</span></button>
+        <button class="mbti-btn" data-mbti="ESFP" onclick="modalSelectMBTI('ESFP',this)">ESFP<span class="mbti-desc">Intrattenitore</span></button>
+        <button class="mbti-btn" data-mbti="ESTJ" onclick="modalSelectMBTI('ESTJ',this)">ESTJ<span class="mbti-desc">Dirigente</span></button>
+        <button class="mbti-btn" data-mbti="ESTP" onclick="modalSelectMBTI('ESTP',this)">ESTP<span class="mbti-desc">Dinamico</span></button>
+        <button class="mbti-btn" data-mbti="ISTP" onclick="modalSelectMBTI('ISTP',this)">ISTP<span class="mbti-desc">Virtuoso</span></button>
+        <button class="mbti-btn" data-mbti="ISTJ" onclick="modalSelectMBTI('ISTJ',this)">ISTJ<span class="mbti-desc">Logistico</span></button>
       </div>
-
-      <!-- PREVIEW -->
-      <div class="preview-section visible" id="previewSection">
-        <div class="section-label" style="margin-bottom: 10px">Anteprima dati disponibili</div>
-        <div class="preview-card" id="previewCard">
-          <div class="empty-state">Seleziona un cliente dalla tabella</div>
-        </div>
-      </div>
-
-      <div class="cta-row">
-        <div class="cta-info" id="ctaInfo">Seleziona cliente e tipo report per continuare</div>
-        <button class="btn-generate" id="btnGenerate" onclick="onGenerate()">
-          ⬇ Genera PDF
-        </button>
+      <div class="modal-footer">
+        <button class="modal-btn-generate" id="modalBtnGenerate" onclick="modalGenerate()">⬇ Genera PDF</button>
       </div>
     </div>
-
-  </section>
+  </div>
 
 </main>
 
@@ -1421,361 +1383,261 @@ function loadFile(file) {
 
 // ─── ON DATA LOADED ───────────────────────────────────────────────────
 function onDataLoaded(file, data, totalNotes) {
-  // Header status
   const hs = document.getElementById('headerStatus');
   hs.className = 'header-status loaded';
   hs.innerHTML = `<span class="dot"></span>${STATE.clients.length} clienti · ${STATE.workouts.length} sedute`;
 
-  // File bar
   const exportDate = STATE.exportedAt ? new Date(STATE.exportedAt).toLocaleString('it-IT') : '—';
   document.getElementById('fileNameDisplay').textContent = file.name;
-  document.getElementById('fileMetaDisplay').textContent = `esportato il ${exportDate} · ${(file.size / 1024).toFixed(1)} KB`;
+  document.getElementById('fileMetaDisplay').textContent = `esportato il ${exportDate} · ${(file.size/1024).toFixed(1)} KB`;
   document.getElementById('fileLoadedBar').classList.add('visible');
 
-  // Stats bar
-  document.getElementById('statClienti').textContent = STATE.clients.length;
-  document.getElementById('statSedute').textContent = STATE.workouts.length;
-  document.getElementById('statNote').textContent = totalNotes;
-
-  if (STATE.exportedAt) {
-    const d = new Date(STATE.exportedAt);
-    document.getElementById('statExport').textContent = d.toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
-    document.getElementById('statExportTime').textContent = d.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
-  }
-
-  document.getElementById('statsBar').classList.add('visible');
-
-  // Clients section
-  STATE.filteredClients = [...STATE.clients];
-  document.getElementById('clientsSection').classList.add('visible');
-  renderClientTable(STATE.filteredClients);
-
-  // Show selection panel always
-  document.getElementById('selectionPanel').classList.add('visible');
+  // Show dashboard, populate year dropdown for wrapped
+  document.getElementById('dashboardSection').style.display = '';
+  _populateWrappedYears();
+  renderDashboard();
 }
 
-// ─── CLIENT TABLE ─────────────────────────────────────────────────────
-function renderClientTable(clients) {
-  const tbody = document.getElementById('clientTableBody');
-  document.getElementById('clientsCount').textContent = `${clients.length} su ${STATE.clients.length} clienti`;
-
-  if (!clients.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nessun cliente corrisponde al filtro</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = clients.map(c => {
-    const wkts  = STATE.workoutsMap[c.id] || [];
-    const notes = STATE.notesMap[c.id] || [];
-    const sched = c.schedule || [];
-
-    const profiloTag = c.profilo === 'sportivo_giovane'
-      ? '<span class="tag-pill blue">sportivo</span>'
-      : '<span class="tag-pill">adulto</span>';
-
-    const prtTag = c.prt === 'confermato'
-      ? '<span class="tag-pill red">PRT ✓</span>'
-      : '<span class="tag-pill">—</span>';
-
-    const goalMap = {
-      'Benessere generale':     '<span class="tag-pill green">Benessere</span>',
-      'Performance sportiva':   '<span class="tag-pill blue">Performance</span>',
-      'Riduzione dolore cronico':'<span class="tag-pill amber">Dolore cronico</span>'
-    };
-    const goalTag = goalMap[c.goal] || `<span class="tag-pill">${c.goal || '—'}</span>`;
-
-    const schedHTML = sched.length
-      ? '<div class="schedule-dots">' + sched.map(s => `<span class="sched-dot">${s.giorno?.slice(0,3)} ${s.orario}</span>`).join('') + '</div>'
-      : '<span class="tag-pill red" style="font-size:0.5rem">⚠ nessuno</span>';
-
-    const isSelected = STATE.selectedClient && STATE.selectedClient.id === c.id;
-    const isIoRow = c.sonoIo ? 'sono-io-row' : '';
-
-    return `<tr class="${isIoRow} ${isSelected ? 'selected' : ''}" onclick="selectClient(${c.id})">
-      <td>
-        <div class="client-name">${c.nome} ${c.cognome}</div>
-        <div class="client-id">${getAge(c.dob) ? getAge(c.dob) + ' anni · ' : ''}#${c.id}</div>
-      </td>
-      <td>${profiloTag}</td>
-      <td>${goalTag}</td>
-      <td>${schedHTML}</td>
-      <td>
-        <span class="workout-count">${wkts.length}<span class="wc-label">sedute</span></span>
-      </td>
-      <td><span class="note-count">${notes.length}</span></td>
-      <td>${prtTag}</td>
-    </tr>`;
-  }).join('');
-}
-
-// ─── FILTER ───────────────────────────────────────────────────────────
-function applyFilter(filter, btn) {
-  STATE.filter = filter;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+// ─── PERIOD SELECT (new sticky bar) ──────────────────────────────────
+function onPeriodSelect(period, btn) {
+  STATE.period = period;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  document.getElementById('periodCustom').style.display = period === 'custom' ? 'flex' : 'none';
+  if (period !== 'custom') renderDashboard();
+}
 
-  const isIo = filter === 'sonoIo';
-  document.getElementById('ioBanner').classList.toggle('visible', isIo);
+function onDashboardRefresh() {
+  if (STATE.period === 'custom') renderDashboard();
+}
 
-  const pool = isIo ? STATE.allClients.filter(c => c.sonoIo) : STATE.clients;
+// ─── RENDER DASHBOARD ────────────────────────────────────────────────
+function renderDashboard() {
+  const dateFrom = document.getElementById('dateFrom')?.value || '';
+  const dateTo   = document.getElementById('dateTo')?.value || '';
+  const clients  = STATE.clients;
+  const period   = STATE.period;
 
-  STATE.filteredClients = pool.filter(c => {
-    if (filter === 'all' || filter === 'sonoIo') return true;
-    if (filter === 'prt') return c.prt === 'confermato';
-    if (filter === 'no_schedule') return !(c.schedule && c.schedule.length > 0);
-    return c.profilo === filter;
+  if (!clients.length) return;
+
+  const periodDays = getPeriodDays(period, dateFrom, dateTo);
+  const periodLabel = getPeriodLabel(period, dateFrom, dateTo);
+
+  // Build clientData
+  const clientData = clients.map(c => {
+    const allW = STATE.workoutsMap[c.id] || [];
+    const w    = filterByPeriod(allW, 'createdAt', period, dateFrom, dateTo);
+    const n    = filterByPeriod(STATE.notesMap[c.id] || [], 'date', period, dateFrom, dateTo);
+    return { c, w, allW, notes: n, freq: computeFreq(w, periodDays), energy: computeEnergy(n) };
   });
+  clientData_global = clientData;
 
-  renderClientTable(STATE.filteredClients);
-}
+  // KPIs
+  const totalSedute     = clientData.reduce((s,d) => s+d.freq.count, 0);
+  const seduteConDolore = clientData.reduce((s,d) => s+d.w.filter(w=>w.tipoSeduta==='dolori').length, 0);
+  const pctDolore       = totalSedute > 0 ? Math.round(seduteConDolore/totalSedute*100) : 0;
+  const slotOccupati    = clients.reduce((s,c) => s+(c.schedule?.length||0), 0);
+  const avgFreq         = clientData.length ? (clientData.reduce((s,d)=>s+d.freq.perWeek,0)/clientData.length).toFixed(1) : '—';
+  const allPeriodW      = clientData.flatMap(d => d.w);
+  const painZones       = computePainZones(allPeriodW);
+  const dowData         = computeDowCounts(allPeriodW);
+  const maxDow          = dowData.reduce((b,d) => d.total>b.total?d:b, dowData[0]);
+  const clientiNoSlot   = clients.filter(c => !c.schedule?.length);
 
-// ─── SELECT CLIENT ────────────────────────────────────────────────────
-function selectClient(clientId) {
-  STATE.selectedClient = STATE.allClients.find(c => c.id === clientId);
-  renderClientTable(STATE.filteredClients);
+  // Energia
+  const energyRows = clientData.filter(d => d.energy.mean !== null)
+    .sort((a,b) => a.energy.mean - b.energy.mean);
 
-  const c = STATE.selectedClient;
-  document.getElementById('selClientName').textContent = `${c.nome} ${c.cognome}`;
+  // Juri
+  const juriAll = STATE.allClients.find(c => c.sonoIo);
+  const juriW   = juriAll ? filterByPeriod(STATE.workoutsMap[juriAll.id]||[], 'createdAt', period, dateFrom, dateTo) : [];
+  const juriN   = juriAll ? filterByPeriod(STATE.notesMap[juriAll.id]||[], 'date', period, dateFrom, dateTo) : [];
 
-  // Scroll to selection panel
-  document.getElementById('selectionPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Score section
+  const scoresSectionHTML = buildClientScoreSection(clientData, periodDays, STATE.skipMap);
 
-  renderPreview();
-  updateCTA();
-}
+  // Update KPI bar
+  document.getElementById('periodKpis').innerHTML = `
+    <div class="pkpi"><div class="pkpi-val">${clients.length}</div><div class="pkpi-lbl">Clienti</div></div>
+    <div class="pkpi"><div class="pkpi-val">${totalSedute}</div><div class="pkpi-lbl">Sedute</div></div>
+    <div class="pkpi"><div class="pkpi-val" style="color:${pctDolore>25?'var(--red)':pctDolore>10?'var(--amber)':'var(--green)'}">${pctDolore}%</div><div class="pkpi-lbl">Dolore</div></div>
+    <div class="pkpi"><div class="pkpi-val">${avgFreq}×</div><div class="pkpi-lbl">Freq. media</div></div>
+  `;
 
-// ─── REPORT TYPE ──────────────────────────────────────────────────────
-function selectReportType(type) {
-  STATE.reportType = type;
-  document.getElementById('rtPT').classList.toggle('selected', type === 'pt');
-  document.getElementById('rtCliente').classList.toggle('selected', type === 'cliente');
-  document.getElementById('rtWrapped').classList.toggle('selected', type === 'wrapped');
+  // Build dashboard HTML
+  const painZoneHTML = painZones.slice(0,6).map(([z,n]) => {
+    const w = Math.round(n/painZones[0][1]*100);
+    return `<div class="db-br"><div class="db-br-l">${esc(z)}</div><div class="db-br-track"><div class="db-br-fill" style="width:${w}%;background:var(--red)"></div></div><div class="db-br-v">${n}×</div></div>`;
+  }).join('') || '<div style="color:var(--sub);font-size:.78rem">Nessun dolore nel periodo</div>';
 
-  // MBTI only for cliente + wrapped
-  document.getElementById('mbtiSection').classList.toggle('visible', type === 'cliente' || type === 'wrapped');
+  const energyHTML = energyRows.length ? energyRows.map(({c,energy,notes}) => {
+    const col = energy.mean>=7?'var(--green)':energy.mean>=5?'var(--amber)':'var(--red)';
+    const arrow = energy.trend==='crescita'?'↑':energy.trend==='calo'?'↓':'→';
+    const arrowCol = energy.trend==='crescita'?'var(--green)':energy.trend==='calo'?'var(--red)':'var(--sub)';
+    const negTags = notes.flatMap(n=>n.parsed?.hashtags||[]).filter(t=>HASHTAG_NEGATIVE.includes(t));
+    const negUniq = [...new Set(negTags)].slice(0,2).map(t=>`<span style="font-family:var(--f-mono);font-size:.5rem;background:var(--red-dim);color:var(--red);padding:2px 6px;border-radius:2px">${t}</span>`).join(' ');
+    return `<tr>
+      <td style="font-weight:600;font-size:.82rem">${esc(c.nome+' '+c.cognome)}</td>
+      <td style="font-family:var(--f-mono);font-weight:700;color:${col}">${energy.mean}/10</td>
+      <td style="font-family:var(--f-mono);color:${arrowCol}">${arrow} ${energy.trend}</td>
+      <td>${negUniq||'—'}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="4" style="color:var(--sub);font-size:.78rem;padding:12px">Nessuna nota energia nel periodo</td></tr>`;
 
-  // Period selector: hide for wrapped, show for others
-  document.getElementById('periodoSelect').closest('.sel-group').style.display = type === 'wrapped' ? 'none' : '';
-  document.getElementById('wrappedYearSection').style.display = type === 'wrapped' ? '' : 'none';
+  const juriHTML = juriAll && juriW.length > 0 ? buildJuriSectionHTML(juriAll, juriW, juriN) : '';
 
-  // Populate year dropdown from available workouts data
-  if (type === 'wrapped') _populateWrappedYears();
+  document.getElementById('dashboardBody').innerHTML = `
 
-  updateCTA();
-}
-
-// ─── PERIOD ───────────────────────────────────────────────────────────
-function onPeriodChange() {
-  STATE.period = document.getElementById('periodoSelect').value;
-  const isCustom = STATE.period === 'custom';
-  document.getElementById('customDates').classList.toggle('visible', isCustom);
-  if (STATE.selectedClient) renderPreview();
-}
-
-// ─── MBTI ─────────────────────────────────────────────────────────────
-function toggleMbtiPanel() {
-  const trigger = document.getElementById('mbtiTrigger');
-  const panel   = document.getElementById('mbtiPanel');
-  const isOpen  = panel.classList.contains('open');
-  trigger.classList.toggle('open', !isOpen);
-  panel.classList.toggle('open', !isOpen);
-}
-
-function closeMbtiPanel() {
-  document.getElementById('mbtiTrigger').classList.remove('open');
-  document.getElementById('mbtiPanel').classList.remove('open');
-}
-
-function selectMBTI(mbti, btn) {
-  STATE.mbti = mbti;
-  document.querySelectorAll('.mbti-btn').forEach(b => b.classList.remove('selected'));
-  closeMbtiPanel();
-  document.getElementById('mbtiTriggerLabel').textContent = '— Nessuna selezionata';
-  document.querySelector('.mbti-btn[data-mbti=""]').classList.add('selected');
-  btn.classList.add('selected');
-
-  // Update trigger label
-  const label = mbti
-    ? `${mbti} · ${btn.childNodes[0].textContent.trim()}`
-    : '— Default (bilanciato)';
-  document.getElementById('mbtiTriggerLabel').textContent = label;
-
-  // Close panel after selection
-  closeMbtiPanel();
-  updateCTA();
-}
-
-// ─── PREVIEW ─────────────────────────────────────────────────────────
-function renderPreview() {
-  const c = STATE.selectedClient;
-  if (!c) return;
-
-  const wkts  = STATE.workoutsMap[c.id] || [];
-  const notes = STATE.notesMap[c.id] || [];
-  const percorso = STATE.percorsoMap[c.id] || null;
-
-  // Filter by period
-  const dateFrom = document.getElementById('dateFrom').value;
-  const dateTo   = document.getElementById('dateTo').value;
-  const wktsPeriod  = filterByPeriod(wkts, 'createdAt', STATE.period, dateFrom, dateTo);
-  const notesPeriod = filterByPeriod(notes, 'date', STATE.period, dateFrom, dateTo);
-
-  // Compute energia media
-  const energie = notesPeriod.map(n => n.parsed.energia).filter(e => e !== null);
-  const energiaMedia = energie.length ? (energie.reduce((a, b) => a + b, 0) / energie.length).toFixed(1) : null;
-
-  // Last workout
-  const lastW = wkts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-
-  // Workout con dolore
-  const wktsConDolore = wktsPeriod.filter(w => w.tipoSeduta === 'dolori').length;
-
-  // Hashtag
-  const allTags = notesPeriod.flatMap(n => n.parsed.hashtags);
-  const negTags = allTags.filter(t => HASHTAG_NEGATIVE.includes(t));
-  const tagFreq = {};
-  allTags.forEach(t => { tagFreq[t] = (tagFreq[t] || 0) + 1; });
-
-  const card = document.getElementById('previewCard');
-  card.innerHTML = `
-    <div class="preview-data-grid">
-      <div class="preview-kv">
-        <div class="pk-label">Sedute nel periodo</div>
-        <div class="pk-value">${wktsPeriod.length} <span style="font-size:0.8rem;color:var(--sub);font-family:var(--f-mono)">/ ${wkts.length} totali</span></div>
+    <!-- §01 STUDIO -->
+    <div class="db-section">
+      <div class="db-section-head">
+        <span class="db-sec-num">01 ·</span>
+        <span class="db-sec-title">Studio</span>
       </div>
-      <div class="preview-kv">
-        <div class="pk-label">Energia media</div>
-        <div class="pk-value">${energiaMedia !== null ? energiaMedia + '/10' : '—'} <span style="font-size:0.8rem;color:var(--sub);font-family:var(--f-mono)">${energie.length} rilevazioni</span></div>
+      <div class="db-grid db-grid-3" style="margin-bottom:1px">
+        <div class="db-cell db-cell-white">
+          <div class="db-ctag">Slot settimanali fissi</div>
+          <div class="db-bignum">${slotOccupati}</div>
+          <div class="db-unit">slot occupati · settimana</div>
+          ${clientiNoSlot.length ? `<div class="db-body" style="color:var(--amber);margin-top:10px">⚠ Senza slot: ${clientiNoSlot.map(c=>c.nome).join(', ')}</div>` : '<div class="db-body" style="color:var(--green)">✓ Tutti i clienti hanno uno slot</div>'}
+        </div>
+        <div class="db-cell" style="background:var(--ink)">
+          <div class="db-ctag" style="color:rgba(255,255,255,.4)">Frequenza media studio</div>
+          <div class="db-bignum db-bignum-white">${avgFreq}</div>
+          <div class="db-unit db-unit-white">sedute / settimana per cliente</div>
+          <div class="db-body db-body-white" style="margin-top:10px">Giorno più intenso: <b>${maxDow.day}</b> (${maxDow.total} sed.)</div>
+        </div>
+        <div class="db-cell" style="background:${pctDolore>25?'var(--red-dim)':pctDolore>10?'var(--amber-dim)':'var(--green-dim)'}">
+          <div class="db-ctag">Sedute con dolore</div>
+          <div class="db-bignum" style="color:${pctDolore>25?'var(--red)':pctDolore>10?'var(--amber)':'var(--green)'}">${pctDolore}<span style="font-size:1.8rem">%</span></div>
+          <div class="db-unit">${seduteConDolore} su ${totalSedute} sedute</div>
+        </div>
       </div>
-      <div class="preview-kv">
-        <div class="pk-label">Note disponibili</div>
-        <div class="pk-value">${notesPeriod.length} <span style="font-size:0.8rem;color:var(--sub);font-family:var(--f-mono)">nel periodo</span></div>
-      </div>
-      <div class="preview-kv">
-        <div class="pk-label">Sedute con dolore</div>
-        <div class="pk-value" style="${wktsConDolore > 0 ? 'color:var(--amber)' : ''}">${wktsConDolore}</div>
-      </div>
-      <div class="preview-kv">
-        <div class="pk-label">Percorso Fit</div>
-        <div class="pk-value">${percorso ? percorso.pct + '%' : '—'} <span style="font-size:0.8rem;color:var(--sub);font-family:var(--f-mono)">${percorso ? percorso.done + '/' + percorso.total : ''}</span></div>
-      </div>
-      <div class="preview-kv">
-        <div class="pk-label">Ultima seduta</div>
-        <div class="pk-value" style="font-size:0.95rem">${lastW ? formatDateIT(lastW.createdAt) : '—'}</div>
+      <div class="db-grid db-grid-60-40">
+        <div class="db-cell db-cell-white">
+          <div class="db-ctag">Zone dolore più frequenti · ${periodLabel}</div>
+          <div style="margin-top:8px">${painZoneHTML}</div>
+        </div>
+        <div class="db-cell">
+          <div class="db-ctag">Energie studio · media per cliente</div>
+          <table style="width:100%;border-collapse:collapse;margin-top:8px">
+            <thead><tr style="font-family:var(--f-mono);font-size:.54rem;letter-spacing:.08em;text-transform:uppercase;color:var(--sub)">
+              <th style="text-align:left;padding-bottom:8px;border-bottom:1px solid var(--line2)">Cliente</th>
+              <th style="padding-bottom:8px;border-bottom:1px solid var(--line2)">Media</th>
+              <th style="padding-bottom:8px;border-bottom:1px solid var(--line2)">Trend</th>
+              <th style="padding-bottom:8px;border-bottom:1px solid var(--line2)">Alert</th>
+            </tr></thead>
+            <tbody style="font-size:.8rem">${energyHTML}</tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    ${allTags.length ? `
-    <div style="margin-bottom:14px">
-      <div class="workouts-mini-title">Hashtag nel periodo</div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px">
-        ${Object.entries(tagFreq).sort((a,b) => b[1]-a[1]).slice(0, 12).map(([tag, count]) => {
-          const isNeg = HASHTAG_NEGATIVE.includes(tag);
-          const isPos = HASHTAG_POSITIVE.includes(tag);
-          return `<span class="nm-tag ${isNeg ? 'neg' : ''}" style="${isPos ? 'color:var(--green);background:var(--green-dim);border-color:#c8e6c9' : ''}">${tag} <span style="opacity:0.6">${count > 1 ? '×' + count : ''}</span></span>`;
-        }).join('')}
+    ${juriHTML ? `<!-- §02 JURI -->
+    <div class="db-section">${juriHTML}</div>` : ''}
+
+    <!-- §03 PRIORITÀ CLIENTI -->
+    <div class="db-section">
+      <div class="db-section-head">
+        <span class="db-sec-num">${juriAll&&juriW.length?'03':'02'} ·</span>
+        <span class="db-sec-title">Priorità clienti</span>
       </div>
-    </div>` : ''}
-
-    ${wktsPeriod.length ? `
-    <div class="workouts-mini">
-      <div class="workouts-mini-title">Sedute nel periodo (ultime 5)</div>
-      ${wktsPeriod.slice(0, 5).map(w => `
-        <div class="workout-mini-row">
-          <span class="wm-date">${formatDateIT(w.createdAt)}</span>
-          <span class="wm-name">${w.name || 'Seduta'}</span>
-          <span class="wm-tipo">
-            ${w.tipoSeduta === 'dolori'
-              ? '<span class="tag-pill amber" style="font-size:0.48rem">⚠ dolori</span>'
-              : '<span class="tag-pill green" style="font-size:0.48rem">✓ normale</span>'}
-          </span>
-        </div>`).join('')}
-    </div>` : `<div class="empty-state" style="padding:20px">Nessuna seduta nel periodo selezionato</div>`}
-
-    ${notesPeriod.length ? `
-    <div class="notes-mini">
-      <div class="workouts-mini-title">Note seduta nel periodo (ultime 3)</div>
-      ${notesPeriod.slice(0, 3).map(n => {
-        const tags = n.parsed.hashtags;
-        const negT = tags.filter(t => HASHTAG_NEGATIVE.includes(t));
-        const posT = tags.filter(t => HASHTAG_POSITIVE.includes(t));
-        const noteText = [
-          ...n.parsed.positivi.map(t => '✅ ' + t),
-          ...n.parsed.reminder.map(t => '➡️ ' + t),
-          ...n.parsed.attenzione.map(t => '⚠️ ' + t)
-        ].join(' · ') || (n.text || '').replace(/⚡.*?\|/g,'').replace(/#[\w\-\/]+/g,'').trim().slice(0, 80);
-        return `
-          <div class="note-mini-row">
-            <div class="nm-header">
-              <span class="nm-date">${formatDateIT(n.date)}</span>
-              ${n.parsed.energia !== null ? `<span class="nm-energia">⚡ ${n.parsed.energia}/10</span>` : ''}
-            </div>
-            ${noteText ? `<div class="nm-text">${noteText}</div>` : ''}
-            ${tags.length ? `<div class="nm-hashtags">
-              ${posT.map(t => `<span class="nm-tag" style="color:var(--green);background:var(--green-dim);border-color:#c8e6c9">${t}</span>`).join('')}
-              ${negT.map(t => `<span class="nm-tag neg">${t}</span>`).join('')}
-              ${tags.filter(t => !HASHTAG_NEGATIVE.includes(t) && !HASHTAG_POSITIVE.includes(t)).map(t => `<span class="nm-tag">${t}</span>`).join('')}
-            </div>` : ''}
-          </div>`;
-      }).join('')}
-    </div>` : ''}
+      ${scoresSectionHTML}
+    </div>
   `;
+
+  // Animate bars after render
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.db-br-fill').forEach(el => {
+      const w = el.style.width;
+      el.style.width = '0';
+      requestAnimationFrame(() => { el.style.width = w; });
+    });
+  });
 }
 
-// ─── CTA ─────────────────────────────────────────────────────────────
-function updateCTA() {
-  const ready = STATE.selectedClient && STATE.reportType;
-  const btn = document.getElementById('btnGenerate');
-  btn.classList.toggle('ready', !!ready);
+// ─── MODAL MBTI ───────────────────────────────────────────────────────
+let _modalClient = null;
+let _modalType   = 'cliente'; // 'cliente' | 'wrapped'
+let _modalMbti   = '';
+let _modalYear   = new Date().getFullYear();
 
-  if (!STATE.selectedClient) {
-    document.getElementById('ctaInfo').textContent = 'Seleziona un cliente dalla tabella';
-  } else if (!STATE.reportType) {
-    document.getElementById('ctaInfo').innerHTML = `<strong>${STATE.selectedClient.nome} ${STATE.selectedClient.cognome}</strong> selezionato — scegli il tipo di report`;
-  } else {
-    const periodoLabel = STATE.reportType === 'wrapped'
-      ? `Anno ${STATE.wrappedYear}`
-      : ({ '1m': 'ultimo mese', '3m': 'ultimo trimestre', '6m': 'ultimi 6 mesi', '1y': 'ultimo anno', 'custom': 'periodo personalizzato' }[STATE.period] || STATE.period);
-    const typeLabel = { pt: 'Report PT', cliente: 'Report Cliente', wrapped: '🎁 Wrapped' }[STATE.reportType] || STATE.reportType;
-    document.getElementById('ctaInfo').innerHTML = `<strong>${STATE.selectedClient.nome} ${STATE.selectedClient.cognome}</strong> · <strong>${typeLabel}</strong> · ${periodoLabel}${STATE.mbti ? ' · MBTI ' + STATE.mbti : ''}`;
-  }
+function openReportModal(clientId, type, year) {
+  _modalClient = STATE.clients.find(c => c.id === clientId) || STATE.allClients.find(c => c.id === clientId);
+  _modalType   = type;
+  _modalYear   = year || STATE.wrappedYear;
+  _modalMbti   = '';
+  const modal = document.getElementById('mbtiModal');
+  document.getElementById('modalTitle').textContent =
+    type === 'wrapped' ? `🎁 Wrapped ${_modalYear} · ${_modalClient.nome}` : `📄 Report Cliente · ${_modalClient.nome}`;
+  document.querySelectorAll('#modalMbtiGrid .mbti-btn').forEach(b => b.classList.toggle('selected', b.dataset.mbti === ''));
+  modal.style.display = 'flex';
 }
 
-// ─── GENERATE — ROUTING ──────────────────────────────────────────────
-function onGenerate() {
-  if (!STATE.selectedClient || !STATE.reportType) return;
+function closeMbtiModal(e) {
+  if (e && e.target !== document.getElementById('mbtiModal')) return;
+  document.getElementById('mbtiModal').style.display = 'none';
+}
 
-  const c = STATE.selectedClient;
-  const dateFrom = document.getElementById('dateFrom').value;
-  const dateTo   = document.getElementById('dateTo').value;
+function modalSelectMBTI(mbti, btn) {
+  _modalMbti = mbti;
+  document.querySelectorAll('#modalMbtiGrid .mbti-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function modalGenerate() {
+  if (!_modalClient) return;
+  const btn = document.getElementById('modalBtnGenerate');
+  btn.textContent = '⏳ Generazione...';
+  btn.disabled = true;
+
+  const dateFrom = document.getElementById('dateFrom')?.value || '';
+  const dateTo   = document.getElementById('dateTo')?.value || '';
+  const period   = STATE.period;
 
   const config = {
-    client:     c,
-    reportType: STATE.reportType,
-    period:     STATE.period,
+    client:      _modalClient,
+    reportType:  _modalType,
+    period,
     dateFrom,
     dateTo,
-    mbti:       STATE.mbti,
-    workouts:   filterByPeriod(STATE.workoutsMap[c.id] || [], 'createdAt', STATE.period, dateFrom, dateTo),
-    allWorkouts: STATE.workoutsMap[c.id] || [],
-    notes:      filterByPeriod(STATE.notesMap[c.id] || [], 'date', STATE.period, dateFrom, dateTo),
-    percorso:   STATE.percorsoMap[c.id] || null,
-    skips:      STATE.skipMap[c.id] || [],
-    allClients: STATE.clients,
+    mbti:        _modalMbti,
+    workouts:    filterByPeriod(STATE.workoutsMap[_modalClient.id]||[], 'createdAt', period, dateFrom, dateTo),
+    allWorkouts: STATE.workoutsMap[_modalClient.id] || [],
+    notes:       filterByPeriod(STATE.notesMap[_modalClient.id]||[], 'date', period, dateFrom, dateTo),
+    percorso:    STATE.percorsoMap[_modalClient.id] || null,
+    skips:       STATE.skipMap[_modalClient.id] || [],
+    allClients:  STATE.clients,
     allWorkoutsMap: STATE.workoutsMap,
-    allNotesMap: STATE.notesMap,
+    allNotesMap:    STATE.notesMap,
     allPercorsoMap: STATE.percorsoMap,
-    allSkipMap: STATE.skipMap
+    allSkipMap:     STATE.skipMap
   };
 
-  if (STATE.reportType === 'pt') {
-    generatePTReport(config);
-  } else if (STATE.reportType === 'wrapped') {
-    generateWrappedReport(config);
-  } else {
-    generateClienteReport(config);
-  }
+  document.getElementById('mbtiModal').style.display = 'none';
+  btn.textContent = '⬇ Genera PDF';
+  btn.disabled = false;
+
+  setTimeout(() => {
+    if (_modalType === 'wrapped') {
+      STATE.wrappedYear = _modalYear;
+      STATE.mbti = _modalMbti;
+      generateWrappedReport(config);
+    } else {
+      generateClienteReport(config);
+    }
+  }, 30);
 }
+
+// ─── STUBS per funzioni legacy non più usate direttamente ─────────────
+function renderClientTable() {}
+function applyFilter() {}
+function selectClient() {}
+function selectReportType() {}
+function updateCTA() {}
+function renderPreview() {}
+function onGenerate() {}
+function onPeriodChange() {}
 
 
 
@@ -3110,6 +2972,13 @@ function buildClientScoreSection(clientData, periodDays, skipsMap) {
       ? `<div class="pm-rif">IC su: ${esc(s.icResult.riferimento)}</div>` : '';
     const reasonPills = s.priorityReasons.map(r=>`<span class="pm-reason">${esc(r)}</span>`).join('');
 
+    // Wrapped year options
+    const allW = STATE.workoutsMap[s.c.id]||[];
+    const years = [...new Set(allW.map(w=>new Date(w.createdAt).getFullYear()))].sort((a,b)=>b-a);
+    const yearOpts = years.length
+      ? years.map(y=>`<option value="${y}">${y}</option>`).join('')
+      : `<option value="${new Date().getFullYear()}">${new Date().getFullYear()}</option>`;
+
     return `
     <details class="pm-client" ${expanded?'open':''}>
       <summary class="pm-summary">
@@ -3130,6 +2999,11 @@ function buildClientScoreSection(clientData, periodDays, skipsMap) {
         <div class="trend-row">${buildTrendRow(s.trend4)}</div>
         ${rifHTML}
         <div class="dec-content" style="margin-top:10px">${buildDecisioneHTML(s.dec)}</div>
+        <div class="pm-actions">
+          <button class="pm-btn pm-btn-primary" onclick="openReportModal(${s.c.id},'cliente')">📄 Report Cliente</button>
+          <select class="pm-wrapped-year" id="wy-${s.c.id}">${yearOpts}</select>
+          <button class="pm-btn" onclick="openReportModal(${s.c.id},'wrapped',parseInt(document.getElementById('wy-${s.c.id}').value))">🎁 Wrapped</button>
+        </div>
       </div>
     </details>`;
   }
@@ -4664,23 +4538,20 @@ function resetAll() {
   STATE.allClients = [];
   STATE.reportType = null;
   STATE.filter = 'all';
+  STATE.period = '3m';
 
   document.getElementById('headerStatus').className = 'header-status';
   document.getElementById('headerStatus').innerHTML = `<span class="dot"></span>nessun backup caricato`;
   document.getElementById('fileLoadedBar').classList.remove('visible');
-  document.getElementById('statsBar').classList.remove('visible');
-  document.getElementById('clientsSection').classList.remove('visible');
-  document.getElementById('selectionPanel').classList.remove('visible');
   document.getElementById('fileInput').value = '';
-  document.getElementById('ioBanner').classList.remove('visible');
+  document.getElementById('dashboardSection').style.display = 'none';
+  document.getElementById('mbtiModal').style.display = 'none';
 
-  document.querySelectorAll('.filter-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
-  document.querySelectorAll('.mbti-btn').forEach(b => b.classList.remove('selected'));
-  document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
-  document.getElementById('mbtiSection').classList.remove('visible');
-  document.getElementById('wrappedYearSection').style.display = 'none';
-  document.getElementById('periodoSelect').closest('.sel-group').style.display = '';
-  document.getElementById('btnGenerate').classList.remove('ready');
+  // Reset period bar
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === '3m'));
+  document.getElementById('periodCustom').style.display = 'none';
+  document.getElementById('periodKpis').innerHTML = '';
+  document.getElementById('dashboardBody').innerHTML = '';
 }
 </script>
 
