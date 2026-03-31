@@ -1,0 +1,1779 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASD Report Generator — Juri Monasso PT</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=DM+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300;1,600&display=swap" rel="stylesheet">
+<style>
+/* ─── RESET & BASE ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #faf9f6;
+  --white:   #ffffff;
+  --warm:    #f5f0e8;
+  --warm2:   #ede8df;
+  --ink:     #111111;
+  --mid:     #555555;
+  --sub:     #999999;
+  --line:    #e5e0d5;
+  --line2:   #ede8df;
+  --red:     #e53935;
+  --red-dim: #fdecea;
+  --green:   #2e7d32;
+  --green-dim:#e8f5e9;
+  --amber:   #e65100;
+  --amber-dim:#fff3e0;
+  --blue:    #1565c0;
+  --blue-dim:#e3f2fd;
+
+  --f-display: 'Outfit', sans-serif;
+  --f-mono:    'DM Mono', monospace;
+  --f-serif:   'Cormorant Garamond', serif;
+
+  --radius: 3px;
+  --shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px var(--line);
+  --shadow-lift: 0 4px 16px rgba(0,0,0,0.10), 0 0 0 1px var(--line);
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-display);
+  font-size: 18px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── HEADER ────────────────────────────────────────────────────── */
+.app-header {
+  background: var(--ink);
+  border-left: 4px solid var(--red);
+  padding: 22px 40px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.app-header .logo-mark {
+  font-family: var(--f-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--red);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1.5px solid var(--red);
+  padding: 6px 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.app-header .title-group { flex: 1; }
+
+.app-header h1 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.app-header .subtitle {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  color: #777;
+  letter-spacing: 0.08em;
+  margin-top: 3px;
+}
+
+.header-status {
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  color: #888;
+  letter-spacing: 0.06em;
+  text-align: right;
+}
+
+.header-status .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #444;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.header-status.loaded .dot { background: var(--green); }
+
+/* ─── LAYOUT ────────────────────────────────────────────────────── */
+.app-body {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 44px 36px 80px;
+}
+
+/* ─── SECTION LABEL ─────────────────────────────────────────────── */
+.section-label {
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--red);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-label::before {
+  content: '';
+  display: block;
+  width: 22px;
+  height: 1.5px;
+  background: var(--red);
+}
+
+/* ─── UPLOAD ZONE ───────────────────────────────────────────────── */
+.upload-section { margin-bottom: 44px; }
+
+.drop-zone {
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--white);
+  padding: 52px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.drop-zone::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3.5px;
+  background: var(--line2);
+  transition: background 0.18s ease;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--red);
+  background: var(--red-dim);
+  box-shadow: var(--shadow-lift);
+}
+
+.drop-zone:hover::before,
+.drop-zone.drag-over::before { background: var(--red); }
+
+.drop-zone.drag-over { transform: scale(1.004); }
+
+.drop-icon {
+  font-size: 3.2rem;
+  margin-bottom: 18px;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.drop-zone:hover .drop-icon { transform: translateY(-3px); }
+
+.drop-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.drop-sub {
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  color: var(--sub);
+  letter-spacing: 0.06em;
+  margin-bottom: 24px;
+}
+
+.btn-upload {
+  display: inline-block;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--f-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 12px 28px;
+  border-radius: 2px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-upload:hover { background: var(--red); }
+
+#fileInput { display: none; }
+
+/* ─── LOADED STATE ──────────────────────────────────────────────── */
+.file-loaded-bar {
+  display: none;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-left: 3.5px solid var(--green);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  margin-top: 14px;
+  align-items: center;
+  gap: 16px;
+}
+
+.file-loaded-bar.visible { display: flex; }
+
+.file-loaded-bar .file-name {
+  font-family: var(--f-mono);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--green);
+  flex: 1;
+}
+
+.file-loaded-bar .file-meta {
+  font-family: var(--f-mono);
+  font-size: 0.7rem;
+  color: var(--sub);
+  letter-spacing: 0.05em;
+}
+
+.btn-reset {
+  font-family: var(--f-mono);
+  font-size: 0.7rem;
+  color: var(--sub);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-reset:hover { border-color: var(--red); color: var(--red); }
+
+/* ─── STATS BAR ─────────────────────────────────────────────────── */
+.stats-bar {
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 36px;
+  animation: fadeUp 0.35s ease forwards;
+}
+
+.stats-bar.visible { display: grid; }
+
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--line2);
+}
+
+.stat-card.accent-red::before  { background: var(--red); }
+.stat-card.accent-green::before { background: var(--green); }
+.stat-card.accent-amber::before { background: var(--amber); }
+.stat-card.accent-blue::before  { background: var(--blue); }
+
+.stat-label {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  color: var(--sub);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-family: var(--f-serif);
+  font-size: 3rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.stat-sub {
+  font-family: var(--f-mono);
+  font-size: 0.65rem;
+  color: var(--sub);
+  margin-top: 6px;
+}
+
+/* ─── CLIENT GRID ───────────────────────────────────────────────── */
+.clients-section { display: none; }
+.clients-section.visible { display: block; }
+
+.clients-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.clients-count {
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  color: var(--sub);
+  letter-spacing: 0.06em;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--mid);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.filter-btn:hover { border-color: var(--ink); color: var(--ink); }
+.filter-btn.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.filter-btn-io {
+  border-color: var(--amber);
+  color: var(--amber);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.filter-btn-io:hover { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+.filter-btn-io.active { background: var(--amber); color: #fff; border-color: var(--amber); }
+
+/* IO row in table */
+.client-table tbody tr.sono-io-row { background: #fffbf5; }
+.client-table tbody tr.sono-io-row:hover { background: #fff3e0; }
+.client-table tbody tr.sono-io-row td:first-child { border-left: 4px solid var(--amber); }
+.client-table tbody tr.sono-io-row.selected { background: #fff8f0; }
+.client-table tbody tr.sono-io-row.selected td:first-child { border-left: 4px solid var(--red); }
+
+/* IO banner shown when filter active */
+.io-banner {
+  display: none;
+  background: var(--amber-dim);
+  border: 1px solid #ffe0b2;
+  border-left: 4px solid var(--amber);
+  border-radius: var(--radius);
+  padding: 11px 18px;
+  margin-bottom: 14px;
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  color: var(--amber);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  align-items: center;
+  gap: 10px;
+}
+.io-banner.visible { display: flex; }
+.io-banner-icon { font-size: 1rem; }
+.io-banner-text { flex: 1; color: var(--ink); }
+.io-banner-text strong { color: var(--amber); }
+
+/* ─── CLIENT TABLE ──────────────────────────────────────────────── */
+.client-table-wrap {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.client-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.client-table thead th {
+  font-family: var(--f-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--sub);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--warm);
+  white-space: nowrap;
+}
+
+.client-table tbody tr {
+  border-bottom: 1px solid var(--line2);
+  transition: background 0.12s ease;
+  cursor: pointer;
+}
+
+.client-table tbody tr:last-child { border-bottom: none; }
+.client-table tbody tr:hover { background: var(--warm); }
+.client-table tbody tr.selected { background: #fff5f5; }
+.client-table tbody tr.selected td:first-child {
+  border-left: 4px solid var(--red);
+}
+
+.client-table td {
+  padding: 14px 18px;
+  vertical-align: middle;
+}
+
+.client-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.client-id {
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  color: var(--sub);
+  margin-top: 2px;
+}
+
+.tag-pill {
+  display: inline-block;
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  color: var(--mid);
+  background: var(--warm);
+  white-space: nowrap;
+}
+
+.tag-pill.red   { color: var(--red);   background: var(--red-dim);   border-color: #f4c6c5; }
+.tag-pill.green { color: var(--green); background: var(--green-dim); border-color: #c8e6c9; }
+.tag-pill.amber { color: var(--amber); background: var(--amber-dim); border-color: #ffe0b2; }
+.tag-pill.blue  { color: var(--blue);  background: var(--blue-dim);  border-color: #bbdefb; }
+
+.schedule-dots {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.sched-dot {
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  background: var(--warm2);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 3px 8px;
+  color: var(--mid);
+  white-space: nowrap;
+}
+
+.workout-count {
+  font-family: var(--f-mono);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.workout-count .wc-label {
+  font-size: 0.6rem;
+  color: var(--sub);
+  display: block;
+  font-weight: 400;
+}
+
+.note-count {
+  font-family: var(--f-mono);
+  font-size: 0.85rem;
+  color: var(--mid);
+}
+
+/* ─── SELECTION PANEL ───────────────────────────────────────────── */
+.selection-panel {
+  display: none;
+  margin-top: 32px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--red);
+  border-radius: var(--radius);
+  padding: 30px 32px;
+  animation: fadeUp 0.25s ease forwards;
+  box-shadow: var(--shadow-lift);
+}
+
+.selection-panel.visible { display: block; }
+
+.sel-panel-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 24px;
+  letter-spacing: -0.02em;
+}
+
+.sel-panel-title span {
+  color: var(--red);
+}
+
+.sel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 26px;
+}
+
+.sel-group label {
+  display: block;
+  font-family: var(--f-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--sub);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 9px;
+}
+
+.sel-group select,
+.sel-group input[type="date"] {
+  width: 100%;
+  font-family: var(--f-mono);
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 10px 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.14s;
+}
+
+.sel-group select:focus,
+.sel-group input[type="date"]:focus { border-color: var(--red); }
+
+.custom-dates {
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: -12px;
+  margin-bottom: 26px;
+}
+
+.custom-dates.visible { display: grid; }
+
+.mbti-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.mbti-btn {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 9px 8px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--mid);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.13s ease;
+  line-height: 1.3;
+}
+
+.mbti-btn:hover { border-color: var(--ink); color: var(--ink); }
+.mbti-btn.selected { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.mbti-desc {
+  font-family: var(--f-mono);
+  font-size: 0.56rem;
+  display: block;
+  opacity: 0.65;
+  margin-top: 2px;
+}
+
+.sel-report-type {
+  display: flex;
+  gap: 12px;
+  margin-top: 9px;
+}
+
+.report-type-btn {
+  flex: 1;
+  border: 1.5px solid var(--line);
+  border-radius: 2px;
+  padding: 16px 20px;
+  cursor: pointer;
+  background: var(--bg);
+  transition: all 0.14s ease;
+  text-align: left;
+}
+
+.report-type-btn:hover { border-color: var(--ink); background: var(--warm); }
+.report-type-btn.selected { border-color: var(--red); background: var(--red-dim); }
+
+.report-type-btn .rt-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-type-btn .rt-sub {
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  color: var(--sub);
+  margin-top: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* MBTI section visible only when cliente selected */
+.mbti-section { display: none; }
+.mbti-section.visible { display: block; }
+
+/* ─── MBTI COLLAPSIBLE ──────────────────────────────────────────── */
+.mbti-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--f-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.mbti-trigger:hover { border-color: var(--ink); background: var(--warm); }
+.mbti-trigger.open {
+  border-color: var(--red);
+  border-bottom-color: transparent;
+  border-radius: 2px 2px 0 0;
+  background: var(--white);
+}
+
+.mbti-trigger-label { flex: 1; }
+
+.mbti-trigger-arrow {
+  font-size: 0.8rem;
+  color: var(--sub);
+  transition: transform 0.22s ease, color 0.15s;
+  display: inline-block;
+  margin-left: 10px;
+}
+
+.mbti-trigger.open .mbti-trigger-arrow { transform: rotate(180deg); color: var(--red); }
+
+.mbti-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.26s ease;
+  border: 1px solid transparent;
+  border-top: none;
+  border-radius: 0 0 2px 2px;
+}
+
+.mbti-panel.open {
+  grid-template-rows: 1fr;
+  border-color: var(--red);
+}
+
+.mbti-panel-inner {
+  overflow: hidden;
+  background: var(--white);
+  padding: 0 12px;
+  transition: padding 0.22s ease;
+}
+
+.mbti-panel.open .mbti-panel-inner {
+  padding: 14px 12px;
+}
+
+/* ─── CTA BUTTON ─────────────────────────────────────────────────── */
+.cta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line2);
+}
+
+.cta-info {
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  color: var(--sub);
+}
+
+.cta-info strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.btn-generate {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--red);
+  color: #fff;
+  font-family: var(--f-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  border-radius: 2px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.btn-generate.ready {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-generate.ready:hover {
+  background: #c62828;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(229,57,53,0.35);
+}
+
+/* ─── PREVIEW PANEL ─────────────────────────────────────────────── */
+.preview-section {
+  display: none;
+  margin-top: 28px;
+  animation: fadeUp 0.3s ease forwards;
+}
+
+.preview-section.visible { display: block; }
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.preview-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.preview-tab {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--white);
+  color: var(--sub);
+  cursor: pointer;
+  transition: all 0.13s ease;
+}
+
+.preview-tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.preview-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--shadow);
+}
+
+.preview-data-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.preview-kv { }
+.preview-kv .pk-label {
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  color: var(--sub);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.preview-kv .pk-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.workouts-mini {
+  margin-top: 20px;
+  border-top: 1px solid var(--line2);
+  padding-top: 18px;
+}
+
+.workouts-mini-title {
+  font-family: var(--f-mono);
+  font-size: 0.65rem;
+  color: var(--sub);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.workout-mini-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line2);
+}
+
+.workout-mini-row:last-child { border-bottom: none; }
+
+.wm-date {
+  font-family: var(--f-mono);
+  font-size: 0.7rem;
+  color: var(--mid);
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.wm-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+  flex: 1;
+}
+
+.wm-tipo {
+  flex-shrink: 0;
+}
+
+.notes-mini {
+  margin-top: 20px;
+  border-top: 1px solid var(--line2);
+  padding-top: 18px;
+}
+
+.note-mini-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line2);
+}
+
+.note-mini-row:last-child { border-bottom: none; }
+
+.nm-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.nm-date {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  color: var(--sub);
+  font-weight: 500;
+}
+
+.nm-energia {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--amber);
+}
+
+.nm-text {
+  font-size: 0.88rem;
+  color: var(--mid);
+  line-height: 1.45;
+}
+
+.nm-hashtags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.nm-tag {
+  font-family: var(--f-mono);
+  font-size: 0.6rem;
+  color: var(--blue);
+  background: var(--blue-dim);
+  border: 1px solid #bbdefb;
+  padding: 3px 8px;
+  border-radius: 2px;
+}
+
+.nm-tag.neg {
+  color: var(--red);
+  background: var(--red-dim);
+  border-color: #f4c6c5;
+}
+
+/* ─── ANIMATIONS ────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { opacity: 0.6; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+/* ─── EMPTY STATE ───────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 52px 24px;
+  color: var(--sub);
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sel-grid { grid-template-columns: 1fr; }
+  .stats-bar { grid-template-columns: 1fr 1fr; }
+  .mbti-grid { grid-template-columns: repeat(3, 1fr); }
+  .preview-data-grid { grid-template-columns: 1fr 1fr; }
+  .sel-report-type { flex-direction: column; }
+  .app-header { padding: 14px 18px; }
+  .app-body { padding: 24px 16px 48px; }
+}
+
+/* ─── SCROLLBAR ──────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ─── HEADER ─── -->
+<header class="app-header">
+  <div class="logo-mark">ASD</div>
+  <div class="title-group">
+    <h1>Report Generator</h1>
+    <div class="subtitle">ALLENATI SENZA DOLORI · JURI MONASSO PT · MODULO 1 — CARICAMENTO DATI</div>
+  </div>
+  <div class="header-status" id="headerStatus">
+    <span class="dot"></span>nessun backup caricato
+  </div>
+</header>
+
+<!-- ─── BODY ─── -->
+<main class="app-body">
+
+  <!-- UPLOAD -->
+  <section class="upload-section">
+    <div class="section-label">01 · Carica backup</div>
+
+    <div class="drop-zone" id="dropZone">
+      <span class="drop-icon">📂</span>
+      <div class="drop-title">Trascina qui il backup JSON</div>
+      <div class="drop-sub">FILE · asd_backup_YYYY-MM-DD.json · ESPORTATO DAL GESTIONALE ASD</div>
+      <button class="btn-upload" onclick="document.getElementById('fileInput').click()">Scegli file</button>
+      <input type="file" id="fileInput" accept=".json">
+    </div>
+
+    <div class="file-loaded-bar" id="fileLoadedBar">
+      <span class="file-name" id="fileNameDisplay">—</span>
+      <span class="file-meta" id="fileMetaDisplay">—</span>
+      <button class="btn-reset" onclick="resetAll()">✕ Rimuovi</button>
+    </div>
+  </section>
+
+  <!-- STATS BAR -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card accent-red">
+      <div class="stat-label">Clienti attivi</div>
+      <div class="stat-value" id="statClienti">—</div>
+      <div class="stat-sub">escluso Juri</div>
+    </div>
+    <div class="stat-card accent-blue">
+      <div class="stat-label">Sedute totali</div>
+      <div class="stat-value" id="statSedute">—</div>
+      <div class="stat-sub">workout loggati</div>
+    </div>
+    <div class="stat-card accent-amber">
+      <div class="stat-label">Note seduta</div>
+      <div class="stat-value" id="statNote">—</div>
+      <div class="stat-sub">con clienti</div>
+    </div>
+    <div class="stat-card accent-green">
+      <div class="stat-label">Esportato</div>
+      <div class="stat-value" id="statExport" style="font-size:1.1rem; padding-top:6px">—</div>
+      <div class="stat-sub" id="statExportTime">—</div>
+    </div>
+  </div>
+
+  <!-- CLIENTI -->
+  <section class="clients-section" id="clientsSection">
+    <div class="clients-header">
+      <div class="section-label" style="margin-bottom:0">02 · Seleziona cliente</div>
+      <div class="clients-count" id="clientsCount">—</div>
+    </div>
+
+    <div class="filter-row" id="filterRow">
+      <button class="filter-btn active" data-filter="all" onclick="applyFilter('all', this)">Tutti</button>
+      <button class="filter-btn" data-filter="dolore_adulto" onclick="applyFilter('dolore_adulto', this)">Dolore adulto</button>
+      <button class="filter-btn" data-filter="sportivo_giovane" onclick="applyFilter('sportivo_giovane', this)">Sportivo giovane</button>
+      <button class="filter-btn" data-filter="prt" onclick="applyFilter('prt', this)">PRT confermato</button>
+      <button class="filter-btn" data-filter="no_schedule" onclick="applyFilter('no_schedule', this)">Senza slot fisso</button>
+      <button class="filter-btn filter-btn-io" data-filter="sonoIo" onclick="applyFilter('sonoIo', this)">⚡ IO</button>
+    </div>
+
+    <div class="io-banner" id="ioBanner">
+      <span class="io-banner-icon">⚡</span>
+      <span class="io-banner-text">Stai visualizzando il tuo profilo personale. <strong>I dati studio non vengono influenzati.</strong> Puoi generare report PT o Cliente per te stesso.</span>
+    </div>
+    <div class="client-table-wrap">
+      <table class="client-table">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Profilo</th>
+            <th>Obiettivo</th>
+            <th>Slot settimanali</th>
+            <th>Sedute</th>
+            <th>Note</th>
+            <th>PRT</th>
+          </tr>
+        </thead>
+        <tbody id="clientTableBody">
+          <tr><td colspan="7" class="empty-state">Carica un backup per vedere i clienti</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SELECTION PANEL -->
+    <div class="selection-panel" id="selectionPanel">
+      <div class="sel-panel-title">Configura report per <span id="selClientName">—</span></div>
+
+      <div class="sel-grid">
+        <div class="sel-group">
+          <label>Tipo report</label>
+          <div class="sel-report-type">
+            <div class="report-type-btn" id="rtPT" onclick="selectReportType('pt')">
+              <div class="rt-title">📊 Report PT</div>
+              <div class="rt-sub">Analisi interna · dati operativi</div>
+            </div>
+            <div class="report-type-btn" id="rtCliente" onclick="selectReportType('cliente')">
+              <div class="rt-title">📄 Report Cliente</div>
+              <div class="rt-sub">Documento emotivo · da stampare</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sel-group">
+          <label>Periodo di analisi</label>
+          <select id="periodoSelect" onchange="onPeriodChange()">
+            <option value="1m">Ultimo mese (30 gg)</option>
+            <option value="3m" selected>Ultimo trimestre (90 gg)</option>
+            <option value="6m">Ultimi 6 mesi</option>
+            <option value="1y">Ultimo anno</option>
+            <option value="custom">Periodo personalizzato</option>
+          </select>
+        </div>
+
+        <div class="sel-group mbti-section" id="mbtiSection">
+          <label>Personalità MBTI <span style="color:var(--sub); font-size:0.6rem">(opzionale)</span></label>
+          <button class="mbti-trigger" id="mbtiTrigger" onclick="toggleMbtiPanel()">
+            <span class="mbti-trigger-label" id="mbtiTriggerLabel">— Nessuna selezionata</span>
+            <span class="mbti-trigger-arrow" id="mbtiTriggerArrow">▾</span>
+          </button>
+          <div class="mbti-panel" id="mbtiPanel"><div class="mbti-panel-inner">
+            <div class="mbti-grid" id="mbtiGrid">
+              <button class="mbti-btn selected" data-mbti="" onclick="selectMBTI('', this)">
+                Default<span class="mbti-desc">bilanciato</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ENFJ" onclick="selectMBTI('ENFJ', this)">
+                ENFJ<span class="mbti-desc">Protagonista</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ENTJ" onclick="selectMBTI('ENTJ', this)">
+                ENTJ<span class="mbti-desc">Comandante</span>
+              </button>
+              <button class="mbti-btn" data-mbti="INFJ" onclick="selectMBTI('INFJ', this)">
+                INFJ<span class="mbti-desc">Avvocato</span>
+              </button>
+              <button class="mbti-btn" data-mbti="INFP" onclick="selectMBTI('INFP', this)">
+                INFP<span class="mbti-desc">Mediatore</span>
+              </button>
+              <button class="mbti-btn" data-mbti="INTP" onclick="selectMBTI('INTP', this)">
+                INTP<span class="mbti-desc">Logico</span>
+              </button>
+              <button class="mbti-btn" data-mbti="INTJ" onclick="selectMBTI('INTJ', this)">
+                INTJ<span class="mbti-desc">Architetto</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ENFP" onclick="selectMBTI('ENFP', this)">
+                ENFP<span class="mbti-desc">Attivista</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ENTP" onclick="selectMBTI('ENTP', this)">
+                ENTP<span class="mbti-desc">Dibattitore</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ISFJ" onclick="selectMBTI('ISFJ', this)">
+                ISFJ<span class="mbti-desc">Difensore</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ISFP" onclick="selectMBTI('ISFP', this)">
+                ISFP<span class="mbti-desc">Avventuriero</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ESFJ" onclick="selectMBTI('ESFJ', this)">
+                ESFJ<span class="mbti-desc">Console</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ESFP" onclick="selectMBTI('ESFP', this)">
+                ESFP<span class="mbti-desc">Intrattenitore</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ESTJ" onclick="selectMBTI('ESTJ', this)">
+                ESTJ<span class="mbti-desc">Dirigente</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ESTP" onclick="selectMBTI('ESTP', this)">
+                ESTP<span class="mbti-desc">Dinamico</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ISTP" onclick="selectMBTI('ISTP', this)">
+                ISTP<span class="mbti-desc">Virtuoso</span>
+              </button>
+              <button class="mbti-btn" data-mbti="ISTJ" onclick="selectMBTI('ISTJ', this)">
+                ISTJ<span class="mbti-desc">Logistico</span>
+              </button>
+            </div>
+          </div></div>
+        </div>
+      </div>
+
+      <div class="custom-dates" id="customDates">
+        <div class="sel-group">
+          <label>Data inizio</label>
+          <input type="date" id="dateFrom">
+        </div>
+        <div class="sel-group">
+          <label>Data fine</label>
+          <input type="date" id="dateTo">
+        </div>
+      </div>
+
+      <!-- PREVIEW -->
+      <div class="preview-section visible" id="previewSection">
+        <div class="section-label" style="margin-bottom: 10px">Anteprima dati disponibili</div>
+        <div class="preview-card" id="previewCard">
+          <div class="empty-state">Seleziona un cliente dalla tabella</div>
+        </div>
+      </div>
+
+      <div class="cta-row">
+        <div class="cta-info" id="ctaInfo">Seleziona cliente e tipo report per continuare</div>
+        <button class="btn-generate" id="btnGenerate" onclick="onGenerate()">
+          ⬇ Genera PDF
+        </button>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   ASD REPORT GENERATOR — MODULO 1: UPLOAD + PARSING
+   ═══════════════════════════════════════════════════════════════════ */
+
+// ─── STATE ──────────────────────────────────────────────────────────
+const STATE = {
+  raw: null,
+  clients: [],
+  allClients: [],
+  workouts: [],
+  notesMap: {},        // clientId → [{date, tipo, text, parsed}]
+  percorsoMap: {},     // clientId → {done, total, pct}
+  skipMap: {},         // clientId → [{date, who}]
+  workoutsMap: {},     // clientId → [workout]
+  exportedAt: null,
+  selectedClient: null,
+  reportType: null,    // 'pt' | 'cliente'
+  period: '3m',
+  mbti: '',
+  filter: 'all',
+  filteredClients: []
+};
+
+// ─── HASHTAG CLASSIFICATION ──────────────────────────────────────────
+const HASHTAG_POSITIVE = ['#tecnica-ok', '#motivazione-alta', '#progresso'];
+const HASHTAG_NEGATIVE = ['#motivazione-bassa', '#regressione', '#stress', '#pocosonno', '#preciclo', '#ciclo', '#stresslavoro'];
+
+// ─── PARSING UTILITIES ──────────────────────────────────────────────
+function parseNote(text) {
+  const result = { energia: null, hashtags: [], positivi: [], attenzione: [], reminder: [], note_libere: [] };
+  if (!text) return result;
+
+  const mEnergia = text.match(/Energia[:\s]+(\d+)/i);
+  if (mEnergia) result.energia = parseInt(mEnergia[1]);
+
+  result.hashtags = (text.match(/#[\w\-\/]+/g) || []).map(h => h.toLowerCase());
+
+  const symbols = [
+    { sym: '✅', key: 'positivi' },
+    { sym: '⚠️', key: 'attenzione' },
+    { sym: '➡️', key: 'reminder' },
+    { sym: '📝', key: 'note_libere' }
+  ];
+
+  symbols.forEach(({ sym, key }) => {
+    const idx = text.indexOf(sym);
+    if (idx === -1) return;
+    let after = text.slice(idx + sym.length);
+    // stop at next pipe or next symbol
+    after = after.split('|')[0];
+    ['✅','⚠️','➡️','📝'].forEach(s => { const si = after.indexOf(s); if (si > -1) after = after.slice(0, si); });
+    const clean = after.replace(/#[\w\-\/]+/g, '').trim();
+    if (clean) result[key].push(clean);
+  });
+
+  return result;
+}
+
+function getAge(dobStr) {
+  if (!dobStr) return null;
+  const dob = new Date(dobStr.slice(0, 10));
+  return Math.floor((Date.now() - dob) / (365.25 * 24 * 3600 * 1000));
+}
+
+function formatDateIT(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr.slice(0, 10));
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function filterByPeriod(list, dateField, period, dateFrom, dateTo) {
+  const now = new Date();
+  let start, end = now;
+
+  if (period === 'custom') {
+    start = dateFrom ? new Date(dateFrom) : new Date(0);
+    end   = dateTo   ? new Date(dateTo)   : now;
+  } else {
+    const days = { '1m': 30, '3m': 90, '6m': 180, '1y': 365 }[period] || 90;
+    start = new Date(now - days * 86400000);
+  }
+
+  return list.filter(item => {
+    const d = new Date((item[dateField] || '').slice(0, 10));
+    return d >= start && d <= end;
+  });
+}
+
+// ─── PARSE BACKUP JSON ───────────────────────────────────────────────
+function parseBackup(data) {
+  STATE.raw = data;
+  STATE.exportedAt = data['_exportedAt'] || null;
+
+  // Clients
+  const allClients = JSON.parse(data['asd_clients'] || '[]');
+  STATE.clients = allClients.filter(c => !c.sonoIo);
+  STATE.allClients = allClients; // includes sonoIo:true
+
+  // Workouts
+  STATE.workouts = JSON.parse(data['asd_workouts'] || '[]');
+  STATE.workoutsMap = {};
+  STATE.workouts.forEach(w => {
+    if (!STATE.workoutsMap[w.clientId]) STATE.workoutsMap[w.clientId] = [];
+    STATE.workoutsMap[w.clientId].push(w);
+  });
+
+  // Notes
+  STATE.notesMap = {};
+  let totalNotes = 0;
+  Object.keys(data).forEach(key => {
+    if (!key.startsWith('session_notes_')) return;
+    const clientId = parseInt(key.replace('session_notes_', ''));
+    const raw = JSON.parse(data[key] || '[]');
+    totalNotes += raw.length;
+    STATE.notesMap[clientId] = raw.map(n => ({
+      ...n,
+      parsed: parseNote(n.text || '')
+    })).sort((a, b) => new Date(b.date) - new Date(a.date));
+  });
+
+  // Percorso
+  STATE.percorsoMap = {};
+  Object.keys(data).forEach(key => {
+    if (!key.startsWith('percorso_check_')) return;
+    const clientId = parseInt(key.replace('percorso_check_', ''));
+    const percorso = JSON.parse(data[key] || '{}');
+    const total = Object.keys(percorso).length;
+    const done  = Object.values(percorso).filter(Boolean).length;
+    STATE.percorsoMap[clientId] = { done, total, pct: total ? Math.round(done / total * 100) : 0 };
+  });
+
+  // Skip
+  STATE.skipMap = {};
+  Object.keys(data).forEach(key => {
+    if (!key.startsWith('fixed_skip_')) return;
+    const parts = key.split('_');
+    // fixed_skip_{clientId}_{date}
+    const date     = parts[parts.length - 1];
+    const clientId = parseInt(parts[parts.length - 2]);
+    if (!STATE.skipMap[clientId]) STATE.skipMap[clientId] = [];
+    STATE.skipMap[clientId].push({ date, who: data[key] });
+  });
+
+  return { totalNotes };
+}
+
+// ─── DRAG & DROP ─────────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+dropZone.addEventListener('click', () => fileInput.click());
+
+function loadFile(file) {
+  if (!file.name.endsWith('.json')) {
+    alert('Carica un file .json di backup ASD');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const { totalNotes } = parseBackup(data);
+      onDataLoaded(file, data, totalNotes);
+    } catch (err) {
+      alert('Errore nel parsing del JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ─── ON DATA LOADED ───────────────────────────────────────────────────
+function onDataLoaded(file, data, totalNotes) {
+  // Header status
+  const hs = document.getElementById('headerStatus');
+  hs.className = 'header-status loaded';
+  hs.innerHTML = `<span class="dot"></span>${STATE.clients.length} clienti · ${STATE.workouts.length} sedute`;
+
+  // File bar
+  const exportDate = STATE.exportedAt ? new Date(STATE.exportedAt).toLocaleString('it-IT') : '—';
+  document.getElementById('fileNameDisplay').textContent = file.name;
+  document.getElementById('fileMetaDisplay').textContent = `esportato il ${exportDate} · ${(file.size / 1024).toFixed(1)} KB`;
+  document.getElementById('fileLoadedBar').classList.add('visible');
+
+  // Stats bar
+  document.getElementById('statClienti').textContent = STATE.clients.length;
+  document.getElementById('statSedute').textContent = STATE.workouts.length;
+  document.getElementById('statNote').textContent = totalNotes;
+
+  if (STATE.exportedAt) {
+    const d = new Date(STATE.exportedAt);
+    document.getElementById('statExport').textContent = d.toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
+    document.getElementById('statExportTime').textContent = d.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  document.getElementById('statsBar').classList.add('visible');
+
+  // Clients section
+  STATE.filteredClients = [...STATE.clients];
+  document.getElementById('clientsSection').classList.add('visible');
+  renderClientTable(STATE.filteredClients);
+
+  // Show selection panel always
+  document.getElementById('selectionPanel').classList.add('visible');
+}
+
+// ─── CLIENT TABLE ─────────────────────────────────────────────────────
+function renderClientTable(clients) {
+  const tbody = document.getElementById('clientTableBody');
+  document.getElementById('clientsCount').textContent = `${clients.length} su ${STATE.clients.length} clienti`;
+
+  if (!clients.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nessun cliente corrisponde al filtro</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = clients.map(c => {
+    const wkts  = STATE.workoutsMap[c.id] || [];
+    const notes = STATE.notesMap[c.id] || [];
+    const sched = c.schedule || [];
+
+    const profiloTag = c.profilo === 'sportivo_giovane'
+      ? '<span class="tag-pill blue">sportivo</span>'
+      : '<span class="tag-pill">adulto</span>';
+
+    const prtTag = c.prt === 'confermato'
+      ? '<span class="tag-pill red">PRT ✓</span>'
+      : '<span class="tag-pill">—</span>';
+
+    const goalMap = {
+      'Benessere generale':     '<span class="tag-pill green">Benessere</span>',
+      'Performance sportiva':   '<span class="tag-pill blue">Performance</span>',
+      'Riduzione dolore cronico':'<span class="tag-pill amber">Dolore cronico</span>'
+    };
+    const goalTag = goalMap[c.goal] || `<span class="tag-pill">${c.goal || '—'}</span>`;
+
+    const schedHTML = sched.length
+      ? '<div class="schedule-dots">' + sched.map(s => `<span class="sched-dot">${s.giorno?.slice(0,3)} ${s.orario}</span>`).join('') + '</div>'
+      : '<span class="tag-pill red" style="font-size:0.5rem">⚠ nessuno</span>';
+
+    const isSelected = STATE.selectedClient && STATE.selectedClient.id === c.id;
+    const isIoRow = c.sonoIo ? 'sono-io-row' : '';
+
+    return `<tr class="${isIoRow} ${isSelected ? 'selected' : ''}" onclick="selectClient(${c.id})">
+      <td>
+        <div class="client-name">${c.nome} ${c.cognome}</div>
+        <div class="client-id">${getAge(c.dob) ? getAge(c.dob) + ' anni · ' : ''}#${c.id}</div>
+      </td>
+      <td>${profiloTag}</td>
+      <td>${goalTag}</td>
+      <td>${schedHTML}</td>
+      <td>
+        <span class="workout-count">${wkts.length}<span class="wc-label">sedute</span></span>
+      </td>
+      <td><span class="note-count">${notes.length}</span></td>
+      <td>${prtTag}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── FILTER ───────────────────────────────────────────────────────────
+function applyFilter(filter, btn) {
+  STATE.filter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const isIo = filter === 'sonoIo';
+  document.getElementById('ioBanner').classList.toggle('visible', isIo);
+
+  const pool = isIo ? STATE.allClients.filter(c => c.sonoIo) : STATE.clients;
+
+  STATE.filteredClients = pool.filter(c => {
+    if (filter === 'all' || filter === 'sonoIo') return true;
+    if (filter === 'prt') return c.prt === 'confermato';
+    if (filter === 'no_schedule') return !(c.schedule && c.schedule.length > 0);
+    return c.profilo === filter;
+  });
+
+  renderClientTable(STATE.filteredClients);
+}
+
+// ─── SELECT CLIENT ────────────────────────────────────────────────────
+function selectClient(clientId) {
+  STATE.selectedClient = STATE.allClients.find(c => c.id === clientId);
+  renderClientTable(STATE.filteredClients);
+
+  const c = STATE.selectedClient;
+  document.getElementById('selClientName').textContent = `${c.nome} ${c.cognome}`;
+
+  // Scroll to selection panel
+  document.getElementById('selectionPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  renderPreview();
+  updateCTA();
+}
+
+// ─── REPORT TYPE ──────────────────────────────────────────────────────
+function selectReportType(type) {
+  STATE.reportType = type;
+  document.getElementById('rtPT').classList.toggle('selected', type === 'pt');
+  document.getElementById('rtCliente').classList.toggle('selected', type === 'cliente');
+
+  // MBTI only for cliente
+  document.getElementById('mbtiSection').classList.toggle('visible', type === 'cliente');
+
+  updateCTA();
+}
+
+// ─── PERIOD ───────────────────────────────────────────────────────────
+function onPeriodChange() {
+  STATE.period = document.getElementById('periodoSelect').value;
+  const isCustom = STATE.period === 'custom';
+  document.getElementById('customDates').classList.toggle('visible', isCustom);
+  if (STATE.selectedClient) renderPreview();
+}
+
+// ─── MBTI ─────────────────────────────────────────────────────────────
+function toggleMbtiPanel() {
+  const trigger = document.getElementById('mbtiTrigger');
+  const panel   = document.getElementById('mbtiPanel');
+  const isOpen  = panel.classList.contains('open');
+  trigger.classList.toggle('open', !isOpen);
+  panel.classList.toggle('open', !isOpen);
+}
+
+function closeMbtiPanel() {
+  document.getElementById('mbtiTrigger').classList.remove('open');
+  document.getElementById('mbtiPanel').classList.remove('open');
+}
+
+function selectMBTI(mbti, btn) {
+  STATE.mbti = mbti;
+  document.querySelectorAll('.mbti-btn').forEach(b => b.classList.remove('selected'));
+  closeMbtiPanel();
+  document.getElementById('mbtiTriggerLabel').textContent = '— Nessuna selezionata';
+  document.querySelector('.mbti-btn[data-mbti=""]').classList.add('selected');
+  btn.classList.add('selected');
+
+  // Update trigger label
+  const label = mbti
+    ? `${mbti} · ${btn.childNodes[0].textContent.trim()}`
+    : '— Default (bilanciato)';
+  document.getElementById('mbtiTriggerLabel').textContent = label;
+
+  // Close panel after selection
+  closeMbtiPanel();
+  updateCTA();
+}
+
+// ─── PREVIEW ─────────────────────────────────────────────────────────
+function renderPreview() {
+  const c = STATE.selectedClient;
+  if (!c) return;
+
+  const wkts  = STATE.workoutsMap[c.id] || [];
+  const notes = STATE.notesMap[c.id] || [];
+  const percorso = STATE.percorsoMap[c.id] || null;
+
+  // Filter by period
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo   = document.getElementById('dateTo').value;
+  const wktsPeriod  = filterByPeriod(wkts, 'createdAt', STATE.period, dateFrom, dateTo);
+  const notesPeriod = filterByPeriod(notes, 'date', STATE.period, dateFrom, dateTo);
+
+  // Compute energia media
+  const energie = notesPeriod.map(n => n.parsed.energia).filter(e => e !== null);
+  const energiaMedia = energie.length ? (energie.reduce((a, b) => a + b, 0) / energie.length).toFixed(1) : null;
+
+  // Last workout
+  const lastW = wkts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+
+  // Workout con dolore
+  const wktsConDolore = wktsPeriod.filter(w => w.tipoSeduta === 'dolori').length;
+
+  // Hashtag
+  const allTags = notesPeriod.flatMap(n => n.parsed.hashtags);
+  const negTags = allTags.filter(t => HASHTAG_NEGATIVE.includes(t));
+  const tagFreq = {};
+  allTags.forEach(t => { tagFreq[t] = (tagFreq[t] || 0) + 1; });
+
+  const card = document.getElementById('previewCard');
+  card.innerHTML = `
+    <div class="preview-data-grid">
+      <div class="preview-kv">
+        <div class="pk-label">Sedute nel periodo</div>
+        <div class="pk-value">${wktsPeriod.length} <span style="font-size:0.8rem;color:var(--sub);font-family:var(--f-mono)">/ ${wkts.length} totali</span></div>
+      </div>
+      <div class="preview-kv">
+        <div class="pk-label">Energia media</div>
+        <div class="pk-value">${energiaMedia !== null ? energiaMedia + '/10' : '—'} <span style="font-size:0.8rem;color:var(--sub);font-family:var(--f-mono)">${energie.length} rilevazioni</span></div>
+      </div>
+      <div class="preview-kv">
+        <div class="pk-label">Note disponibili</div>
+        <div class="pk-value">${notesPeriod.length} <span style="font-size:0.8rem;color:var(--sub);font-family:var(--f-mono)">nel periodo</span></div>
+      </div>
+      <div class="preview-kv">
+        <div class="pk-label">Sedute con dolore</div>
+        <div class="pk-value" style="${wktsConDolore > 0 ? 'color:var(--amber)' : ''}">${wktsConDolore}</div>
+      </div>
+      <div class="preview-kv">
+        <div class="pk-label">Percorso Fit</div>
+        <div class="pk-value">${percorso ? percorso.pct + '%' : '—'} <span style="font-size:0.8rem;color:var(--sub);font-family:var(--f-mono)">${percorso ? percorso.done + '/' + percorso.total : ''}</span></div>
+      </div>
+      <div class="preview-kv">
+        <div class="pk-label">Ultima seduta</div>
+        <div class="pk-value" style="font-size:0.95rem">${lastW ? formatDateIT(lastW.createdAt) : '—'}</div>
+      </div>
+    </div>
+
+    ${allTags.length ? `
+    <div style="margin-bottom:14px">
+      <div class="workouts-mini-title">Hashtag nel periodo</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${Object.entries(tagFreq).sort((a,b) => b[1]-a[1]).slice(0, 12).map(([tag, count]) => {
+          const isNeg = HASHTAG_NEGATIVE.includes(tag);
+          const isPos = HASHTAG_POSITIVE.includes(tag);
+          return `<span class="nm-tag ${isNeg ? 'neg' : ''}" style="${isPos ? 'color:var(--green);background:var(--green-dim);border-color:#c8e6c9' : ''}">${tag} <span style="opacity:0.6">${count > 1 ? '×' + count : ''}</span></span>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    ${wktsPeriod.length ? `
+    <div class="workouts-mini">
+      <div class="workouts-mini-title">Sedute nel periodo (ultime 5)</div>
+      ${wktsPeriod.slice(0, 5).map(w => `
+        <div class="workout-mini-row">
+          <span class="wm-date">${formatDateIT(w.createdAt)}</span>
+          <span class="wm-name">${w.name || 'Seduta'}</span>
+          <span class="wm-tipo">
+            ${w.tipoSeduta === 'dolori'
+              ? '<span class="tag-pill amber" style="font-size:0.48rem">⚠ dolori</span>'
+              : '<span class="tag-pill green" style="font-size:0.48rem">✓ normale</span>'}
+          </span>
+        </div>`).join('')}
+    </div>` : `<div class="empty-state" style="padding:20px">Nessuna seduta nel periodo selezionato</div>`}
+
+    ${notesPeriod.length ? `
+    <div class="notes-mini">
+      <div class="workouts-mini-title">Note seduta nel periodo (ultime 3)</div>
+      ${notesPeriod.slice(0, 3).map(n => {
+        const tags = n.parsed.hashtags;
+        const negT = tags.filter(t => HASHTAG_NEGATIVE.includes(t));
+        const posT = tags.filter(t => HASHTAG_POSITIVE.includes(t));
+        const noteText = [
+          ...n.parsed.positivi.map(t => '✅ ' + t),
+          ...n.parsed.reminder.map(t => '➡️ ' + t),
+          ...n.parsed.attenzione.map(t => '⚠️ ' + t)
+        ].join(' · ') || (n.text || '').replace(/⚡.*?\|/g,'').replace(/#[\w\-\/]+/g,'').trim().slice(0, 80);
+        return `
+          <div class="note-mini-row">
+            <div class="nm-header">
+              <span class="nm-date">${formatDateIT(n.date)}</span>
+              ${n.parsed.energia !== null ? `<span class="nm-energia">⚡ ${n.parsed.energia}/10</span>` : ''}
+            </div>
+            ${noteText ? `<div class="nm-text">${noteText}</div>` : ''}
+            ${tags.length ? `<div class="nm-hashtags">
+              ${posT.map(t => `<span class="nm-tag" style="color:var(--green);background:var(--green-dim);border-color:#c8e6c9">${t}</span>`).join('')}
+              ${negT.map(t => `<span class="nm-tag neg">${t}</span>`).join('')}
+              ${tags.filter(t => !HASHTAG_NEGATIVE.includes(t) && !HASHTAG_POSITIVE.includes(t)).map(t => `<span class="nm-tag">${t}</span>`).join('')}
+            </div>` : ''}
+          </div>`;
+      }).join('')}
+    </div>` : ''}
+  `;
+}
+
+// ─── CTA ─────────────────────────────────────────────────────────────
+function updateCTA() {
+  const ready = STATE.selectedClient && STATE.reportType;
+  const btn = document.getElementById('btnGenerate');
+  btn.classList.toggle('ready', !!ready);
+
+  if (!STATE.selectedClient) {
+    document.getElementById('ctaInfo').textContent = 'Seleziona un cliente dalla tabella';
+  } else if (!STATE.reportType) {
+    document.getElementById('ctaInfo').innerHTML = `<strong>${STATE.selectedClient.nome} ${STATE.selectedClient.cognome}</strong> selezionato — scegli il tipo di report`;
+  } else {
+    const periodoLabel = { '1m': 'ultimo mese', '3m': 'ultimo trimestre', '6m': 'ultimi 6 mesi', '1y': 'ultimo anno', 'custom': 'periodo personalizzato' }[STATE.period] || STATE.period;
+    document.getElementById('ctaInfo').innerHTML = `<strong>${STATE.selectedClient.nome} ${STATE.selectedClient.cognome}</strong> · <strong>${STATE.reportType === 'pt' ? 'Report PT' : 'Report Cliente'}</strong> · ${periodoLabel}${STATE.mbti ? ' · MBTI ' + STATE.mbti : ''}`;
+  }
+}
+
+// ─── GENERATE (placeholder per moduli successivi) ─────────────────────
+function onGenerate() {
+  if (!STATE.selectedClient || !STATE.reportType) return;
+
+  const c = STATE.selectedClient;
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo   = document.getElementById('dateTo').value;
+
+  const config = {
+    client:     c,
+    reportType: STATE.reportType,
+    period:     STATE.period,
+    dateFrom,
+    dateTo,
+    mbti:       STATE.mbti,
+    workouts:   filterByPeriod(STATE.workoutsMap[c.id] || [], 'createdAt', STATE.period, dateFrom, dateTo),
+    notes:      filterByPeriod(STATE.notesMap[c.id] || [], 'date', STATE.period, dateFrom, dateTo),
+    percorso:   STATE.percorsoMap[c.id] || null,
+    skips:      STATE.skipMap[c.id] || []
+  };
+
+  // Modulo 2 e 3 saranno attaccati qui
+  alert(`✅ Configurazione pronta!\n\nCliente: ${c.nome} ${c.cognome}\nReport: ${config.reportType.toUpperCase()}\nPeriodo: ${config.period}\nSedute trovate: ${config.workouts.length}\nNote trovate: ${config.notes.length}\nMBTI: ${config.mbti || 'default'}\n\n→ Moduli PDF in arrivo nel prossimo step!`);
+
+  console.log('[ASD Report] Config pronta:', config);
+}
+
+// ─── RESET ────────────────────────────────────────────────────────────
+function resetAll() {
+  STATE.raw = null;
+  STATE.clients = [];
+  STATE.workouts = [];
+  STATE.notesMap = {};
+  STATE.percorsoMap = {};
+  STATE.skipMap = {};
+  STATE.workoutsMap = {};
+  STATE.selectedClient = null;
+  STATE.allClients = [];
+  STATE.reportType = null;
+  STATE.filter = 'all';
+
+  document.getElementById('headerStatus').className = 'header-status';
+  document.getElementById('headerStatus').innerHTML = `<span class="dot"></span>nessun backup caricato`;
+  document.getElementById('fileLoadedBar').classList.remove('visible');
+  document.getElementById('statsBar').classList.remove('visible');
+  document.getElementById('clientsSection').classList.remove('visible');
+  document.getElementById('selectionPanel').classList.remove('visible');
+  document.getElementById('fileInput').value = '';
+  document.getElementById('ioBanner').classList.remove('visible');
+
+  document.querySelectorAll('.filter-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  document.querySelectorAll('.mbti-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('mbtiSection').classList.remove('visible');
+  document.getElementById('btnGenerate').classList.remove('ready');
+}
+</script>
+
+</body>
+</html>
