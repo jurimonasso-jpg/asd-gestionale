@@ -70,6 +70,59 @@
 .fu-toggle-icon.open { transform: rotate(180deg); }
 .fu-banner-body { display: none; background: var(--surface); border: 1.5px solid var(--border); border-top: none; border-radius: 0 0 var(--radius) var(--radius); padding: 12px 14px; }
 .fu-banner-body.open { display: block; }
+
+/* ─── FOLLOW-UP ALERT BANNER ──────────────────────────────────────── */
+.fu-alert-wrap {
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.fu-alert-wrap.fu-alert-red   { border: 1.5px solid #ef9a9a; background: #fff5f5; }
+.fu-alert-wrap.fu-alert-orange { border: 1.5px solid #ffcc80; background: #fff8f0; }
+.fu-alert-wrap.fu-alert-yellow { border: 1.5px solid #ffe082; background: #fffdf0; }
+.fu-alert-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 14px; cursor: pointer; user-select: none;
+}
+.fu-alert-hdr-left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.fu-alert-title { font-size: 12px; font-weight: 700; }
+.fu-alert-wrap.fu-alert-red    .fu-alert-title { color: #c62828; }
+.fu-alert-wrap.fu-alert-orange .fu-alert-title { color: #e65100; }
+.fu-alert-wrap.fu-alert-yellow .fu-alert-title { color: #f57f17; }
+.fu-alert-meta { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text3); }
+.fu-alert-body { display: none; padding: 10px 14px; border-top: 1px solid rgba(0,0,0,0.06); }
+.fu-alert-body.open { display: block; }
+.fu-alert-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.fu-alert-row:last-child { border-bottom: none; }
+.fu-alert-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; flex-shrink: 0;
+}
+.fu-alert-wrap.fu-alert-red    .fu-alert-avatar { background: rgba(198,40,40,0.1); color: #c62828; }
+.fu-alert-wrap.fu-alert-orange .fu-alert-avatar { background: rgba(230,81,0,0.1);  color: #e65100; }
+.fu-alert-wrap.fu-alert-yellow .fu-alert-avatar { background: rgba(245,127,23,0.1);color: #f57f17; }
+.fu-alert-info { flex: 1; min-width: 0; }
+.fu-alert-name { font-size: 12px; font-weight: 700; }
+.fu-alert-signals { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.fu-alert-pill {
+  font-size: 9px; font-family: 'DM Mono', monospace; font-weight: 600;
+  padding: 1px 7px; border-radius: 8px;
+}
+.pill-red    { background: rgba(198,40,40,0.1);  color: #c62828; border: 1px solid rgba(198,40,40,0.2);  }
+.pill-orange { background: rgba(230,81,0,0.1);   color: #e65100; border: 1px solid rgba(230,81,0,0.2);   }
+.pill-yellow { background: rgba(245,127,23,0.1); color: #f57f17; border: 1px solid rgba(245,127,23,0.2); }
+.fu-alert-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.fu-alert-btn {
+  font-size: 10px; font-family: 'DM Mono', monospace;
+  padding: 3px 9px; border-radius: 8px; cursor: pointer; border: none;
+  white-space: nowrap;
+}
+.fu-alert-btn-wa  { background: rgba(37,211,102,0.1); color: #1b5e20; border: 1px solid rgba(37,211,102,0.3); }
+.fu-alert-btn-ok  { background: rgba(71,255,160,0.1); color: var(--green); border: 1px solid rgba(71,255,160,0.3); }
 .fu-trend-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); margin-bottom: 8px; }
 .fu-trend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .fu-trend-name { font-size: 11px; font-weight: 600; color: var(--text2); width: 56px; flex-shrink: 0; }
@@ -2997,6 +3050,9 @@ window.fbLoadFromCloud = async function() {
       <div id="dash-promemoria"></div>
     </div>
 
+    <!-- FOLLOW-UP ALERT BANNER (segnali clinici da risposte ricevute) -->
+    <div id="fu-alert-banner" style="display:none;margin-bottom:10px;"></div>
+
     <!-- FOLLOW-UP REMINDER BANNER -->
     <div id="fu-reminder-banner" style="display:none;margin-bottom:12px;"></div>
 
@@ -4760,6 +4816,21 @@ function filterClients() {
 function openClientDetail(clientId) {
   const client = clients.find(c => c.id === clientId);
   if (!client) return;
+
+  // Marca come letti tutti gli alert Firebase non letti per questo cliente
+  // (scansiona le chiavi fu_alert_read già note nel DOM dell'alert banner)
+  const alertBanner = document.getElementById('fu-alert-banner');
+  if (alertBanner) {
+    alertBanner.querySelectorAll('.fu-alert-btn-ok').forEach(btn => {
+      const onclickStr = btn.getAttribute('onclick') || '';
+      const match = onclickStr.match(/fuMarkAlertRead\((\d+),'([^']+)'\)/);
+      if (match && String(match[1]) === String(clientId)) {
+        localStorage.setItem(_fuAlertReadKey(clientId, match[2]), '1');
+      }
+    });
+    // Re-render silenzioso dopo aver aperto la scheda
+    setTimeout(() => renderFollowUpAlerts(), 300);
+  }
 
   const clientWorkouts = workouts.filter(w => w.clientId == clientId);
   const initials = (client.nome[0] + client.cognome[0]).toUpperCase();
@@ -9918,6 +9989,7 @@ function renderDashboard() {
   // ── FOLLOW-UP BANNER ──────────────────────────────────────────────────────
   autoArchivePassedFixedSlots();
   renderFollowUpBanner();
+  renderFollowUpAlerts();
 
   // ── AGENDA OGGI nella dashboard ─────────────────────────────────────────
   const agendaOggiEl = document.getElementById('dash-agenda-oggi');
@@ -11959,6 +12031,206 @@ function _fuDismissKey(clientId, type, dateStr) {
 function fuMarkSent(clientId, type, dateStr) {
   localStorage.setItem(_fuDismissKey(clientId, type, dateStr), '1');
   renderFollowUpBanner();
+}
+
+// ── Chiave per "alert già letto" — sparisce quando apri la scheda ────
+function _fuAlertReadKey(clientId, docId) {
+  return 'fu_alert_read_' + clientId + '_' + docId;
+}
+
+function fuMarkAlertRead(clientId, docId) {
+  localStorage.setItem(_fuAlertReadKey(clientId, docId), '1');
+  renderFollowUpAlerts();
+}
+
+// ── Analisi clinica di un documento follow-up ────────────────────────
+// Restituisce null se nessun segnale, oppure { priority, signals[] }
+// priority: 'red' | 'orange' | 'yellow'
+// signals: array di { label, pill }
+function _analyzeFollowup(doc, lastWorkout) {
+  const signals = [];
+
+  const dolore  = doc.intensitaDolore ?? null;
+  const stress  = doc.stress          ?? null;
+  const energia = doc.energia         ?? null;
+  const tipo    = doc.tipo || '';
+  const isPost  = tipo === 'post_seduta';
+
+  // ── Segnale 1: peggioramento dolore rispetto alla seduta ─────────────
+  // Confronta dolore post-seduta con painEnd medio della seduta precedente
+  if (isPost && dolore !== null && lastWorkout) {
+    const painEndArr = lastWorkout.painEnd || lastWorkout.painStart || [];
+    if (painEndArr.length > 0) {
+      const avgPainEnd = painEndArr.reduce((s, p) => s + (p.intensity || 0), 0) / painEndArr.length;
+      const delta = dolore - avgPainEnd;
+      if (delta >= 3) {
+        signals.push({ label: `Dolore peggiorato di +${Math.round(delta)} dopo la seduta`, pill: 'pill-red', priority: 'red' });
+      } else if (delta >= 1.5) {
+        signals.push({ label: `Dolore lievemente peggiorato (+${Math.round(delta*10)/10})`, pill: 'pill-orange', priority: 'orange' });
+      }
+    }
+  }
+
+  // ── Segnale 2: dolore alto in assoluto ───────────────────────────────
+  if (dolore !== null) {
+    if (dolore >= 7 && !signals.some(s => s.priority === 'red')) {
+      signals.push({ label: `Dolore ${dolore}/10 — alto`, pill: 'pill-red', priority: 'red' });
+    } else if (dolore >= 5 && !signals.length) {
+      signals.push({ label: `Dolore ${dolore}/10 — da monitorare`, pill: 'pill-orange', priority: 'orange' });
+    }
+  }
+
+  // ── Segnale 3: seduta era "con dolori" + dolore ancora presente post ─
+  if (isPost && lastWorkout && lastWorkout.tipoSeduta === 'dolori' && dolore !== null && dolore >= 4) {
+    if (!signals.some(s => s.label.includes('Dolore'))) {
+      signals.push({ label: `Seduta con dolori → dolore ancora ${dolore}/10`, pill: 'pill-orange', priority: 'orange' });
+    }
+  }
+
+  // ── Segnale 4: combo stress alto + energia bassa ─────────────────────
+  if (stress !== null && energia !== null && stress >= 6 && energia <= 4) {
+    const p = (stress >= 8 && energia <= 3) ? 'red' : 'orange';
+    signals.push({ label: `Stress ${stress}/10 + Energia ${energia}/10 — carico esterno alto`, pill: 'pill-' + p, priority: p });
+  } else {
+    // Segnali singoli meno gravi
+    if (stress !== null && stress >= 8) {
+      signals.push({ label: `Stress ${stress}/10 — molto alto`, pill: 'pill-yellow', priority: 'yellow' });
+    }
+    if (energia !== null && energia <= 3) {
+      signals.push({ label: `Energia ${energia}/10 — molto bassa`, pill: 'pill-yellow', priority: 'yellow' });
+    }
+  }
+
+  if (!signals.length) return null;
+
+  // Priorità globale = la più grave tra i segnali
+  const order = { red: 0, orange: 1, yellow: 2 };
+  const topPriority = signals.sort((a, b) => order[a.priority] - order[b.priority])[0].priority;
+  return { priority: topPriority, signals };
+}
+
+// ── Render banner alert clinici ──────────────────────────────────────
+async function renderFollowUpAlerts() {
+  const alertBanner = document.getElementById('fu-alert-banner');
+  if (!alertBanner) return;
+
+  // Serve Firebase
+  if (!window._db || !window._fsCollection || !window._fsDocs || !window._fsQuery) {
+    alertBanner.style.display = 'none';
+    return;
+  }
+
+  const fuClients = clients.filter(c => !c.sonoIo && c.followUpEnabled);
+  if (!fuClients.length) { alertBanner.style.display = 'none'; return; }
+
+  // Finestra temporale: ultimi 5 giorni (abbastanza per non perdere nulla)
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 5);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  let allAlerts = []; // { priority, client, doc, signals, docId }
+
+  try {
+    await Promise.all(fuClients.map(async c => {
+      try {
+        const q = window._fsQuery(
+          window._fsCollection(window._db, 'followups'),
+          window._fsWhere('clientId', '==', String(c.id)),
+          window._fsOrderBy('timestamp', 'desc')
+        );
+        const snap = await window._fsDocs(q);
+        const docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
+
+        // Considera solo i doc recenti non ancora letti
+        const recent = docs.filter(d => {
+          const dateStr = d.date || (d.timestamp?.toDate?.()?.toISOString().slice(0,10)) || '';
+          return dateStr >= cutoffStr;
+        });
+
+        for (const doc of recent) {
+          const docId = doc._docId;
+          if (localStorage.getItem(_fuAlertReadKey(c.id, docId))) continue; // già letto
+
+          // Trova l'ultima seduta del cliente per confronto delta
+          const clientWorkouts = (JSON.parse(localStorage.getItem('asd_workouts') || '[]'))
+            .filter(w => String(w.clientId) === String(c.id))
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          const lastWorkout = clientWorkouts[0] || null;
+
+          const analysis = _analyzeFollowup(doc, lastWorkout);
+          if (!analysis) continue;
+
+          allAlerts.push({
+            priority: analysis.priority,
+            signals:  analysis.signals,
+            client:   c,
+            doc,
+            docId
+          });
+        }
+      } catch(_) {}
+    }));
+  } catch(_) {}
+
+  if (!allAlerts.length) { alertBanner.style.display = 'none'; return; }
+
+  // Raggruppa per priorità
+  const order = { red: 0, orange: 1, yellow: 2 };
+  allAlerts.sort((a, b) => order[a.priority] - order[b.priority]);
+
+  const groups = { red: [], orange: [], yellow: [] };
+  allAlerts.forEach(a => groups[a.priority].push(a));
+
+  const labels = {
+    red:    { emoji: '🔴', text: 'Contatta oggi', border: 'fu-alert-red' },
+    orange: { emoji: '🟠', text: 'Tieni d\'occhio', border: 'fu-alert-orange' },
+    yellow: { emoji: '🟡', text: 'Da sapere', border: 'fu-alert-yellow' }
+  };
+
+  const FOLLOWUP_BASE = 'https://jurimonasso-jpg.github.io/asd-gestionale';
+
+  const html = Object.entries(groups)
+    .filter(([, items]) => items.length > 0)
+    .map(([pri, items]) => {
+      const lbl = labels[pri];
+      const rowsHTML = items.map(({ client: c, doc, docId, signals }) => {
+        const initials = ((c.nome||'')[0]||'') + ((c.cognome||'')[0]||'');
+        const tel = (c.phone || c.telefono || '').replace(/[\s\-().]/g, '');
+        const telClean = tel.startsWith('+') ? tel.slice(1) : tel.replace(/^00/, '');
+        const dateLabel = (doc.date || '').slice(5).replace('-','/') || '—';
+        const tipoLabel = doc.tipo === 'post_seduta' ? 'post-seduta' : doc.tipo === 'check_settimanale' ? 'settimanale' : 'follow-up';
+        const waMsg = `Ciao ${c.nome}! 👋\n\nHo visto il tuo follow-up e volevo sapere come stai. Tutto ok?`;
+        const waUrl = (telClean ? 'https://wa.me/' + telClean : 'https://wa.me/') + '?text=' + encodeURIComponent(waMsg);
+        const pillsHTML = signals.map(s => `<span class="fu-alert-pill ${s.pill}">${s.label}</span>`).join('');
+        return `
+          <div class="fu-alert-row">
+            <div class="fu-alert-avatar">${initials.toUpperCase()}</div>
+            <div class="fu-alert-info">
+              <div class="fu-alert-name">${c.nome} ${c.cognome} <span style="font-family:'DM Mono';font-size:9px;color:var(--text3);font-weight:400;">${tipoLabel} · ${dateLabel}</span></div>
+              <div class="fu-alert-signals">${pillsHTML}</div>
+            </div>
+            <div class="fu-alert-actions">
+              ${telClean ? `<button class="fu-alert-btn fu-alert-btn-wa" onclick="event.stopPropagation();window.open('${waUrl}','_blank','noopener,noreferrer')">💬 WA</button>` : ''}
+              <button class="fu-alert-btn fu-alert-btn-ok" onclick="event.stopPropagation();fuMarkAlertRead(${c.id},'${docId}')">✓ Letto</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      const bodyId = 'fu-alert-body-' + pri;
+      return `
+        <div class="fu-alert-wrap ${lbl.border}" style="margin-bottom:6px;">
+          <div class="fu-alert-hdr" onclick="(function(el){var b=document.getElementById('${bodyId}');b.classList.toggle('open');el.querySelector('.fu-chev').textContent=b.classList.contains('open')?'▴':'▾';})(this)">
+            <div class="fu-alert-hdr-left">
+              <span class="fu-alert-title">${lbl.emoji} ${lbl.text} — ${items.length} ${items.length === 1 ? 'cliente' : 'clienti'}</span>
+            </div>
+            <span class="fu-chev" style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">▾</span>
+          </div>
+          <div class="fu-alert-body open" id="${bodyId}">${rowsHTML}</div>
+        </div>`;
+    }).join('');
+
+  alertBanner.style.display = '';
+  alertBanner.innerHTML = html;
 }
 
 function renderFollowUpBanner() {
