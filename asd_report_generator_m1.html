@@ -1377,6 +1377,8 @@ const STATE = {
   percorsoMap: {},     // clientId → {done, total, pct}
   skipMap: {},         // clientId → [{date, who}]
   workoutsMap: {},     // clientId → [workout]
+  followupMap: {},     // clientId → [{date, type, energia, dolore, umore, testo, painZones}]
+  manualSessionsMap: {},// clientId → [{date, orario, note}]
   exportedAt: null,
   selectedClient: null,
   reportType: null,    // 'pt' | 'cliente'
@@ -1390,6 +1392,44 @@ const STATE = {
 // ─── HASHTAG CLASSIFICATION ──────────────────────────────────────────
 const HASHTAG_POSITIVE = ['#tecnica-ok', '#motivazione-alta', '#progresso'];
 const HASHTAG_NEGATIVE = ['#motivazione-bassa', '#regressione', '#stress', '#pocosonno', '#preciclo', '#ciclo', '#stresslavoro'];
+
+// ─── FOLLOW-UP HELPERS ───────────────────────────────────────────────
+// Compute follow-up engagement: tasso di compilazione + media energia + trend dolore
+function computeFollowupStats(followups, periodDays) {
+  if (!followups || !followups.length) return { count: 0, engagementPct: null, energyMean: null, painMean: null, lastDate: null, missedDays: null };
+  const sorted = [...followups].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const lastDate = sorted[sorted.length - 1].date;
+  const daysSinceLast = Math.round((Date.now() - new Date(lastDate)) / 86400000);
+  // Energia media (campo energia numerico 1-10)
+  const withEnergy = followups.filter(f => f.energia != null && !isNaN(Number(f.energia)));
+  const energyMean = withEnergy.length ? Math.round(withEnergy.reduce((s, f) => s + Number(f.energia), 0) / withEnergy.length * 10) / 10 : null;
+  // Dolore medio (campo dolore numerico 1-10)
+  const withPain = followups.filter(f => f.dolore != null && !isNaN(Number(f.dolore)));
+  const painMean = withPain.length ? Math.round(withPain.reduce((s, f) => s + Number(f.dolore), 0) / withPain.length * 10) / 10 : null;
+  // Tasso compilazione: rispetto alle settimane nel periodo
+  const weeks = Math.max(Math.round(periodDays / 7), 1);
+  const engagementPct = Math.min(Math.round(followups.length / weeks * 100), 100);
+  return { count: followups.length, engagementPct, energyMean, painMean, lastDate, missedDays: daysSinceLast };
+}
+
+// Clienti con follow-up mancante da più di N giorni dopo ultima seduta
+function getClientsFollowupGap(clients, workoutsMap, followupMap, thresholdDays) {
+  const result = [];
+  clients.forEach(c => {
+    const fu = followupMap[c.id] || [];
+    const ws = workoutsMap[c.id] || [];
+    if (!ws.length) return; // nessuna seduta, skip
+    const lastW = new Date(Math.max(...ws.map(w => new Date(w.createdAt))));
+    const lastFu = fu.length ? new Date(Math.max(...fu.map(f => new Date(f.date)))) : null;
+    const daysSinceW = Math.round((Date.now() - lastW) / 86400000);
+    if (daysSinceW > thresholdDays) return; // cliente inattivo da troppo — non è un follow-up gap
+    const gapDays = lastFu ? Math.round((Date.now() - lastFu) / 86400000) : daysSinceW;
+    if (gapDays >= thresholdDays) {
+      result.push({ c, gapDays, lastWorkout: lastW, lastFollowup: lastFu });
+    }
+  });
+  return result.sort((a, b) => b.gapDays - a.gapDays);
+}
 
 // ─── PARSING UTILITIES ──────────────────────────────────────────────
 function parseNote(text) {
@@ -1470,7 +1510,7 @@ function parseBackup(data) {
     STATE.workoutsMap[w.clientId].push(w);
   });
 
-  // Notes
+  // Notes (+ enriched with mood field already in data)
   STATE.notesMap = {};
   let totalNotes = 0;
   Object.keys(data).forEach(key => {
@@ -1482,6 +1522,26 @@ function parseBackup(data) {
       ...n,
       parsed: parseNote(n.text || '')
     })).sort((a, b) => new Date(b.date) - new Date(a.date));
+  });
+
+  // Follow-up notes (Firebase export — key: followup_notes_{clientId})
+  // Struttura attesa: [{id, date, type:'post_session'|'weekly', energia, dolore, umore, testo, painZones:[{label,intensity}]}]
+  STATE.followupMap = {};
+  let totalFollowups = 0;
+  Object.keys(data).forEach(key => {
+    if (!key.startsWith('followup_notes_')) return;
+    const clientId = parseInt(key.replace('followup_notes_', ''));
+    const raw = JSON.parse(data[key] || '[]');
+    totalFollowups += raw.length;
+    STATE.followupMap[clientId] = raw.sort((a, b) => new Date(b.date) - new Date(a.date));
+  });
+
+  // Manual sessions (asd_manual_sessions — sedute manuali non da gestionale)
+  STATE.manualSessionsMap = {};
+  const manualSessions = JSON.parse(data['asd_manual_sessions'] || '[]');
+  manualSessions.forEach(s => {
+    if (!STATE.manualSessionsMap[s.clientId]) STATE.manualSessionsMap[s.clientId] = [];
+    STATE.manualSessionsMap[s.clientId].push(s);
   });
 
   // Percorso
@@ -1507,7 +1567,7 @@ function parseBackup(data) {
     STATE.skipMap[clientId].push({ date, who: data[key] });
   });
 
-  return { totalNotes };
+  return { totalNotes, totalFollowups };
 }
 
 // ─── DRAG & DROP ─────────────────────────────────────────────────────
@@ -1534,8 +1594,8 @@ function loadFile(file) {
   reader.onload = e => {
     try {
       const data = JSON.parse(e.target.result);
-      const { totalNotes } = parseBackup(data);
-      onDataLoaded(file, data, totalNotes);
+      const { totalNotes, totalFollowups } = parseBackup(data);
+      onDataLoaded(file, data, totalNotes, totalFollowups);
     } catch (err) {
       alert('Errore nel parsing del JSON: ' + err.message);
     }
@@ -1544,10 +1604,12 @@ function loadFile(file) {
 }
 
 // ─── ON DATA LOADED ───────────────────────────────────────────────────
-function onDataLoaded(file, data, totalNotes) {
+function onDataLoaded(file, data, totalNotes, totalFollowups) {
   const hs = document.getElementById('headerStatus');
   hs.className = 'header-status loaded';
-  hs.innerHTML = `<span class="dot"></span>${STATE.clients.length} clienti · ${STATE.workouts.length} sedute`;
+  const fuCount = totalFollowups || 0;
+  const fuStr   = fuCount > 0 ? ` · ${fuCount} follow-up` : '';
+  hs.innerHTML = `<span class="dot"></span>${STATE.clients.length} clienti · ${STATE.workouts.length} sedute${fuStr}`;
 
   const exportDate = STATE.exportedAt ? new Date(STATE.exportedAt).toLocaleString('it-IT') : '—';
   document.getElementById('fileNameDisplay').textContent = file.name;
@@ -2386,6 +2448,79 @@ function _buildClientePDF(config) {
     y += attenH + 6;
   }
 
+  // ── §4b FUORI DALLA PALESTRA (follow-up data) ──
+  const fuList = STATE.followupMap[c.id] || [];
+  const fuPeriod = filterByPeriod(fuList, 'date', period, dateFrom, dateTo);
+  if (fuPeriod.length > 0) {
+    y = pdfCheckPage(doc, y, 50, PH, MB, drawPageHeader);
+
+    y = drawSectionLabel(doc, y, '4b', 'Fuori dalla palestra');
+
+    // Calc fuori stats
+    const fuEnergy = fuPeriod.filter(f => f.energia != null && !isNaN(Number(f.energia)));
+    const fuPain   = fuPeriod.filter(f => f.dolore  != null && !isNaN(Number(f.dolore)));
+    const fuEnergyMean = fuEnergy.length ? Math.round(fuEnergy.reduce((s,f)=>s+Number(f.energia),0)/fuEnergy.length*10)/10 : null;
+    const fuPainMean   = fuPain.length   ? Math.round(fuPain.reduce((s,f)=>s+Number(f.dolore),0)/fuPain.length*10)/10 : null;
+
+    // KPI chips — 3 col
+    const kW3 = (CW - 4) / 3;
+    const fuEnergyCol = fuEnergyMean === null ? SUB : fuEnergyMean >= 7 ? GREEN : fuEnergyMean >= 5 ? AMBER : RED;
+    const fuPainCol   = fuPainMean   === null ? SUB : fuPainMean <= 3   ? GREEN : fuPainMean <= 6   ? AMBER : RED;
+
+    // chip helper
+    const drawChip = (x, cy, w, h, label, val, subTxt, valColor) => {
+      doc.setFillColor(248,246,242);
+      doc.rect(x, cy, w, h, 'F');
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...SUB);
+      doc.text(label.toUpperCase(), x+3, cy+5);
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(14);
+      doc.setTextColor(...valColor);
+      doc.text(String(val), x+3, cy+13);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(6);
+      doc.setTextColor(...SUB);
+      doc.text(subTxt, x+3, cy+18);
+    };
+
+    drawChip(ML,          y, kW3, 22, 'Risposte follow-up', fuPeriod.length,                'nel periodo',        INK);
+    drawChip(ML+kW3+2,    y, kW3, 22, 'Energia (casa)',     fuEnergyMean !== null ? fuEnergyMean+'/10' : '—', fuEnergy.length+' rilevazioni', fuEnergyCol);
+    drawChip(ML+kW3*2+4,  y, kW3, 22, 'Dolore (casa)',      fuPainMean   !== null ? fuPainMean+'/10'   : '—', fuPain.length+' rilevazioni',   fuPainCol);
+    y += 26;
+
+    // Last 3 follow-up notes (testo libero)
+    const withTesto = fuPeriod.filter(f => f.testo && f.testo.trim()).slice(0, 3);
+    if (withTesto.length) {
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(...MID);
+      doc.text('ULTIME NOTE LIBERE DAI FOLLOW-UP', ML, y);
+      y += 5;
+      withTesto.forEach(f => {
+        const dateLabel = new Date(f.date).toLocaleDateString('it-IT',{day:'2-digit',month:'short'});
+        const noteLines = doc.splitTextToSize(f.testo.trim(), CW - 10);
+        const noteH = noteLines.length * 4.8 + 8;
+        y = pdfCheckPage(doc, y, noteH + 4, PH, MB, drawPageHeader);
+        doc.setFillColor(245, 244, 240);
+        doc.rect(ML, y, CW, noteH, 'F');
+        doc.setFillColor(...accent);
+        doc.rect(ML, y, 2.5, noteH, 'F');
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(6);
+        doc.setTextColor(...accent);
+        doc.text(dateLabel, ML + 5, y + 4.5);
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...INK);
+        doc.text(noteLines, ML + 5, y + 9);
+        y += noteH + 4;
+      });
+    }
+    y += 4;
+  }
+
   // ── §5 COSA TI ASPETTA ──
   y = drawSectionLabel(doc, y, 5, 'Cosa ti aspetta');
 
@@ -2890,6 +3025,18 @@ function scoreIC(freq, skips, periodDays, client, allWorkouts) {
   // Penalità assenze non giustificate (solo who==='client')
   const absences = (skips||[]).filter(s=>s.who==='client').length;
   score -= Math.min(absences*0.5, 1.5);
+
+  // Bonus/malus follow-up engagement (±1 max)
+  // Disponibile solo se il cliente ha follow-up attivo e dati nel periodo
+  const fuList = STATE.followupMap[client?.id] || [];
+  if (fuList.length > 0) {
+    const fuStats = computeFollowupStats(fuList, effectiveDays);
+    if (fuStats.engagementPct !== null) {
+      // ≥70% compilazione: +0.5, 40-69%: neutro, <40%: -0.5
+      if (fuStats.engagementPct >= 70) score += 0.5;
+      else if (fuStats.engagementPct < 40) score -= 0.5;
+    }
+  }
 
   return {
     score: Math.round(Math.min(Math.max(score, 0), 10)*10)/10,
@@ -4824,6 +4971,22 @@ function _renderDecisioniTab(clientData, periodDays) {
     const names = clientData.filter(d => d.w.length === 0).map(d => d.c.nome + ' ' + d.c.cognome).join(', ');
     actions.push({ pri:'urgent', title: `${noSess} clienti senza sedute nel periodo`, body: names, who: 'Contattali questa settimana — rischio abbandono silenzioso' });
   }
+  // Follow-up gap alert
+  const hasFollowupData = Object.keys(STATE.followupMap).length > 0;
+  if (hasFollowupData) {
+    const fuGap = getClientsFollowupGap(clients, STATE.workoutsMap, STATE.followupMap, 7);
+    if (fuGap.length > 0) {
+      fuGap.slice(0, 4).forEach(({ c, gapDays }) => {
+        actions.push({ pri:'urgent', title: `${c.nome} ${c.cognome} — follow-up mancante`, body: `Nessuna risposta al form da ${gapDays} giorni. Segnale precoce di disengagement tra una seduta e l'altra.`, who: 'Invia il form follow-up manualmente o contattalo direttamente' });
+      });
+    }
+  } else {
+    // Nessun dato followup: suggerisci di abilitarlo
+    const noFollowupEnabled = clients.filter(c => !c.followUpEnabled).length;
+    if (noFollowupEnabled > 0) {
+      actions.push({ pri:'low', title: `Follow-up non attivo su ${noFollowupEnabled} clienti`, body: 'Il follow-up post-seduta rileva disengagement 48-72h prima che si manifestino assenze. Attivalo dal gestionale per ciascun cliente.', who: 'Abilita "follow-up" nel profilo cliente' });
+    }
+  }
   lowEn.forEach(d => {
     actions.push({ pri:'urgent', title: `${d.c.nome} ${d.c.cognome} — energia cronica bassa`, body: `Media ${d.energy.mean}/10 su ${d.notes.length} sessioni. Pattern sistematico, non occasionale.`, who: 'Check-in diretto: cosa succede fuori dal campo?' });
   });
@@ -4900,6 +5063,20 @@ function _renderClientiTab(clientData, periodDays) {
       const painMax = painCount ? Math.max(...d.c.painPoints.map(p=>p.intensity||0)) : 0;
       const painCls = painMax >= 7 ? 'dt-red' : painMax >= 5 ? 'dt-yellow' : painCount > 0 ? 'dt-orange' : 'dt-muted';
 
+      // Follow-up data
+      const fuList = STATE.followupMap[d.c.id] || [];
+      const fuStats = computeFollowupStats(fuList, periodDays);
+      let fuLabel, fuCls;
+      if (!d.c.followUpEnabled) {
+        fuLabel = 'disabilitato'; fuCls = 'dt-muted';
+      } else if (fuStats.count === 0) {
+        fuLabel = 'nessuno'; fuCls = 'dt-red';
+      } else if (fuStats.missedDays !== null && fuStats.missedDays >= 7) {
+        fuLabel = fuStats.missedDays + 'gg fa'; fuCls = 'dt-yellow';
+      } else {
+        fuLabel = fuStats.count + ' (' + (fuStats.engagementPct || 0) + '%)'; fuCls = fuStats.engagementPct >= 70 ? 'dt-green' : 'dt-yellow';
+      }
+
       return `<tr>
         <td style="font-weight:600;color:#e8e8f0">${esc(name)}</td>
         <td style="color:#6b6b80;font-size:0.7rem">${esc(d.c.goal||'—')}</td>
@@ -4907,6 +5084,7 @@ function _renderClientiTab(clientData, periodDays) {
         <td>${dTag(lastLabel, lastCls)}</td>
         <td>${d.energy.mean !== null ? dTag(d.energy.mean+'/10', enCol) : dTag('—','dt-muted')}</td>
         <td>${painCount > 0 ? dTag(painCount+' zone (max '+painMax+')', painCls) : dTag('—','dt-muted')}</td>
+        <td>${dTag(fuLabel, fuCls)}</td>
         <td>${dTag(abbLabel, abbCls)}</td>
         <td>${dTag(obLabel, obCls)}</td>
         <td>${dTag(st.label, st.cls)}</td>
@@ -4936,7 +5114,7 @@ function _renderClientiTab(clientData, periodDays) {
     <table class="d-table">
       <thead><tr>
         <th>Cliente</th><th>Goal</th><th>Sedute</th><th>Ultima sed.</th>
-        <th>Energia</th><th>Dolore</th><th>Abbonamento</th><th>Onboarding</th><th>Status</th>
+        <th>Energia</th><th>Dolore</th><th>Follow-up</th><th>Abbonamento</th><th>Onboarding</th><th>Status</th>
       </tr></thead>
       <tbody id="dtab-clienti-table-body"></tbody>
     </table>
@@ -5030,6 +5208,57 @@ function _renderDoloreTab(clientData, periodDays) {
     </tr>`;
   }).join('');
 
+  // ── Follow-up pain trend (inter-seduta) ──
+  // Aggrega dolore medio settimanale dai follow-up di tutti i clienti
+  const fuPainWeeks = {};
+  const fuByClient = [];
+  clients.forEach(c => {
+    const fu = (STATE.followupMap[c.id] || []).filter(f => f.dolore != null && !isNaN(Number(f.dolore)));
+    if (!fu.length) return;
+    const sorted = [...fu].sort((a,b) => new Date(a.date)-new Date(b.date));
+    // Weekly avg
+    sorted.forEach(f => {
+      const d = new Date(f.date);
+      const onejan = new Date(d.getFullYear(),0,1);
+      const wk = d.getFullYear() + '-W' + String(Math.ceil(((d-onejan)/86400000+onejan.getDay()+1)/7)).padStart(2,'0');
+      if (!fuPainWeeks[wk]) fuPainWeeks[wk] = [];
+      fuPainWeeks[wk].push(Number(f.dolore));
+    });
+    // Per-client: primo e ultimo valore dolore
+    const first = sorted[0], last = sorted[sorted.length-1];
+    const firstPain = Number(first.dolore), lastPain = Number(last.dolore);
+    const delta = Math.round((firstPain - lastPain)*10)/10; // positivo = miglioramento
+    fuByClient.push({ c, firstPain, lastPain, delta, count: fu.length });
+  });
+  fuByClient.sort((a,b) => b.delta - a.delta);
+
+  const hasFuPain = fuByClient.length > 0;
+  const fuTrendRows = fuByClient.slice(0,8).map(({c,firstPain,lastPain,delta}) => {
+    const col = delta > 2 ? 'dt-green' : delta >= 0 ? 'dt-yellow' : 'dt-red';
+    const arrow = delta > 0 ? '↓' : delta < 0 ? '↑' : '→';
+    const arrowColor = delta > 0 ? '#3dd68c' : delta < 0 ? '#ff5c5c' : '#6b6b80';
+    return `<tr>
+      <td style="color:#e8e8f0;font-weight:600">${esc(c.nome+' '+c.cognome)}</td>
+      <td style="color:#c0c0d0">${firstPain}/10</td>
+      <td style="color:#c0c0d0">${lastPain}/10</td>
+      <td><span style="color:${arrowColor};font-size:1rem;margin-right:4px">${arrow}</span>${dTag((delta>0?'−':delta<0?'+':'')+Math.abs(delta)+'', col)}</td>
+    </tr>`;
+  }).join('');
+
+  const fuPainSection = hasFuPain
+    ? `<div class="d-card" style="margin-top:12px">
+        ${dSecTitle('Dolore tra le sedute — trend follow-up')}
+        <div style="font-family:var(--f-mono);font-size:0.6rem;color:#6b6b80;margin-bottom:10px">Prima vs ultima risposta nel periodo · Δ positivo = miglioramento</div>
+        <div style="overflow-x:auto"><table class="d-table"><thead><tr><th>Cliente</th><th>Dolore iniziale</th><th>Dolore attuale</th><th>Δ</th></tr></thead><tbody>${fuTrendRows}</tbody></table></div>
+      </div>`
+    : `<div class="d-card" style="margin-top:12px;border-style:dashed">
+        ${dSecTitle('Dolore tra le sedute — follow-up')}
+        <div style="font-family:var(--f-mono);font-size:0.72rem;color:#6b6b80;line-height:1.7">
+          Nessun dato follow-up disponibile.<br>
+          Esporta i dati Firebase nel backup con chiave <span style="color:#7c6fff">followup_notes_{clientId}</span><br>per vedere il dolore <strong style="color:#c0c0d0">tra una seduta e l'altra</strong>.
+        </div>
+      </div>`;
+
   const _db2 = document.getElementById('dtab-dolore-body'); if(_db2) _db2.innerHTML =
     kpisHTML +
     dSecTitle('Clienti per carico di dolore') +
@@ -5043,7 +5272,8 @@ function _renderDoloreTab(clientData, periodDays) {
         ${dSecTitle('Pain delta intra-seduta')}
         ${deltas.length ? `<div style="overflow-x:auto"><table class="d-table"><thead><tr><th>Data</th><th>Zona</th><th>Pre</th><th>Post</th><th>Δ</th></tr></thead><tbody>${deltaRows}</tbody></table></div>` : '<span style="color:#6b6b80;font-size:0.75rem">Nessun delta registrato nel periodo — inizia a tracciare pre/post nelle note seduta.</span>'}
       </div>
-    </div>`;
+    </div>` +
+    fuPainSection;
 }
 
 // ── TAB 4: STUDIO ────────────────────────────────────────────────────
