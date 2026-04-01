@@ -1102,7 +1102,150 @@ html, body {
 .pm-btn:hover { border-color: var(--ink); }
 .pm-btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); }
 .pm-btn-primary:hover { background: #333; }
-.pm-wrapped-year { font-family: var(--f-mono); font-size: .62rem; padding: 7px 10px; border: 1px solid var(--line); border-radius: 2px; background: var(--white); color: var(--ink); }</style>
+.pm-wrapped-year { font-family: var(--f-mono); font-size: .62rem; padding: 7px 10px; border: 1px solid var(--line); border-radius: 2px; background: var(--white); color: var(--ink); }
+/* ─── DECISION TABS ─────────────────────────────────────────────── */
+.dtab-nav {
+  display: flex;
+  gap: 0;
+  background: #0d0d12;
+  border-bottom: 1px solid #2a2a38;
+  padding: 0 32px;
+  overflow-x: auto;
+  position: sticky;
+  top: 64px;
+  z-index: 90;
+}
+.dtab-btn {
+  padding: 13px 18px;
+  cursor: pointer;
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #6b6b80;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.18s, border-color 0.18s;
+}
+.dtab-btn:hover:not(.active) { color: #c0c0d0; }
+.dtab-btn.active { color: #7c6fff; border-bottom-color: #7c6fff; }
+.dtab-btn-report { margin-left: auto; color: #555; border-left: 1px solid #2a2a38; padding-left: 20px; }
+.dtab-btn-report.active { color: var(--red); border-bottom-color: var(--red); }
+
+.dtab-panel { display: none; }
+.dtab-panel.active { display: block; }
+.dtab-body { max-width: 1100px; margin: 0 auto; padding: 28px 32px 80px; }
+
+/* ─── DARK PANEL BASE ───────────────────────────────────────────── */
+.dp-bg { background: #0a0a0f; }
+
+/* KPI row */
+.d-kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px,1fr)); gap: 10px; margin-bottom: 24px; }
+.d-kpi { background: #111118; border: 1px solid #2a2a38; border-radius: 7px; padding: 14px 16px; }
+.d-kpi-label { font-family: var(--f-mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.1em; color: #6b6b80; margin-bottom: 5px; }
+.d-kpi-value { font-family: var(--f-display); font-size: 26px; font-weight: 800; line-height: 1; color: #e8e8f0; }
+.d-kpi-sub { font-family: var(--f-mono); font-size: 0.6rem; color: #6b6b80; margin-top: 3px; }
+.d-kpi-value.dv-green { color: #3dd68c; }
+.d-kpi-value.dv-yellow { color: #f5c542; }
+.d-kpi-value.dv-red { color: #ff5c5c; }
+.d-kpi-value.dv-accent { color: #7c6fff; }
+.d-kpi-value.dv-orange { color: #ff9a3c; }
+.d-kpi-value.dv-blue { color: #4fc3f7; }
+
+/* Section heading */
+.d-sec-title {
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #6b6b80;
+  margin: 20px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.d-sec-title::after { content:''; flex:1; height:1px; background:#2a2a38; }
+
+/* Action cards */
+.d-action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px,1fr)); gap: 12px; margin-bottom: 24px; }
+.d-action-card { background: #111118; border: 1px solid #2a2a38; border-radius: 7px; padding: 16px 18px; position: relative; overflow: hidden; }
+.d-action-card::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; }
+.d-action-card.da-urgent::before { background: #ff5c5c; }
+.d-action-card.da-high::before { background: #ff9a3c; }
+.d-action-card.da-medium::before { background: #f5c542; }
+.d-action-card.da-low::before { background: #7c6fff; }
+.d-action-pri { font-family: var(--f-mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 5px; }
+.d-action-pri.dp-urgent { color: #ff5c5c; }
+.d-action-pri.dp-high { color: #ff9a3c; }
+.d-action-pri.dp-medium { color: #f5c542; }
+.d-action-pri.dp-low { color: #7c6fff; }
+.d-action-title { font-family: var(--f-display); font-size: 0.88rem; font-weight: 700; margin-bottom: 6px; color: #fff; }
+.d-action-body { font-family: var(--f-mono); font-size: 0.7rem; color: #8888a0; line-height: 1.65; }
+.d-action-who { margin-top: 8px; font-family: var(--f-mono); font-size: 0.68rem; color: #c0c0d0; }
+.d-action-who strong { color: #fff; }
+
+/* Client table dark */
+.d-table { width: 100%; border-collapse: collapse; }
+.d-table th { text-align: left; font-family: var(--f-mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.1em; color: #6b6b80; padding: 8px 10px; border-bottom: 1px solid #2a2a38; }
+.d-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; font-size: 0.78rem; color: #c0c0d0; }
+.d-table tr:hover td { background: #111118; }
+
+/* Tags */
+.d-tag { display: inline-block; font-family: var(--f-mono); font-size: 0.58rem; padding: 2px 6px; border-radius: 3px; font-weight: 500; }
+.d-tag.dt-green { background: rgba(61,214,140,0.12); color: #3dd68c; border: 1px solid rgba(61,214,140,0.25); }
+.d-tag.dt-yellow { background: rgba(245,197,66,0.12); color: #f5c542; border: 1px solid rgba(245,197,66,0.25); }
+.d-tag.dt-red { background: rgba(255,92,92,0.12); color: #ff5c5c; border: 1px solid rgba(255,92,92,0.25); }
+.d-tag.dt-orange { background: rgba(255,154,60,0.12); color: #ff9a3c; border: 1px solid rgba(255,154,60,0.25); }
+.d-tag.dt-accent { background: rgba(124,111,255,0.12); color: #7c6fff; border: 1px solid rgba(124,111,255,0.25); }
+.d-tag.dt-muted { background: rgba(107,107,128,0.1); color: #6b6b80; border: 1px solid #2a2a38; }
+.d-tag.dt-blue { background: rgba(79,195,247,0.12); color: #4fc3f7; border: 1px solid rgba(79,195,247,0.25); }
+
+/* Filter btns */
+.d-filter-row { display: flex; gap: 7px; margin-bottom: 14px; flex-wrap: wrap; }
+.d-filter-btn { padding: 5px 11px; border-radius: 4px; border: 1px solid #2a2a38; background: #111118; color: #6b6b80; cursor: pointer; font-family: var(--f-mono); font-size: 0.62rem; transition: all 0.14s; }
+.d-filter-btn:hover, .d-filter-btn.active { border-color: #7c6fff; color: #7c6fff; background: rgba(124,111,255,0.08); }
+
+/* Progress bar */
+.d-prog-bar { width: 100%; height: 5px; background: #2a2a38; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.d-prog-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+
+/* Pain list */
+.d-pain-item { background: #111118; border: 1px solid #2a2a38; border-radius: 6px; padding: 11px 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; margin-bottom: 7px; }
+.d-pain-name { font-family: var(--f-display); font-weight: 600; font-size: 0.85rem; color: #e8e8f0; }
+.d-pain-zones { font-family: var(--f-mono); font-size: 0.65rem; color: #6b6b80; margin-top: 2px; }
+.d-pain-score { font-family: var(--f-display); font-weight: 800; font-size: 22px; }
+
+/* Revenue dot matrix */
+.d-dot-matrix { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.d-dot { width: 10px; height: 10px; border-radius: 50%; }
+.d-dot.dd-abb { background: #3dd68c; }
+.d-dot.dd-noabb { background: #2a2a38; }
+
+/* 2col grid */
+.d-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.d-card { background: #111118; border: 1px solid #2a2a38; border-radius: 7px; padding: 16px 18px; }
+.d-card-title { font-family: var(--f-mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: #6b6b80; margin-bottom: 10px; }
+
+/* Studio heatmap bar */
+.d-heatmap { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 8px; }
+.d-hm-cell { aspect-ratio: 1; border-radius: 2px; background: #1a1a24; font-family: var(--f-mono); font-size: 0.5rem; color: #6b6b80; display: flex; align-items: center; justify-content: center; }
+.d-hm-label { font-family: var(--f-mono); font-size: 0.58rem; color: #6b6b80; text-align: center; margin-bottom: 2px; }
+
+/* Candidate list */
+.d-cand-item { background: #1a1a24; border-radius: 5px; padding: 9px 13px; margin-bottom: 7px; }
+.d-cand-name { font-family: var(--f-display); font-size: 0.85rem; font-weight: 600; color: #fff; }
+.d-cand-meta { font-family: var(--f-mono); font-size: 0.62rem; color: #6b6b80; margin-top: 1px; }
+
+@media (max-width: 600px) {
+  .dtab-nav { padding: 0 10px; }
+  .dtab-body { padding: 16px; }
+  .d-grid-2 { grid-template-columns: 1fr; }
+  .d-action-grid { grid-template-columns: 1fr; }
+}
+</style>
 </head>
 <body>
 
@@ -1140,28 +1283,47 @@ html, body {
   <!-- DASHBOARD (visibile dopo caricamento) -->
   <div id="dashboardSection" style="display:none">
 
-    <!-- PERIODO STICKY BAR -->
-    <div class="period-bar" id="periodBar">
-      <div class="period-bar-inner">
-        <span class="period-label">Periodo</span>
-        <div class="period-btns">
-          <button class="period-btn" data-period="1m" onclick="onPeriodSelect('1m',this)">1 mese</button>
-          <button class="period-btn active" data-period="3m" onclick="onPeriodSelect('3m',this)">3 mesi</button>
-          <button class="period-btn" data-period="6m" onclick="onPeriodSelect('6m',this)">6 mesi</button>
-          <button class="period-btn" data-period="1y" onclick="onPeriodSelect('1y',this)">1 anno</button>
-          <button class="period-btn" data-period="custom" onclick="onPeriodSelect('custom',this)">Custom</button>
-        </div>
-        <div class="period-custom" id="periodCustom" style="display:none">
-          <input type="date" id="dateFrom" onchange="onDashboardRefresh()">
-          <span style="color:var(--sub)">→</span>
-          <input type="date" id="dateTo" onchange="onDashboardRefresh()">
-        </div>
-        <div class="period-kpis" id="periodKpis"></div>
-      </div>
+    <!-- DECISION TABS NAV -->
+    <div class="dtab-nav" id="dtabNav">
+      <button class="dtab-btn active" data-tab="decisioni" onclick="showDTab('decisioni',this)">🎯 Decisioni</button>
+      <button class="dtab-btn" data-tab="clienti" onclick="showDTab('clienti',this)">👥 Clienti</button>
+      <button class="dtab-btn" data-tab="dolore" onclick="showDTab('dolore',this)">🦴 Dolore</button>
+      <button class="dtab-btn" data-tab="studio" onclick="showDTab('studio',this)">🏋 Studio</button>
+      <button class="dtab-btn" data-tab="revenue" onclick="showDTab('revenue',this)">💰 Revenue</button>
+      <button class="dtab-btn" data-tab="io" onclick="showDTab('io',this)">⚡ Tu</button>
+      <button class="dtab-btn dtab-btn-report" data-tab="report" onclick="showDTab('report',this)">📄 Report PDF</button>
     </div>
 
-    <!-- DASHBOARD CONTENT -->
-    <div class="dashboard-body" id="dashboardBody"></div>
+    <!-- TAB PANELS -->
+    <div class="dtab-panel active" id="dtab-decisioni"><div class="dtab-body" id="dtab-decisioni-body"></div></div>
+    <div class="dtab-panel" id="dtab-clienti"><div class="dtab-body" id="dtab-clienti-body"></div></div>
+    <div class="dtab-panel" id="dtab-dolore"><div class="dtab-body" id="dtab-dolore-body"></div></div>
+    <div class="dtab-panel" id="dtab-studio"><div class="dtab-body" id="dtab-studio-body"></div></div>
+    <div class="dtab-panel" id="dtab-revenue"><div class="dtab-body" id="dtab-revenue-body"></div></div>
+    <div class="dtab-panel" id="dtab-io"><div class="dtab-body" id="dtab-io-body"></div></div>
+
+    <!-- TAB: REPORT PDF (dashboard originale) -->
+    <div class="dtab-panel" id="dtab-report">
+      <div class="period-bar" id="periodBar">
+        <div class="period-bar-inner">
+          <span class="period-label">Periodo</span>
+          <div class="period-btns">
+            <button class="period-btn" data-period="1m" onclick="onPeriodSelect('1m',this)">1 mese</button>
+            <button class="period-btn active" data-period="3m" onclick="onPeriodSelect('3m',this)">3 mesi</button>
+            <button class="period-btn" data-period="6m" onclick="onPeriodSelect('6m',this)">6 mesi</button>
+            <button class="period-btn" data-period="1y" onclick="onPeriodSelect('1y',this)">1 anno</button>
+            <button class="period-btn" data-period="custom" onclick="onPeriodSelect('custom',this)">Custom</button>
+          </div>
+          <div class="period-custom" id="periodCustom" style="display:none">
+            <input type="date" id="dateFrom" onchange="onDashboardRefresh()">
+            <span style="color:var(--sub)">→</span>
+            <input type="date" id="dateTo" onchange="onDashboardRefresh()">
+          </div>
+          <div class="period-kpis" id="periodKpis"></div>
+        </div>
+      </div>
+      <div class="dashboard-body" id="dashboardBody"></div>
+    </div>
 
   </div>
 
@@ -1396,6 +1558,9 @@ function onDataLoaded(file, data, totalNotes) {
   document.getElementById('dashboardSection').style.display = '';
   _populateWrappedYears();
   renderDashboard();
+  renderAllDTabs();
+  // Start on Decisioni tab
+  showDTab('decisioni', document.querySelector('.dtab-btn[data-tab="decisioni"]'));
 }
 
 // ─── PERIOD SELECT (new sticky bar) ──────────────────────────────────
@@ -4546,6 +4711,13 @@ function resetAll() {
   document.getElementById('fileInput').value = '';
   document.getElementById('dashboardSection').style.display = 'none';
   document.getElementById('mbtiModal').style.display = 'none';
+  // Reset decision tabs
+  document.querySelectorAll('.dtab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.dtab-panel').forEach(p => p.classList.remove('active'));
+  const d0 = document.querySelector('.dtab-btn[data-tab="decisioni"]');
+  if (d0) d0.classList.add('active');
+  const p0 = document.getElementById('dtab-decisioni');
+  if (p0) p0.classList.add('active');
 
   // Reset period bar
   document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === '3m'));
@@ -4553,6 +4725,560 @@ function resetAll() {
   document.getElementById('periodKpis').innerHTML = '';
   document.getElementById('dashboardBody').innerHTML = '';
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// DECISION TABS — showDTab + all render functions
+// ═══════════════════════════════════════════════════════════════════
+
+function showDTab(id, btn) {
+  document.querySelectorAll('.dtab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.dtab-btn').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('dtab-' + id);
+  if (panel) panel.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function renderAllDTabs() {
+  const dateFrom = document.getElementById('dateFrom')?.value || '';
+  const dateTo   = document.getElementById('dateTo')?.value || '';
+  const period   = STATE.period;
+  const clients  = STATE.clients;
+  if (!clients.length) return;
+
+  const periodDays = getPeriodDays(period, dateFrom, dateTo);
+  const clientData = clients.map(c => {
+    const allW = STATE.workoutsMap[c.id] || [];
+    const w    = filterByPeriod(allW, 'createdAt', period, dateFrom, dateTo);
+    const n    = filterByPeriod(STATE.notesMap[c.id] || [], 'date', period, dateFrom, dateTo);
+    return { c, w, allW, notes: n, freq: computeFreq(w, periodDays), energy: computeEnergy(n) };
+  });
+
+  _renderDecisioniTab(clientData, periodDays);
+  _renderClientiTab(clientData, periodDays);
+  _renderDoloreTab(clientData, periodDays);
+  _renderStudioTab(clientData, periodDays, period, dateFrom, dateTo);
+  _renderRevenueTab(clientData);
+  _renderIoTab(clientData, periodDays, period, dateFrom, dateTo);
+}
+
+// ── helpers ──────────────────────────────────────────────────────────
+function dTag(txt, cls) {
+  return `<span class="d-tag ${cls}">${esc(txt)}</span>`;
+}
+function dKpi(label, value, cls, sub) {
+  return `<div class="d-kpi"><div class="d-kpi-label">${label}</div><div class="d-kpi-value ${cls||''}">${value}</div>${sub?`<div class="d-kpi-sub">${sub}</div>`:''}</div>`;
+}
+function dSecTitle(txt) {
+  return `<div class="d-sec-title">${txt}</div>`;
+}
+function dActionCard(pri, title, body, who) {
+  const priMap = { urgent:'🔴 Urgente — questa settimana', high:'🟠 Alta priorità — entro 7 giorni', medium:'🟡 Media priorità — entro 30 giorni', low:'🔵 Sviluppo — prossimi 60 giorni' };
+  return `<div class="d-action-card da-${pri}">
+    <div class="d-action-pri dp-${pri}">${priMap[pri]||pri}</div>
+    <div class="d-action-title">${esc(title)}</div>
+    <div class="d-action-body">${esc(body)}</div>
+    ${who ? `<div class="d-action-who">→ <strong>${esc(who)}</strong></div>` : ''}
+  </div>`;
+}
+
+// ── TAB 1: DECISIONI ─────────────────────────────────────────────────
+function _renderDecisioniTab(clientData, periodDays) {
+  const clients = STATE.clients;
+  const allW    = clientData.flatMap(d => d.w);
+  const totalSedute     = clientData.reduce((s,d) => s + d.freq.count, 0);
+  const seduteConDolore = allW.filter(w => w.tipoSeduta === 'dolori').length;
+  const pctDolore       = totalSedute > 0 ? Math.round(seduteConDolore / totalSedute * 100) : 0;
+  const clientiConDolore = clients.filter(c => (c.painPoints||[]).length > 0).length;
+  const conAbb  = clients.filter(c => c.abbTipo && c.abbTipo !== 'none').length;
+  const noSess  = clientData.filter(d => d.w.length === 0).length;
+  const lowEn   = clientData.filter(d => d.energy.mean !== null && d.energy.mean < 5.5);
+  const noOnb   = clients.filter(c => {
+    const p = STATE.percorsoMap[c.id];
+    return !p || p.pct < 30;
+  }).length;
+
+  // Build alerts from existing system
+  const alerts  = computeAlerts(clients, STATE.workoutsMap, STATE.notesMap, STATE.percorsoMap, STATE.period,
+    document.getElementById('dateFrom')?.value||'', document.getElementById('dateTo')?.value||'');
+  const highAlerts  = alerts.filter(a => a.priority === 'HIGH');
+  const medAlerts   = alerts.filter(a => a.priority === 'MEDIUM');
+
+  // Action cards — urgent
+  const actions = [];
+  if (noSess > 0) {
+    const names = clientData.filter(d => d.w.length === 0).map(d => d.c.nome + ' ' + d.c.cognome).join(', ');
+    actions.push({ pri:'urgent', title: `${noSess} clienti senza sedute nel periodo`, body: names, who: 'Contattali questa settimana — rischio abbandono silenzioso' });
+  }
+  lowEn.forEach(d => {
+    actions.push({ pri:'urgent', title: `${d.c.nome} ${d.c.cognome} — energia cronica bassa`, body: `Media ${d.energy.mean}/10 su ${d.notes.length} sessioni. Pattern sistematico, non occasionale.`, who: 'Check-in diretto: cosa succede fuori dal campo?' });
+  });
+  highAlerts.slice(0, 3).forEach(a => {
+    actions.push({ pri:'high', title: a.client, body: a.msg, who: '' });
+  });
+  if (noOnb > 0) {
+    actions.push({ pri:'high', title: `${noOnb} clienti con onboarding incompleto`, body: 'Onboarding incompleto è il predittore #1 di abbandono precoce.', who: 'Programma una sessione dedicata per ciascuno' });
+  }
+  if (conAbb < Math.round(clients.length * 0.4)) {
+    actions.push({ pri:'medium', title: `Solo ${conAbb}/${clients.length} clienti con abbonamento`, body: 'Revenue imprevedibile. Proponi trimestrale ai clienti più frequenti: zero sconto, massima continuità.', who: '' });
+  }
+  medAlerts.slice(0,2).forEach(a => {
+    actions.push({ pri:'medium', title: a.client, body: a.msg, who: '' });
+  });
+  actions.push({ pri:'low', title: 'Pain delta: materiale marketing clinico', body: 'Ogni -3 o più in una seduta è un case study reale. Documenta con consenso cliente.', who: '' });
+
+  const kpisHTML = `<div class="d-kpi-row">
+    ${dKpi('Clienti attivi', clients.length, 'dv-accent')}
+    ${dKpi('Sedute periodo', totalSedute, 'dv-green')}
+    ${dKpi('Clienti con dolore', clientiConDolore, 'dv-yellow', Math.round(clientiConDolore/clients.length*100)+'% del totale')}
+    ${dKpi('Con abbonamento', conAbb, conAbb < clients.length*0.3 ? 'dv-red' : 'dv-green', `${Math.round(conAbb/clients.length*100)}% clienti`)}
+    ${dKpi('Sedute in dolore', pctDolore+'%', pctDolore>25?'dv-red':pctDolore>10?'dv-yellow':'dv-green', `${seduteConDolore} su ${totalSedute}`)}
+    ${dKpi('Alert attivi', highAlerts.length, highAlerts.length>3?'dv-red':highAlerts.length>0?'dv-orange':'dv-green', `${medAlerts.length} medi`)}
+  </div>`;
+
+  const actionsHTML = `<div class="d-action-grid">${actions.map(a => dActionCard(a.pri, a.title, a.body, a.who)).join('')}</div>`;
+
+  document.getElementById('dtab-decisioni-body').innerHTML =
+    kpisHTML +
+    dSecTitle('Azioni prioritarie') +
+    actionsHTML;
+}
+
+// ── TAB 2: CLIENTI ───────────────────────────────────────────────────
+function _renderClientiTab(clientData, periodDays) {
+  let activeFilter = 'all';
+
+  function getStatus(d) {
+    if (d.w.length === 0) return { label:'Nessuna seduta', cls:'dt-red' };
+    if (d.energy.mean !== null && d.energy.mean < 5.5) return { label:'Energia bassa', cls:'dt-orange' };
+    if ((d.c.painPoints||[]).length >= 5) return { label:'Multi-dolore', cls:'dt-red' };
+    const p = STATE.percorsoMap[d.c.id];
+    if (!p || p.pct < 30) return { label:'Onboarding incompleto', cls:'dt-yellow' };
+    if (d.freq.count >= 6) return { label:'Top frequenza', cls:'dt-green' };
+    if (d.c.abbTipo && d.c.abbTipo !== 'none') return { label:'Abbonato', cls:'dt-accent' };
+    return { label:'Regolare', cls:'dt-muted' };
+  }
+
+  function renderTable(filter) {
+    let rows = clientData;
+    if (filter === 'atrisk') rows = clientData.filter(d => d.w.length === 0 || (d.energy.mean !== null && d.energy.mean < 5.5));
+    else if (filter === 'pain') rows = clientData.filter(d => (d.c.painPoints||[]).length > 0);
+    else if (filter === 'noabb') rows = clientData.filter(d => !d.c.abbTipo || d.c.abbTipo === 'none');
+    else if (filter === 'top') rows = clientData.filter(d => d.freq.count >= 3).sort((a,b) => b.freq.count - a.freq.count);
+
+    const allWorkouts = [...STATE.workouts, ...(STATE.allClients.find(c=>c.sonoIo) ? STATE.workoutsMap[STATE.allClients.find(c=>c.sonoIo).id]||[] : [])];
+
+    const tableRows = rows.map(d => {
+      const name = d.c.nome + ' ' + d.c.cognome;
+      const st = getStatus(d);
+      const lastW = d.allW.sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt))[0];
+      const daysSince = lastW ? Math.round((Date.now()-new Date(lastW.createdAt))/86400000) : null;
+      const enCol = d.energy.mean === null ? 'dt-muted' : d.energy.mean < 5.5 ? 'dt-red' : d.energy.mean < 6.5 ? 'dt-yellow' : 'dt-green';
+      const sessCol = d.freq.count === 0 ? 'dt-red' : d.freq.count >= 6 ? 'dt-green' : 'dt-muted';
+      const abbLabel = (!d.c.abbTipo || d.c.abbTipo==='none') ? '—' : d.c.abbTipo + 'gg';
+      const abbCls = (d.c.abbTipo && d.c.abbTipo !== 'none') ? 'dt-green' : 'dt-muted';
+      const perc = STATE.percorsoMap[d.c.id];
+      const obLabel = perc ? perc.pct + '%' : '—';
+      const obCls = !perc ? 'dt-red' : perc.pct === 100 ? 'dt-green' : perc.pct > 50 ? 'dt-yellow' : 'dt-red';
+      const lastLabel = daysSince === null ? 'Mai' : daysSince + 'gg fa';
+      const lastCls = daysSince === null ? 'dt-red' : daysSince > 14 ? 'dt-yellow' : 'dt-muted';
+      const painCount = (d.c.painPoints||[]).length;
+      const painMax = painCount ? Math.max(...d.c.painPoints.map(p=>p.intensity||0)) : 0;
+      const painCls = painMax >= 7 ? 'dt-red' : painMax >= 5 ? 'dt-yellow' : painCount > 0 ? 'dt-orange' : 'dt-muted';
+
+      return `<tr>
+        <td style="font-weight:600;color:#e8e8f0">${esc(name)}</td>
+        <td style="color:#6b6b80;font-size:0.7rem">${esc(d.c.goal||'—')}</td>
+        <td>${dTag(d.freq.count+'', sessCol)}</td>
+        <td>${dTag(lastLabel, lastCls)}</td>
+        <td>${d.energy.mean !== null ? dTag(d.energy.mean+'/10', enCol) : dTag('—','dt-muted')}</td>
+        <td>${painCount > 0 ? dTag(painCount+' zone (max '+painMax+')', painCls) : dTag('—','dt-muted')}</td>
+        <td>${dTag(abbLabel, abbCls)}</td>
+        <td>${dTag(obLabel, obCls)}</td>
+        <td>${dTag(st.label, st.cls)}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('dtab-clienti-table-body').innerHTML = tableRows;
+  }
+
+  window._dclientiFilter = function(f, btn) {
+    activeFilter = f;
+    document.querySelectorAll('.d-filter-btn[data-cf]').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderTable(f);
+  };
+
+  document.getElementById('dtab-clienti-body').innerHTML = `
+    <div class="d-filter-row">
+      <button class="d-filter-btn active" data-cf="all" onclick="_dclientiFilter('all',this)">Tutti (${clientData.length})</button>
+      <button class="d-filter-btn" data-cf="atrisk" onclick="_dclientiFilter('atrisk',this)">⚠️ A rischio</button>
+      <button class="d-filter-btn" data-cf="pain" onclick="_dclientiFilter('pain',this)">🦴 Con dolore</button>
+      <button class="d-filter-btn" data-cf="noabb" onclick="_dclientiFilter('noabb',this)">💳 Senza abb</button>
+      <button class="d-filter-btn" data-cf="top" onclick="_dclientiFilter('top',this)">🏆 Top frequenza</button>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="d-table">
+      <thead><tr>
+        <th>Cliente</th><th>Goal</th><th>Sedute</th><th>Ultima sed.</th>
+        <th>Energia</th><th>Dolore</th><th>Abbonamento</th><th>Onboarding</th><th>Status</th>
+      </tr></thead>
+      <tbody id="dtab-clienti-table-body"></tbody>
+    </table>
+    </div>`;
+
+  renderTable('all');
+}
+
+// ── TAB 3: DOLORE ────────────────────────────────────────────────────
+function _renderDoloreTab(clientData, periodDays) {
+  const clients = STATE.clients;
+
+  // Chronic pain from client profiles
+  const painClients = clients
+    .filter(c => (c.painPoints||[]).length > 0)
+    .map(c => {
+      const pts = c.painPoints || [];
+      const maxI = Math.max(...pts.map(p=>p.intensity||0));
+      return { c, pts, maxI, count: pts.length };
+    })
+    .sort((a,b) => b.maxI - a.maxI || b.count - a.count);
+
+  // Zone frequency
+  const zoneCount = {};
+  clients.forEach(c => (c.painPoints||[]).forEach(p => { zoneCount[p.label] = (zoneCount[p.label]||0)+1; }));
+  const topZones = Object.entries(zoneCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  // Pain deltas from session notes
+  const deltas = [];
+  Object.entries(STATE.notesMap).forEach(([cid, notes]) => {
+    const client = STATE.allClients.find(c=>c.id==cid);
+    notes.forEach(n => {
+      const ps = n.painStart || [];
+      const pe = n.painEnd   || [];
+      ps.forEach(s => {
+        const e = pe.find(x => x.label === s.label);
+        if (e) deltas.push({ date:n.date, zone:s.label, start:s.intensity, end:e.intensity, delta:s.intensity-e.intensity, client: client ? client.nome+' '+client.cognome : '—' });
+      });
+    });
+  });
+  deltas.sort((a,b) => b.delta - a.delta);
+
+  // KPIs
+  const clientiConDolore = painClients.length;
+  const bestDelta = deltas.length ? deltas[0].delta : null;
+  const avgDelta  = deltas.length ? Math.round(deltas.reduce((s,d)=>s+d.delta,0)/deltas.length*10)/10 : null;
+  const seduteConDolore = clientData.flatMap(d=>d.w).filter(w=>w.tipoSeduta==='dolori').length;
+
+  const kpisHTML = `<div class="d-kpi-row">
+    ${dKpi('Clienti con dolore', clientiConDolore, 'dv-yellow', Math.round(clientiConDolore/clients.length*100)+'% del totale')}
+    ${dKpi('Zona più comune', topZones[0]?topZones[0][0]:'—', 'dv-accent', topZones[0]?topZones[0][1]+' clienti':'')}
+    ${bestDelta!==null ? dKpi('Miglior delta seduta', '−'+bestDelta, 'dv-green', 'in una singola sessione') : ''}
+    ${dKpi('Sedute in dolore', seduteConDolore, seduteConDolore>5?'dv-red':'dv-yellow', 'nel periodo')}
+  </div>`;
+
+  // Pain clients list
+  const painListHTML = painClients.map(({c,pts,maxI,count}) => {
+    const col = maxI>=7?'#ff5c5c':maxI>=5?'#f5c542':'#7c6fff';
+    const pct = Math.round(maxI/10*100);
+    const zonesText = pts.map(p=>`${p.label} ${p.intensity}/10`).join(' · ');
+    return `<div class="d-pain-item">
+      <div>
+        <div class="d-pain-name">${esc(c.nome+' '+c.cognome)}</div>
+        <div class="d-pain-zones">${esc(zonesText)}</div>
+        <div class="d-prog-bar" style="width:140px;margin-top:5px"><div class="d-prog-fill" style="width:${pct}%;background:${col}"></div></div>
+      </div>
+      <div class="d-pain-score" style="color:${col}">${maxI}</div>
+    </div>`;
+  }).join('');
+
+  // Zone bars
+  const maxZ = topZones[0]?topZones[0][1]:1;
+  const zoneBarsHTML = topZones.map(([z,n]) => {
+    const pct = Math.round(n/maxZ*100);
+    const col = n>=4?'#ff5c5c':n>=2?'#f5c542':'#7c6fff';
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:0.65rem;margin-bottom:2px;color:#c0c0d0"><span>${esc(z)}</span><span style="color:${col}">${n} clienti</span></div>
+      <div class="d-prog-bar"><div class="d-prog-fill" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+
+  // Delta table
+  const deltaRows = deltas.map(d => {
+    const col = d.delta>3?'dt-green':d.delta>0?'dt-yellow':'dt-muted';
+    return `<tr>
+      <td style="color:#6b6b80">${d.date||'—'}</td>
+      <td style="color:#e8e8f0">${esc(d.zone)}</td>
+      <td style="color:#c0c0d0">${d.start}/10</td>
+      <td style="color:#c0c0d0">${d.end}/10</td>
+      <td>${dTag((d.delta>0?'−':d.delta<0?'+':'')+Math.abs(d.delta)+'', col)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dtab-dolore-body').innerHTML =
+    kpisHTML +
+    dSecTitle('Clienti per carico di dolore') +
+    painListHTML +
+    `<div class="d-grid-2" style="margin-top:20px">
+      <div class="d-card">
+        ${dSecTitle('Zone più frequenti')}
+        ${zoneBarsHTML || '<span style="color:#6b6b80;font-size:0.75rem">Nessun dato</span>'}
+      </div>
+      <div class="d-card">
+        ${dSecTitle('Pain delta intra-seduta')}
+        ${deltas.length ? `<div style="overflow-x:auto"><table class="d-table"><thead><tr><th>Data</th><th>Zona</th><th>Pre</th><th>Post</th><th>Δ</th></tr></thead><tbody>${deltaRows}</tbody></table></div>` : '<span style="color:#6b6b80;font-size:0.75rem">Nessun delta registrato nel periodo — inizia a tracciare pre/post nelle note seduta.</span>'}
+      </div>
+    </div>`;
+}
+
+// ── TAB 4: STUDIO ────────────────────────────────────────────────────
+function _renderStudioTab(clientData, periodDays, period, dateFrom, dateTo) {
+  const allW = clientData.flatMap(d => d.w);
+  const totalSedute     = allW.length;
+  const seduteConDolore = allW.filter(w=>w.tipoSeduta==='dolori').length;
+  const pctDolore       = totalSedute>0 ? Math.round(seduteConDolore/totalSedute*100) : 0;
+
+  // Giorno più intenso
+  const dowMap = {0:'Dom',1:'Lun',2:'Mar',3:'Mer',4:'Gio',5:'Ven',6:'Sab'};
+  const dowCount = {0:0,1:0,2:0,3:0,4:0,5:0,6:0};
+  allW.forEach(w => { const d = new Date(w.createdAt).getDay(); dowCount[d]++; });
+  const maxDow = Object.entries(dowCount).sort((a,b)=>b[1]-a[1])[0];
+  const maxDowLabel = dowMap[maxDow[0]];
+
+  // Sedute per settimana e per mese
+  const weekMap = {};
+  const monthMap = {};
+  allW.forEach(w => {
+    const d = new Date(w.createdAt);
+    const month = d.toISOString().slice(0,7);
+    monthMap[month] = (monthMap[month]||0)+1;
+    // ISO week
+    const onejan = new Date(d.getFullYear(),0,1);
+    const week = Math.ceil(((d-onejan)/86400000+onejan.getDay()+1)/7);
+    const wk = d.getFullYear()+'-W'+String(week).padStart(2,'0');
+    weekMap[wk] = (weekMap[wk]||0)+1;
+  });
+
+  const avgPerWeek = periodDays>0 ? (totalSedute/(periodDays/7)).toFixed(1) : '—';
+  const months = Object.entries(monthMap).sort((a,b)=>a[0].localeCompare(b[0]));
+  const maxMonth = months.length ? months.sort((a,b)=>b[1]-a[1])[0][1] : 1;
+
+  // Clienti attivi vs totali
+  const clientiAttivi = clientData.filter(d=>d.w.length>0).length;
+  const clientiTotali = STATE.clients.length;
+  const slotOccupati  = STATE.clients.reduce((s,c)=>s+(c.schedule?.length||0),0);
+
+  // Ora media delle sedute (da orario field in manual_sessions o from createdAt)
+  const orari = allW.map(w => new Date(w.createdAt).getHours()).filter(h=>h>0);
+  const avgHour = orari.length ? Math.round(orari.reduce((s,h)=>s+h,0)/orari.length) : null;
+
+  // Esercizi più usati globali
+  const exCount = {};
+  allW.forEach(w => (w.blocchi||[]).forEach(b => (b.esercizi||[]).forEach(e => { if(e.nome) exCount[e.nome]=(exCount[e.nome]||0)+1; })));
+  const topEx = Object.entries(exCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxEx = topEx[0]?topEx[0][1]:1;
+
+  // DOW bar chart
+  const dowOrder = [1,2,3,4,5,6,0];
+  const maxDowCount = Math.max(...Object.values(dowCount), 1);
+  const dowBarsHTML = dowOrder.map(d => {
+    const pct = Math.round(dowCount[d]/maxDowCount*100);
+    const col = d===parseInt(maxDow[0]) ? '#7c6fff' : '#3dd68c';
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+      <div style="font-family:var(--f-mono);font-size:0.58rem;color:#6b6b80">${dowCount[d]}</div>
+      <div style="height:60px;width:100%;background:#1a1a24;border-radius:3px;display:flex;align-items:flex-end;overflow:hidden">
+        <div style="width:100%;height:${pct}%;background:${col};border-radius:3px 3px 0 0;transition:height 0.4s"></div>
+      </div>
+      <div style="font-family:var(--f-mono);font-size:0.6rem;color:${d===parseInt(maxDow[0])?'#7c6fff':'#6b6b80'}">${dowMap[d]}</div>
+    </div>`;
+  }).join('');
+
+  // Month bars
+  const monthBarsHTML = months.map(([m,n]) => {
+    const pct = Math.round(n/maxMonth*100);
+    const label = new Date(m+'-01').toLocaleString('it-IT',{month:'short',year:'2-digit'});
+    return `<div style="margin-bottom:7px">
+      <div style="display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:0.62rem;margin-bottom:2px;color:#c0c0d0"><span>${label}</span><span style="color:#3dd68c">${n} sed.</span></div>
+      <div class="d-prog-bar"><div class="d-prog-fill" style="width:${pct}%;background:#3dd68c"></div></div>
+    </div>`;
+  }).join('');
+
+  // Top exercises
+  const exHTML = topEx.map(([name,count]) => {
+    const pct = Math.round(count/maxEx*100);
+    return `<div style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:0.62rem;margin-bottom:2px;color:#c0c0d0"><span>${esc(name)}</span><span style="color:#7c6fff">${count}×</span></div>
+      <div class="d-prog-bar"><div class="d-prog-fill" style="width:${pct}%;background:#7c6fff"></div></div>
+    </div>`;
+  }).join('') || '<span style="color:#6b6b80;font-size:0.75rem">Nessun esercizio tracciato nel periodo</span>';
+
+  const kpisHTML = `<div class="d-kpi-row">
+    ${dKpi('Sedute totali', totalSedute, 'dv-green', 'nel periodo')}
+    ${dKpi('Media/settimana', avgPerWeek+'×', 'dv-accent', 'su tutti i clienti')}
+    ${dKpi('Giorno top', maxDowLabel, 'dv-accent', maxDow[1]+' sedute')}
+    ${dKpi('Clienti attivi', clientiAttivi+'/'+clientiTotali, clientiAttivi===clientiTotali?'dv-green':'dv-yellow', Math.round(clientiAttivi/clientiTotali*100)+'% presenti')}
+    ${dKpi('Slot fissi', slotOccupati, 'dv-blue', 'slot settimanali occupati')}
+    ${dKpi('% sedute dolore', pctDolore+'%', pctDolore>25?'dv-red':pctDolore>10?'dv-yellow':'dv-green', seduteConDolore+' su '+totalSedute)}
+  </div>`;
+
+  document.getElementById('dtab-studio-body').innerHTML =
+    kpisHTML +
+    `<div class="d-grid-2">
+      <div class="d-card">
+        ${dSecTitle('Sedute per giorno della settimana')}
+        <div style="display:flex;gap:5px;align-items:flex-end;height:90px;margin-top:8px">${dowBarsHTML}</div>
+      </div>
+      <div class="d-card">
+        ${dSecTitle('Sedute per mese')}
+        <div style="margin-top:4px">${monthBarsHTML||'<span style="color:#6b6b80;font-size:0.75rem">Nessun dato</span>'}</div>
+      </div>
+    </div>
+    <div class="d-grid-2">
+      <div class="d-card">
+        ${dSecTitle('Esercizi più utilizzati')}
+        ${exHTML}
+      </div>
+      <div class="d-card">
+        ${dSecTitle('Distribuzione clienti per frequenza')}
+        ${_buildFreqDistHTML(clientData)}
+      </div>
+    </div>`;
+}
+
+function _buildFreqDistHTML(clientData) {
+  const buckets = { '0':0, '1':0, '2-3':0, '4-6':0, '7+':0 };
+  clientData.forEach(d => {
+    const n = d.freq.count;
+    if (n===0) buckets['0']++;
+    else if (n===1) buckets['1']++;
+    else if (n<=3) buckets['2-3']++;
+    else if (n<=6) buckets['4-6']++;
+    else buckets['7+']++;
+  });
+  const max = Math.max(...Object.values(buckets),1);
+  const cols = {'0':'#ff5c5c','1':'#f5c542','2-3':'#ff9a3c','4-6':'#3dd68c','7+':'#7c6fff'};
+  return Object.entries(buckets).map(([label,n])=>`<div style="margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:0.62rem;margin-bottom:2px;color:#c0c0d0"><span>${label} sedute</span><span style="color:${cols[label]}">${n} clienti</span></div>
+    <div class="d-prog-bar"><div class="d-prog-fill" style="width:${Math.round(n/max*100)}%;background:${cols[label]}"></div></div>
+  </div>`).join('');
+}
+
+// ── TAB 5: REVENUE ───────────────────────────────────────────────────
+function _renderRevenueTab(clientData) {
+  const clients = STATE.clients;
+  const conAbb  = clients.filter(c=>c.abbTipo&&c.abbTipo!=='none');
+  const noAbb   = clients.filter(c=>!c.abbTipo||c.abbTipo==='none');
+  const abb365  = clients.filter(c=>c.abbTipo==='365');
+  const abb180  = clients.filter(c=>c.abbTipo==='180');
+  const abb30   = clients.filter(c=>c.abbTipo==='30');
+
+  // Candidates: no-abb + most sessions
+  const candidates = clientData
+    .filter(d=>(!d.c.abbTipo||d.c.abbTipo==='none')&&d.freq.count>=2)
+    .sort((a,b)=>b.freq.count-a.freq.count)
+    .slice(0,5);
+
+  const kpisHTML = `<div class="d-kpi-row">
+    ${dKpi('Con abbonamento', conAbb.length, conAbb.length < clients.length*0.3?'dv-red':'dv-green', Math.round(conAbb.length/clients.length*100)+'% dei clienti')}
+    ${dKpi('Senza abbonamento', noAbb.length, 'dv-yellow', 'revenue imprevedibile')}
+    ${dKpi('Abb 365gg', abb365.length, 'dv-green', abb365.map(c=>c.nome).join(', ')||'—')}
+    ${dKpi('Abb 180gg', abb180.length, 'dv-accent', abb180.map(c=>c.nome).join(', ')||'—')}
+    ${dKpi('Abb 30gg', abb30.length, 'dv-blue', abb30.map(c=>c.nome).join(', ')||'—')}
+  </div>`;
+
+  const dotsHTML = `<div class="d-dot-matrix">
+    ${conAbb.map(()=>`<div class="d-dot dd-abb" title="Con abbonamento"></div>`).join('')}
+    ${noAbb.map(()=>`<div class="d-dot dd-noabb" title="Senza abbonamento"></div>`).join('')}
+  </div>
+  <div style="margin-top:10px;display:flex;gap:14px;font-family:var(--f-mono);font-size:0.62rem;color:#6b6b80">
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3dd68c;vertical-align:middle;margin-right:4px"></span>Con abb (${conAbb.length})</span>
+    <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2a2a38;vertical-align:middle;margin-right:4px"></span>Senza abb (${noAbb.length})</span>
+  </div>`;
+
+  const candHTML = candidates.map(d=>`<div class="d-cand-item">
+    <div class="d-cand-name">${esc(d.c.nome+' '+d.c.cognome)}</div>
+    <div class="d-cand-meta">${d.freq.count} sedute nel periodo · energia ${d.energy.mean!==null?d.energy.mean+'/10':'n.d.'} · goal: ${esc(d.c.goal||'—')}</div>
+  </div>`).join('') || '<span style="color:#6b6b80;font-size:0.75rem">Nessun candidato nel periodo</span>';
+
+  document.getElementById('dtab-revenue-body').innerHTML =
+    kpisHTML +
+    `<div class="d-grid-2">
+      <div class="d-card">
+        ${dSecTitle('Copertura abbonamenti')}
+        ${dotsHTML}
+      </div>
+      <div class="d-card">
+        ${dSecTitle('Candidati al primo abbonamento')}
+        <div style="font-family:var(--f-mono);font-size:0.62rem;color:#6b6b80;margin-bottom:8px">Più frequenti, senza abb attivo</div>
+        ${candHTML}
+      </div>
+    </div>
+    <div class="d-action-grid">
+      ${dActionCard('high','Proponi il trimestrale ai top '+candidates.length+' clienti','Nessuno sconto — fai leva su continuità, priorità booking, e protezione del percorso.','Inizia dal cliente con più sedute senza abbonamento')}
+      ${dActionCard('medium','Verifica i clienti con abbTipo = "none"','Alcuni potrebbero avere un accordo verbale non registrato. Allinea il dato con la realtà.','Controlla entro 30 giorni')}
+    </div>`;
+}
+
+// ── TAB 6: IO ────────────────────────────────────────────────────────
+function _renderIoTab(clientData, periodDays, period, dateFrom, dateTo) {
+  const juri = STATE.allClients.find(c=>c.sonoIo);
+  if (!juri) {
+    document.getElementById('dtab-io-body').innerHTML = '<div style="color:#6b6b80;font-family:var(--f-mono);font-size:0.75rem;padding:40px 0">Nessun profilo "sonoIo" trovato nel backup.</div>';
+    return;
+  }
+  const juriW = filterByPeriod(STATE.workoutsMap[juri.id]||[], 'createdAt', period, dateFrom, dateTo);
+  const juriN = filterByPeriod(STATE.notesMap[juri.id]||[], 'date', period, dateFrom, dateTo);
+  const energy = computeEnergy(juriN);
+  const freq   = computeFreq(juriW, periodDays);
+  const avgClientFreq = clientData.length ? (clientData.reduce((s,d)=>s+d.freq.perWeek,0)/clientData.length).toFixed(1) : '—';
+
+  // Top exercises
+  const exCount = {};
+  juriW.forEach(w=>(w.blocchi||[]).forEach(b=>(b.esercizi||[]).forEach(e=>{if(e.nome)exCount[e.nome]=(exCount[e.nome]||0)+1;})));
+  const topEx = Object.entries(exCount).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const maxEx = topEx[0]?topEx[0][1]:1;
+  const exHTML = topEx.map(([name,count])=>`<div style="margin-bottom:5px">
+    <div style="display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:0.62rem;margin-bottom:2px;color:#c0c0d0"><span>${esc(name)}</span><span style="color:#7c6fff">${count}×</span></div>
+    <div class="d-prog-bar"><div class="d-prog-fill" style="width:${Math.round(count/maxEx*100)}%;background:#7c6fff"></div></div>
+  </div>`).join('') || '<span style="color:#6b6b80;font-size:0.75rem">Nessun esercizio loggato nel periodo</span>';
+
+  const enCol = energy.mean===null?'dv-muted':energy.mean>=7?'dv-green':energy.mean>=5?'dv-yellow':'dv-red';
+  const freqCompare = freq.perWeek < parseFloat(avgClientFreq) ? 'dv-red' : 'dv-green';
+
+  // Insights
+  const insights = [];
+  if (freq.count === 0) insights.push({ pri:'urgent', title:'Nessuna seduta nel periodo', body:'Non hai sedute registrate nel periodo selezionato. Trattati come un cliente prioritario.', who:'Schedula almeno 1 seduta a settimana come slot inamovibile' });
+  else if (freq.perWeek < 1) insights.push({ pri:'high', title:`Frequenza bassa: ${freq.perWeek}×/settimana`, body:`I tuoi clienti fanno mediamente ${avgClientFreq}×/settimana. Tu fai meno di loro.`, who:'Aggiungi un secondo slot settimanale' });
+  if (energy.mean !== null && energy.mean < 6) insights.push({ pri:'high', title:`Energia media bassa: ${energy.mean}/10`, body:'Stai allenandoti con poca energia. Valuta recupero, sonno e carico di lavoro.', who:'' });
+  if (topEx.length === 0) insights.push({ pri:'medium', title:'Nessun esercizio tracciato', body:'Stai loggando le sedute senza dettaglio degli esercizi. Perde valore di analisi.', who:'Inizia a loggare almeno 2-3 esercizi per seduta' });
+  if (!insights.length) insights.push({ pri:'low', title:'Tutto nella norma', body:'Frequenza e dati nel periodo sono nella norma. Continua così.', who:'' });
+
+  const kpisHTML = `<div class="d-kpi-row">
+    ${dKpi('Tue sedute', freq.count, freq.count===0?'dv-red':'dv-green', 'nel periodo')}
+    ${dKpi('Tue/settimana', freq.perWeek+'×', freqCompare, 'media clienti: '+avgClientFreq+'×')}
+    ${dKpi('Energia media', energy.mean!==null?energy.mean+'/10':'—', enCol, energy.trend||'')}
+    ${dKpi('Dolori attivi', (juri.painPoints||[]).length, (juri.painPoints||[]).length>0?'dv-yellow':'dv-green', (juri.painPoints||[]).length===0?'Nessuno registrato':'zone attive')}
+  </div>`;
+
+  document.getElementById('dtab-io-body').innerHTML =
+    kpisHTML +
+    dSecTitle('I tuoi dati') +
+    `<div class="d-grid-2" style="margin-bottom:20px">
+      <div class="d-card">
+        ${dSecTitle('Esercizi nel periodo')}
+        ${exHTML}
+      </div>
+      <div class="d-card">
+        ${dSecTitle('Note sessioni')}
+        ${juriN.length ? juriN.slice(0,4).map(n=>`<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #1a1a24">
+          <div style="font-family:var(--f-mono);font-size:0.6rem;color:#6b6b80;margin-bottom:3px">${n.date||'—'}</div>
+          <div style="font-family:var(--f-mono);font-size:0.68rem;color:#c0c0d0;line-height:1.5">${esc(n.text||'').slice(0,120)}</div>
+        </div>`).join('') : '<span style="color:#6b6b80;font-size:0.75rem">Nessuna nota nel periodo</span>'}
+      </div>
+    </div>` +
+    dSecTitle('Cosa dicono i tuoi dati') +
+    `<div class="d-action-grid">${insights.map(a=>dActionCard(a.pri,a.title,a.body,a.who)).join('')}</div>`;
+}
+
 </script>
 
 </body>
