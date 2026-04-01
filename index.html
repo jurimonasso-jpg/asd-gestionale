@@ -2019,6 +2019,67 @@ textarea.form-input {
 .prog-up { background: #fff0f0; color: var(--accent); }
 .prog-same { background: var(--surface2); color: var(--text3); }
 
+/* ─── REP PR ─────────────────────────────────────────────────────── */
+.rep-pr-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+  padding: 4px 6px;
+  background: var(--surface2);
+  border-radius: 6px;
+  border-left: 2px solid var(--border);
+}
+.rep-pr-row.rep-pr-first {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  font-style: italic;
+}
+.rep-pr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text3);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.rep-pr-pill.rep-pr-active {
+  background: #fff8e1;
+  border-color: #ffe082;
+  color: #e65100;
+}
+.rep-pr-pill.rep-pr-beat {
+  background: var(--green-bg);
+  border-color: #a5d6a7;
+  color: var(--green);
+  font-weight: 700;
+}
+.rep-pr-reps { opacity: .7; }
+.rep-pr-kg   { font-weight: 700; }
+.rep-pr-new {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--green);
+  background: var(--green-bg);
+  border-radius: 10px;
+  padding: 2px 8px;
+  border: 1px solid #a5d6a7;
+  animation: prPulse .6s ease;
+}
+@keyframes prPulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
 /* ===== SEDUTA COUNTER ===== */
 .seduta-counter {
   display: flex;
@@ -2677,6 +2738,7 @@ function getAllLocalData() {
     const k = localStorage.key(i);
     if (k && (
       k.startsWith('asd_ex_history_') ||
+      k.startsWith('asd_rep_pr_') ||
       k.startsWith('percorso_check_') ||
       k.startsWith('session_notes_') ||
       k.startsWith('fixed_skip_')
@@ -2698,6 +2760,7 @@ window.fbSaveToCloud = async function() {
     Object.entries(payload).forEach(([k, v]) => {
       if (k === '_savedAt' ||
           k.startsWith('asd_ex_history_') ||
+          k.startsWith('asd_rep_pr_') ||
           k.startsWith('percorso_check_') ||
           k.startsWith('session_notes_') ||
           k.startsWith('fixed_skip_')) {
@@ -6842,6 +6905,9 @@ function toggleBlocco(i) {
 }
 
 function renderEsercizioEditor(ex, bi, ei) {
+  const clientId = document.getElementById('seduta-client-select')?.value || '';
+  const prHTML   = clientId ? buildRepPRBadgeHTML(clientId, ex.nome, ex.reps, ex.kg) : '';
+
   const params = `<div class="fase-ex-params">
     <div class="param-block">
       <span class="param-label">Serie</span>
@@ -6849,17 +6915,18 @@ function renderEsercizioEditor(ex, bi, ei) {
     </div>
     <div class="param-block">
       <span class="param-label">Ripe</span>
-      <input class="param-input" type="text" value="${ex.reps||''}" placeholder="10" oninput="updateEsercizio(${bi},${ei},'reps',this.value)">
+      <input class="param-input" type="text" value="${ex.reps||''}" placeholder="10" oninput="updateEsercizio(${bi},${ei},'reps',this.value);_refreshRepPR(${bi},${ei})">
     </div>
     <div class="param-block">
       <span class="param-label">Kg</span>
-      <input class="param-input kg" type="text" value="${ex.kg||''}" placeholder="—" oninput="updateEsercizio(${bi},${ei},'kg',this.value)">
+      <input class="param-input kg" type="text" value="${ex.kg||''}" placeholder="—" oninput="updateEsercizio(${bi},${ei},'kg',this.value);_refreshRepPR(${bi},${ei})">
     </div>
     <div class="param-block">
       <span class="param-label">Pausa</span>
       <input class="param-input" type="text" value="${ex.pausa||''}" placeholder="1'" oninput="updateEsercizio(${bi},${ei},'pausa',this.value)">
     </div>
-  </div>`;
+  </div>
+  ${prHTML ? `<div id="rep-pr-${bi}-${ei}">${prHTML}</div>` : `<div id="rep-pr-${bi}-${ei}"></div>`}`;
 
   return `<div class="fase-ex-row" id="ex-${bi}-${ei}">
     <div class="fase-ex-name">
@@ -6882,6 +6949,17 @@ function updateProgression(bi, ei, wi, key, val) {
   if (!ex.prog) ex.prog = [{},{},{},{}];
   while (ex.prog.length < 4) ex.prog.push({});
   ex.prog[wi][key] = val;
+}
+
+// Aggiorna il badge PR in tempo reale mentre l'utente digita kg o reps
+function _refreshRepPR(bi, ei) {
+  const clientId = document.getElementById('seduta-client-select')?.value || '';
+  if (!clientId) return;
+  const ex = schedaBlocchi[bi]?.esercizi[ei];
+  if (!ex) return;
+  const container = document.getElementById('rep-pr-' + bi + '-' + ei);
+  if (!container) return;
+  container.innerHTML = buildRepPRBadgeHTML(clientId, ex.nome, ex.reps, ex.kg);
 }
 
 function removeEsercizio(bi, ei) {
@@ -11261,6 +11339,16 @@ function saveSedutaBuilder() {
   _invalidateBalanceCache(clientId);
   _syncAll(clientId, workout.id, _editingWasExisting);
 
+  // ── Aggiorna Rep PR per ogni esercizio con kg inserito ────────────────
+  const _prCid = parseInt(clientId);
+  workout.blocchi.forEach(b => {
+    (b.esercizi || []).forEach(ex => {
+      if (ex.nome && ex.reps && ex.kg) {
+        updateRepPR(_prCid, ex.nome, ex.reps, ex.kg);
+      }
+    });
+  });
+
   // ── Auto-save nota post-seduta se c'è testo nelle note builder ──────────
   if (notes.trim()) {
     const _cid = parseInt(clientId);
@@ -11371,6 +11459,273 @@ function saveExData(clientId, exName, sets, reps, kg, note) {
     note: note || ''
   };
   saveExHistory(clientId, h);
+}
+
+// ─── REP PR ──────────────────────────────────────────────────────────
+// Fasce di ripetizioni: ogni numero di reps ha il suo record di kg
+// Struttura: { "esercizio": { "10": { kg: 12, date: "2026-01-15" }, "8": { kg: 15, date: "..." } } }
+
+function getRepPR(clientId) {
+  return JSON.parse(localStorage.getItem('asd_rep_pr_' + clientId) || '{}');
+}
+
+function saveRepPR(clientId, pr) {
+  localStorage.setItem('asd_rep_pr_' + clientId, JSON.stringify(pr));
+}
+
+// ── Tipi di carico riconosciuti ──────────────────────────────────────
+// CL / corpo libero  → tipo:'cl'
+// trecce rastapower  → tipo:'trecce', val: numero (es. "5t","5trecce","5 trecce")
+// elastico           → tipo:'elastico' → ESCLUSO dal PR
+// tempo isometrico   → tipo:'tempo', val: secondi (es. "30s","1'30\"","2'")
+// kg numerici        → tipo:'kg', val: numero
+
+function _parseKgField(kgStr) {
+  if (!kgStr) return { tipo: null, val: null };
+  const s = String(kgStr).trim().toLowerCase();
+
+  // Elastico — escludi
+  if (/^el(astico)?(\s*(giallo|rosso|verde|blu|nero|arancio|viola|bianco))?$/.test(s) ||
+      s === 'el') {
+    return { tipo: 'elastico', val: null };
+  }
+
+  // Corpo libero
+  if (s === 'cl' || s === 'corpo libero' || s === '0') {
+    return { tipo: 'cl', val: 0 };
+  }
+
+  // Trecce rastapower: "5t", "5trecce", "5 trecce", "5tr"
+  const trecceMatch = s.match(/^(\d+(?:\.\d+)?)\s*t(?:r(?:ecce?)?)?$/);
+  if (trecceMatch) {
+    return { tipo: 'trecce', val: parseFloat(trecceMatch[1]) };
+  }
+
+  // Tempo isometrico: "30s", "1'30\"", "1'30", "2'", "90s", "1:30", "30"sec
+  // Normalizza tutto in secondi
+  const timeMatch = s.match(/^(\d+)'(?:(\d+)["s]?)?$/) ||  // 1'30" o 1'
+                    s.match(/^(\d+):(\d+)$/) ||              // 1:30
+                    s.match(/^(\d+)\s*["s](?:ec)?$/);        // 30s o 30"
+  if (timeMatch) {
+    let secs;
+    if (s.includes("'") || s.includes(':')) {
+      const parts = s.replace(/['"]/g,'').replace(':','\'').split("'");
+      secs = parseInt(parts[0]) * 60 + (parseInt(parts[1]) || 0);
+    } else {
+      secs = parseInt(timeMatch[1]);
+    }
+    if (!isNaN(secs) && secs > 0) return { tipo: 'tempo', val: secs };
+  }
+
+  // Kg numerici
+  const n = parseFloat(s.replace(',', '.'));
+  if (!isNaN(n) && n > 0) return { tipo: 'kg', val: n };
+
+  return { tipo: null, val: null };
+}
+
+// Manteniamo retrocompatibilità per il codice precedente
+function _parseKgValue(kgStr) {
+  const r = _parseKgField(kgStr);
+  return (r.tipo === 'kg') ? r.val : null;
+}
+
+// Normalizza reps: "10-12" → [10,12]; "10" → [10]
+function _parseRepsValue(repsStr) {
+  if (!repsStr) return [];
+  const s = String(repsStr).trim();
+  const rangeMatch = s.match(/^(\d+)[-\/](\d+)$/);
+  if (rangeMatch) {
+    const lo = parseInt(rangeMatch[1]);
+    const hi = parseInt(rangeMatch[2]);
+    return lo === hi ? [lo] : [lo, hi];
+  }
+  const single = parseInt(s);
+  if (!isNaN(single) && single > 0) return [single];
+  return [];
+}
+
+// Aggiorna i PR — gestisce kg, cl, trecce e tempo
+// Struttura PR per tipo:
+//   kg/trecce: { tipo, "10": { val, date } }   val = numero
+//   cl:        { tipo:'cl', "10": { val:0, date } }  val = reps (la chiave È la reps)
+//   tempo:     { tipo:'tempo', "best": { val: secondi, date } }
+function updateRepPR(clientId, exName, repsStr, kgStr) {
+  if (!exName) return [];
+  const parsed = _parseKgField(kgStr);
+
+  // Elastico → skip sempre
+  if (parsed.tipo === 'elastico') return [];
+
+  const pr    = getRepPR(clientId);
+  const key   = exName.trim().toLowerCase();
+  if (!pr[key]) pr[key] = {};
+
+  const newPRs = [];
+  const today  = new Date().toISOString().split('T')[0];
+
+  // ── Tempo isometrico ────────────────────────────────────────────────
+  if (parsed.tipo === 'tempo') {
+    pr[key].tipo = 'tempo';
+    const current = pr[key]['best'];
+    if (!current || parsed.val > current.val) {
+      pr[key]['best'] = { val: parsed.val, date: today };
+      newPRs.push({ tipo: 'tempo', val: parsed.val, prev: current ? current.val : null });
+    }
+    if (newPRs.length) saveRepPR(clientId, pr);
+    return newPRs;
+  }
+
+  // ── Corpo libero (record reps massime, senza kg) ────────────────────
+  if (parsed.tipo === 'cl') {
+    pr[key].tipo = 'cl';
+    const repsArr = _parseRepsValue(repsStr);
+    if (!repsArr.length) return [];
+    const maxReps = Math.max(...repsArr);
+    const current = pr[key]['best'];
+    if (!current || maxReps > current.val) {
+      pr[key]['best'] = { val: maxReps, date: today };
+      newPRs.push({ tipo: 'cl', val: maxReps, prev: current ? current.val : null });
+    }
+    if (newPRs.length) saveRepPR(clientId, pr);
+    return newPRs;
+  }
+
+  // ── Kg o Trecce — record per fascia reps ───────────────────────────
+  if (parsed.tipo === 'kg' || parsed.tipo === 'trecce') {
+    if (!repsStr) return [];
+    const repsArr = _parseRepsValue(repsStr);
+    if (!repsArr.length) return [];
+    pr[key].tipo = parsed.tipo;
+
+    repsArr.forEach(reps => {
+      const rKey   = String(reps);
+      const current = pr[key][rKey];
+      if (!current || parsed.val > current.val) {
+        pr[key][rKey] = { val: parsed.val, date: today };
+        newPRs.push({ tipo: parsed.tipo, reps, val: parsed.val, prev: current ? current.val : null });
+      }
+    });
+
+    if (newPRs.length) saveRepPR(clientId, pr);
+    return newPRs;
+  }
+
+  return [];
+}
+
+// Restituisce i PR per un esercizio in formato display-ready
+function getExRepPRs(clientId, exName) {
+  const pr  = getRepPR(clientId);
+  const key = exName.trim().toLowerCase();
+  const exPR = pr[key] || {};
+  const tipo = exPR.tipo || 'kg';
+
+  if (tipo === 'tempo') {
+    const best = exPR['best'];
+    if (!best) return [];
+    return [{ tipo: 'tempo', val: best.val, date: best.date }];
+  }
+  if (tipo === 'cl') {
+    const best = exPR['best'];
+    if (!best) return [];
+    return [{ tipo: 'cl', val: best.val, date: best.date }];
+  }
+  // kg o trecce — per fascia reps
+  return Object.entries(exPR)
+    .filter(([k]) => k !== 'tipo')
+    .map(([reps, data]) => ({ tipo, reps: parseInt(reps), val: data.val, date: data.date }))
+    .sort((a, b) => a.reps - b.reps);
+}
+
+// Formatta secondi → "1'30"" o "45""
+function _fmtSecs(s) {
+  if (s >= 60) return Math.floor(s/60) + "'" + (s%60 > 0 ? String(s%60).padStart(2,'0') + '"' : '');
+  return s + '"';
+}
+
+// HTML badge per i PR di un esercizio — mostrato nel builder
+function buildRepPRBadgeHTML(clientId, exName, currentReps, currentKg) {
+  if (!clientId || !exName) return '';
+  const prs     = getExRepPRs(clientId, exName);
+  const parsed  = _parseKgField(currentKg || '');
+
+  // Elastico → nessun badge
+  if (parsed.tipo === 'elastico') return '';
+
+  // ── Tempo isometrico ────────────────────────────────────────────────
+  if (parsed.tipo === 'tempo') {
+    const best = prs[0];
+    const isNew = !best || parsed.val > best.val;
+    if (!best) {
+      return `<div class="rep-pr-row rep-pr-first">⏱ Primo record tempo — verrà salvato al termine</div>`;
+    }
+    return `<div class="rep-pr-row">
+      <span class="rep-pr-pill${isNew ? ' rep-pr-beat' : ' rep-pr-active'}">
+        <span class="rep-pr-reps">⏱ rec.</span>
+        <span class="rep-pr-kg">${_fmtSecs(best.val)}</span>
+      </span>
+      ${isNew ? '<span class="rep-pr-new">🏆 Nuovo PR!</span>' : ''}
+    </div>`;
+  }
+
+  // ── Corpo libero ────────────────────────────────────────────────────
+  if (parsed.tipo === 'cl') {
+    const best     = prs[0];
+    const currReps = Math.max(...(_parseRepsValue(currentReps || '')), 0);
+    const isNew    = currReps > 0 && (!best || currReps > best.val);
+    if (!best) {
+      return currReps > 0
+        ? `<div class="rep-pr-row rep-pr-first">🥇 Primo record CL — verrà salvato al termine</div>`
+        : '';
+    }
+    return `<div class="rep-pr-row">
+      <span class="rep-pr-pill${isNew ? ' rep-pr-beat' : ' rep-pr-active'}">
+        <span class="rep-pr-reps">CL rec.</span>
+        <span class="rep-pr-kg">${best.val} reps</span>
+      </span>
+      ${isNew ? '<span class="rep-pr-new">🏆 Nuovo PR!</span>' : ''}
+    </div>`;
+  }
+
+  // ── Kg o Trecce — per fascia reps ──────────────────────────────────
+  if (!prs.length && parsed.val === null) return '';
+
+  const parsedReps = _parseRepsValue(currentReps || '');
+  const unit       = (prs[0]?.tipo === 'trecce' || parsed.tipo === 'trecce') ? 't' : 'kg';
+
+  const isNewPR = parsedReps.length && parsed.val !== null && parsedReps.some(r => {
+    const existing = prs.find(p => p.reps === r);
+    return !existing || parsed.val > existing.val;
+  });
+
+  if (!prs.length) {
+    return parsed.val !== null
+      ? `<div class="rep-pr-row rep-pr-first">🥇 Primo record — verrà salvato al termine</div>`
+      : '';
+  }
+
+  // Mostra max 4 PR, quelli più vicini alle reps attuali prima
+  const sorted = [...prs];
+  if (parsedReps.length) {
+    sorted.sort((a, b) => {
+      const da = Math.min(...parsedReps.map(r => Math.abs(a.reps - r)));
+      const db = Math.min(...parsedReps.map(r => Math.abs(b.reps - r)));
+      return da - db || a.reps - b.reps;
+    });
+  }
+  const shown = sorted.slice(0, 4);
+
+  const pills = shown.map(p => {
+    const isActive = parsedReps.includes(p.reps);
+    const isBeat   = isActive && parsed.val !== null && parsed.val > p.val;
+    return `<span class="rep-pr-pill${isBeat ? ' rep-pr-beat' : isActive ? ' rep-pr-active' : ''}">
+      <span class="rep-pr-reps">${p.reps}×</span>
+      <span class="rep-pr-kg">${p.val}${unit}</span>
+    </span>`;
+  }).join('');
+
+  return `<div class="rep-pr-row">${pills}${isNewPR ? '<span class="rep-pr-new">🏆 Nuovo PR!</span>' : ''}</div>`;
 }
 
 // Apre modal nota dalla seduta con painStart pre-popolato
@@ -12381,6 +12736,7 @@ async function exportData() {
     const k = localStorage.key(i);
     if (k && (
       k.startsWith('asd_ex_history_') ||
+      k.startsWith('asd_rep_pr_') ||
       k.startsWith('percorso_check_') ||
       k.startsWith('session_notes_') ||
       k.startsWith('fixed_skip_')
@@ -12388,15 +12744,11 @@ async function exportData() {
   }
 
   // ── Follow-up data da Firebase ──────────────────────────────────────
-  // Legge la collezione 'followups' e raggruppa per clientId
-  // Output: followup_notes_{clientId} → JSON array
   try {
     if (window._db && window._fsCollection && window._fsDocs && window._fsQuery && window._fsOrderBy) {
       const allClients = JSON.parse(localStorage.getItem('asd_clients') || '[]');
       const clientIds  = allClients.map(c => String(c.id));
-
       if (clientIds.length > 0) {
-        // Firestore non supporta query 'in' su array > 30 — iteriamo per cliente
         const fuByClient = {};
         await Promise.all(clientIds.map(async cid => {
           try {
@@ -12409,44 +12761,38 @@ async function exportData() {
             if (snap.docs.length > 0) {
               fuByClient[cid] = snap.docs.map(d => {
                 const data = d.data();
-                // Normalizza timestamp → stringa ISO date
                 let dateStr = data.date || null;
                 if (!dateStr && data.timestamp?.toDate) {
                   dateStr = data.timestamp.toDate().toISOString().slice(0, 10);
                 }
                 return {
-                  id:              d.id,
-                  date:            dateStr,
-                  tipo:            data.tipo            || null,
-                  energia:         data.energia         ?? null,
-                  sonno:           data.sonno           ?? null,
-                  stress:          data.stress          ?? null,
-                  dolore:          data.intensitaDolore ?? null,
-                  seduta:          data.seduta          || null,
-                  zoneDolorose:    data.zoneDolorose    || [],
-                  esercizi:        data.esercizi        || null,
-                  testo:           data.note            || data.testo || null
+                  id:           d.id,
+                  date:         dateStr,
+                  tipo:         data.tipo            || null,
+                  energia:      data.energia         ?? null,
+                  sonno:        data.sonno           ?? null,
+                  stress:       data.stress          ?? null,
+                  dolore:       data.intensitaDolore ?? null,
+                  seduta:       data.seduta          || null,
+                  zoneDolorose: data.zoneDolorose    || [],
+                  esercizi:     data.esercizi        || null,
+                  testo:        data.note            || data.testo || null
                 };
               });
             }
-          } catch(_) {
-            // Cliente senza follow-up o errore singolo — skip silenzioso
-          }
+          } catch(_) {}
         }));
-
         Object.entries(fuByClient).forEach(([cid, arr]) => {
           if (arr.length) payload['followup_notes_' + cid] = JSON.stringify(arr);
         });
-
         const totalFu = Object.values(fuByClient).reduce((s, a) => s + a.length, 0);
         if (statusEl && totalFu > 0) statusEl.textContent = `⏳ ${totalFu} follow-up trovati, generazione file...`;
       }
     }
   } catch(err) {
-    // Firebase non disponibile o errore — export procede senza follow-up
     console.warn('[exportData] Follow-up Firebase non disponibile:', err.message);
   }
-  // ────────────────────────────────────────────────────────────────────
+  // ───────────────────────────────────────────────────────────────────
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
