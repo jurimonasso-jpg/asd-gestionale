@@ -12733,15 +12733,23 @@ async function sbLoadFollowupBanner(clientId) {
   const snTrend  = sonno.length   > 1 ? lastSn - sonno[sonno.length-2]     : 0;
 
   let bColor, bBg, bBorder, bEmoji, bTitle, bSub, bSugg;
+
+  // Ultimo documento con dolore segnalato — per mostrare le zone
+  const lastWithPain = [...docs].reverse().find(d => (d.intensitaDolore ?? 0) > 0);
+  const lastPainZones = lastWithPain?.zoneDolorose || [];
+  const zonesStr = lastPainZones.length
+    ? lastPainZones.map(z => z.label || z).join(', ')
+    : '';
+
   if (lastEn <= 4 || lastSn <= 4 || lastDol > 2 || (enTrend <= -2 && snTrend <= -1)) {
     bColor='#c62828'; bBg='#fff5f5'; bBorder='#ef9a9a';
     bEmoji='🔴'; bTitle='Attenzione';
-    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0?' · Dolore presente':''}`;
+    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : ''}`;
     bSugg='<strong>Riduci il carico oggi.</strong> Trend negativo — considera una seduta di recupero attivo o deload.';
   } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
     bColor='#e65100'; bBg='#fffdf0'; bBorder='#ffe082';
     bEmoji='⚠️'; bTitle='Monitorare';
-    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10`;
+    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : ''}`;
     bSugg='<strong>Mantieni il carico della scorsa seduta.</strong> Energia in calo — allarga il warm-up e verifica come risponde.';
   } else {
     bColor='#2e7d32'; bBg='#f1f8f2'; bBorder='#a5d6a7';
@@ -12927,15 +12935,22 @@ async function wuLoadFollowupBanner(clientId) {
 
   let color = 'fu-green', title = '🟢 Cliente in forma', sub = '', sugg = '';
 
+  // Ultimo documento con dolore — per mostrare le zone
+  const lastWithPain = [...docs].reverse().find(d => (d.intensitaDolore ?? 0) > 0);
+  const lastPainZones = lastWithPain?.zoneDolorose || [];
+  const zonesStr = lastPainZones.length
+    ? lastPainZones.map(z => z.label || z).join(', ')
+    : '';
+
   if (lastEn <= 4 || lastSn <= 4 || lastDol > 2 || (enTrend <= -2 && snTrend <= -1)) {
     color = 'fu-red';
     title = '🔴 Attenzione';
-    sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10` + (lastDol > 0 ? ' · Dolore presente' : '');
+    sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10` + (lastDol > 0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : '');
     sugg  = '<strong>Riduci il carico oggi.</strong> Energia e/o sonno bassi — considera una seduta di recupero attivo o deload. Chiedi come si sente prima di iniziare.';
   } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
     color = 'fu-yellow';
     title = '🟡 Monitorare';
-    sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10`;
+    sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10` + (lastDol > 0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : '');
     sugg  = '<strong>Mantieni il carico della scorsa seduta, non aumentare.</strong> Trend in leggero calo — allarga il warm-up e valuta come risponde.';
   } else {
     sub  = `Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
