@@ -1558,9 +1558,11 @@ function onDataLoaded(file, data, totalNotes) {
   document.getElementById('dashboardSection').style.display = '';
   _populateWrappedYears();
   renderDashboard();
-  renderAllDTabs();
-  // Start on Decisioni tab
-  showDTab('decisioni', document.querySelector('.dtab-btn[data-tab="decisioni"]'));
+  // Render decision tabs in next tick so DOM is fully painted
+  // Render first tab after DOM is ready
+  setTimeout(function() {
+    showDTab('decisioni', null);
+  }, 0);
 }
 
 // ─── PERIOD SELECT (new sticky bar) ──────────────────────────────────
@@ -4736,29 +4738,42 @@ function showDTab(id, btn) {
   const panel = document.getElementById('dtab-' + id);
   if (panel) panel.classList.add('active');
   if (btn) btn.classList.add('active');
+  else {
+    const b2 = document.querySelector('.dtab-btn[data-tab="'+id+'"]');
+    if (b2) b2.classList.add('active');
+  }
+  // Lazy render: render this tab content now
+  _renderDTab(id);
 }
 
-function renderAllDTabs() {
-  const dateFrom = document.getElementById('dateFrom')?.value || '';
-  const dateTo   = document.getElementById('dateTo')?.value || '';
-  const period   = STATE.period;
-  const clients  = STATE.clients;
-  if (!clients.length) return;
-
+function _renderDTab(id) {
+  if (!STATE.clients || !STATE.clients.length) return;
+  const dateFrom = document.getElementById('dateFrom') ? document.getElementById('dateFrom').value : '';
+  const dateTo   = document.getElementById('dateTo') ? document.getElementById('dateTo').value : '';
+  const period   = STATE.period || '3m';
   const periodDays = getPeriodDays(period, dateFrom, dateTo);
-  const clientData = clients.map(c => {
+  const clientData = STATE.clients.map(c => {
     const allW = STATE.workoutsMap[c.id] || [];
     const w    = filterByPeriod(allW, 'createdAt', period, dateFrom, dateTo);
     const n    = filterByPeriod(STATE.notesMap[c.id] || [], 'date', period, dateFrom, dateTo);
     return { c, w, allW, notes: n, freq: computeFreq(w, periodDays), energy: computeEnergy(n) };
   });
+  try {
+    if (id === 'decisioni') _renderDecisioniTab(clientData, periodDays);
+    else if (id === 'clienti') _renderClientiTab(clientData, periodDays);
+    else if (id === 'dolore')  _renderDoloreTab(clientData, periodDays);
+    else if (id === 'studio')  _renderStudioTab(clientData, periodDays, period, dateFrom, dateTo);
+    else if (id === 'revenue') _renderRevenueTab(clientData);
+    else if (id === 'io')      _renderIoTab(clientData, periodDays, period, dateFrom, dateTo);
+  } catch(e) {
+    const el = document.getElementById('dtab-' + id + '-body');
+    if (el) el.innerHTML = '<div style="color:#ff5c5c;font-family:monospace;padding:20px">Errore render tab ' + id + ': ' + e.message + '</div>';
+    console.error('_renderDTab error ['+id+']:', e);
+  }
+}
 
-  _renderDecisioniTab(clientData, periodDays);
-  _renderClientiTab(clientData, periodDays);
-  _renderDoloreTab(clientData, periodDays);
-  _renderStudioTab(clientData, periodDays, period, dateFrom, dateTo);
-  _renderRevenueTab(clientData);
-  _renderIoTab(clientData, periodDays, period, dateFrom, dateTo);
+function renderAllDTabs() {
+  // Now handled lazily by _renderDTab on tab click
 }
 
 // ── helpers ──────────────────────────────────────────────────────────
