@@ -4837,7 +4837,7 @@ function _renderDecisioniTab(clientData, periodDays) {
 
   const actionsHTML = `<div class="d-action-grid">${actions.map(a => dActionCard(a.pri, a.title, a.body, a.who)).join('')}</div>`;
 
-  document.getElementById('dtab-decisioni-body').innerHTML =
+  const _db0 = document.getElementById('dtab-decisioni-body'); if(_db0) _db0.innerHTML =
     kpisHTML +
     dSecTitle('Azioni prioritarie') +
     actionsHTML;
@@ -4898,7 +4898,8 @@ function _renderClientiTab(clientData, periodDays) {
       </tr>`;
     }).join('');
 
-    document.getElementById('dtab-clienti-table-body').innerHTML = tableRows;
+    const el = document.getElementById('dtab-clienti-table-body');
+    if (el) el.innerHTML = tableRows;
   }
 
   window._dclientiFilter = function(f, btn) {
@@ -4908,7 +4909,7 @@ function _renderClientiTab(clientData, periodDays) {
     renderTable(f);
   };
 
-  document.getElementById('dtab-clienti-body').innerHTML = `
+  const _dbc = document.getElementById('dtab-clienti-body'); if(_dbc) _dbc.innerHTML = `
     <div class="d-filter-row">
       <button class="d-filter-btn active" data-cf="all" onclick="_dclientiFilter('all',this)">Tutti (${clientData.length})</button>
       <button class="d-filter-btn" data-cf="atrisk" onclick="_dclientiFilter('atrisk',this)">⚠️ A rischio</button>
@@ -5014,7 +5015,7 @@ function _renderDoloreTab(clientData, periodDays) {
     </tr>`;
   }).join('');
 
-  document.getElementById('dtab-dolore-body').innerHTML =
+  const _db2 = document.getElementById('dtab-dolore-body'); if(_db2) _db2.innerHTML =
     kpisHTML +
     dSecTitle('Clienti per carico di dolore') +
     painListHTML +
@@ -5120,7 +5121,7 @@ function _renderStudioTab(clientData, periodDays, period, dateFrom, dateTo) {
     ${dKpi('% sedute dolore', pctDolore+'%', pctDolore>25?'dv-red':pctDolore>10?'dv-yellow':'dv-green', seduteConDolore+' su '+totalSedute)}
   </div>`;
 
-  document.getElementById('dtab-studio-body').innerHTML =
+  const _db3 = document.getElementById('dtab-studio-body'); if(_db3) _db3.innerHTML =
     kpisHTML +
     `<div class="d-grid-2">
       <div class="d-card">
@@ -5199,7 +5200,7 @@ function _renderRevenueTab(clientData) {
     <div class="d-cand-meta">${d.freq.count} sedute nel periodo · energia ${d.energy.mean!==null?d.energy.mean+'/10':'n.d.'} · goal: ${esc(d.c.goal||'—')}</div>
   </div>`).join('') || '<span style="color:#6b6b80;font-size:0.75rem">Nessun candidato nel periodo</span>';
 
-  document.getElementById('dtab-revenue-body').innerHTML =
+  const _db4 = document.getElementById('dtab-revenue-body'); if(_db4) _db4.innerHTML =
     kpisHTML +
     `<div class="d-grid-2">
       <div class="d-card">
@@ -5222,7 +5223,7 @@ function _renderRevenueTab(clientData) {
 function _renderIoTab(clientData, periodDays, period, dateFrom, dateTo) {
   const juri = STATE.allClients.find(c=>c.sonoIo);
   if (!juri) {
-    document.getElementById('dtab-io-body').innerHTML = '<div style="color:#6b6b80;font-family:var(--f-mono);font-size:0.75rem;padding:40px 0">Nessun profilo "sonoIo" trovato nel backup.</div>';
+    const _dbio = document.getElementById('dtab-io-body'); if(_dbio) _dbio.innerHTML = '<div style="color:#6b6b80;font-family:var(--f-mono);font-size:0.75rem;padding:40px 0">Nessun profilo "sonoIo" trovato nel backup.</div>';
     return;
   }
   const juriW = filterByPeriod(STATE.workoutsMap[juri.id]||[], 'createdAt', period, dateFrom, dateTo);
@@ -5259,7 +5260,7 @@ function _renderIoTab(clientData, periodDays, period, dateFrom, dateTo) {
     ${dKpi('Dolori attivi', (juri.painPoints||[]).length, (juri.painPoints||[]).length>0?'dv-yellow':'dv-green', (juri.painPoints||[]).length===0?'Nessuno registrato':'zone attive')}
   </div>`;
 
-  document.getElementById('dtab-io-body').innerHTML =
+  const _dbio2 = document.getElementById('dtab-io-body'); if(_dbio2) _dbio2.innerHTML =
     kpisHTML +
     dSecTitle('I tuoi dati') +
     `<div class="d-grid-2" style="margin-bottom:20px">
