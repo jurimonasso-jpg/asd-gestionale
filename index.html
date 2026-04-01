@@ -12366,14 +12366,17 @@ const SYNC_KEYS_ALL = [
   'asd_notes','asd_tests',
 ];
 
-function exportData() {
+async function exportData() {
+  const statusEl = document.getElementById('ds-status');
+  if (statusEl) statusEl.textContent = '⏳ Esportazione in corso...';
+
   const payload = { _exportedAt: new Date().toISOString() };
   // Fixed keys
   SYNC_KEYS_ALL.forEach(k => {
     const v = localStorage.getItem(k);
     if (v) payload[k] = v;
   });
-  // Dynamic keys
+  // Dynamic keys (localStorage)
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (k && (
@@ -12383,6 +12386,68 @@ function exportData() {
       k.startsWith('fixed_skip_')
     )) payload[k] = localStorage.getItem(k);
   }
+
+  // ── Follow-up data da Firebase ──────────────────────────────────────
+  // Legge la collezione 'followups' e raggruppa per clientId
+  // Output: followup_notes_{clientId} → JSON array
+  try {
+    if (window._db && window._fsCollection && window._fsDocs && window._fsQuery && window._fsOrderBy) {
+      const allClients = JSON.parse(localStorage.getItem('asd_clients') || '[]');
+      const clientIds  = allClients.map(c => String(c.id));
+
+      if (clientIds.length > 0) {
+        // Firestore non supporta query 'in' su array > 30 — iteriamo per cliente
+        const fuByClient = {};
+        await Promise.all(clientIds.map(async cid => {
+          try {
+            const q    = window._fsQuery(
+              window._fsCollection(window._db, 'followups'),
+              window._fsWhere('clientId', '==', cid),
+              window._fsOrderBy('timestamp', 'asc')
+            );
+            const snap = await window._fsDocs(q);
+            if (snap.docs.length > 0) {
+              fuByClient[cid] = snap.docs.map(d => {
+                const data = d.data();
+                // Normalizza timestamp → stringa ISO date
+                let dateStr = data.date || null;
+                if (!dateStr && data.timestamp?.toDate) {
+                  dateStr = data.timestamp.toDate().toISOString().slice(0, 10);
+                }
+                return {
+                  id:              d.id,
+                  date:            dateStr,
+                  tipo:            data.tipo            || null,
+                  energia:         data.energia         ?? null,
+                  sonno:           data.sonno           ?? null,
+                  stress:          data.stress          ?? null,
+                  dolore:          data.intensitaDolore ?? null,
+                  seduta:          data.seduta          || null,
+                  zoneDolorose:    data.zoneDolorose    || [],
+                  esercizi:        data.esercizi        || null,
+                  testo:           data.note            || data.testo || null
+                };
+              });
+            }
+          } catch(_) {
+            // Cliente senza follow-up o errore singolo — skip silenzioso
+          }
+        }));
+
+        Object.entries(fuByClient).forEach(([cid, arr]) => {
+          if (arr.length) payload['followup_notes_' + cid] = JSON.stringify(arr);
+        });
+
+        const totalFu = Object.values(fuByClient).reduce((s, a) => s + a.length, 0);
+        if (statusEl && totalFu > 0) statusEl.textContent = `⏳ ${totalFu} follow-up trovati, generazione file...`;
+      }
+    }
+  } catch(err) {
+    // Firebase non disponibile o errore — export procede senza follow-up
+    console.warn('[exportData] Follow-up Firebase non disponibile:', err.message);
+  }
+  // ────────────────────────────────────────────────────────────────────
+
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -12391,7 +12456,7 @@ function exportData() {
   a.download = 'asd_backup_' + date + '.json';
   a.click();
   URL.revokeObjectURL(url);
-  document.getElementById('ds-status').textContent = '✓ Esportato · ' + new Date().toLocaleTimeString('it-IT');
+  if (statusEl) statusEl.textContent = '✓ Esportato · ' + new Date().toLocaleTimeString('it-IT');
 }
 
 function importData(input) {
