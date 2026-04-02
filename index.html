@@ -3056,6 +3056,9 @@ window.fbLoadFromCloud = async function() {
     <!-- FOLLOW-UP REMINDER BANNER -->
     <div id="fu-reminder-banner" style="display:none;margin-bottom:12px;"></div>
 
+    <!-- DOLORI CRONICI DA AGGIORNARE -->
+    <div id="pain-update-alert-banner" style="display:none;margin-bottom:12px;"></div>
+
     <!-- AGENDA OGGI + DOMANI -->
     <div style="margin-bottom:20px;">
       <div class="dash-section-header">
@@ -4834,6 +4837,13 @@ function filterClients() {
   renderClients(document.getElementById('client-search').value);
 }
 
+function openClientPainTab(clientId) {
+  openClientDetail(clientId);
+  setTimeout(() => {
+    const tabBtn = document.querySelector('#client-detail-content [onclick*="tab-pain"]');
+    if (tabBtn) tabBtn.click();
+  }, 80);
+}
 
 function openClientDetail(clientId) {
   const client = clients.find(c => c.id === clientId);
@@ -7409,6 +7419,7 @@ function setPainStato(clientId, label, stato) {
   const p = c.painPoints.find(pp => pp.label === label);
   if (!p) return;
   p.stato = stato;
+  p.dataUltimoAggiornamento = new Date().toISOString().split('T')[0];
   if (stato === 'risolto' && !p.dataRisoluzione) {
     p.dataRisoluzione = new Date().toLocaleDateString('it-IT');
   } else if (stato !== 'risolto') {
@@ -7428,6 +7439,7 @@ function _syncStatoToProfile(clientId, statoMap) {
     const p = c.painPoints.find(pp => pp.label === label);
     if (p && p.stato !== stato) {
       p.stato = stato;
+      p.dataUltimoAggiornamento = new Date().toISOString().split('T')[0];
       if (stato === 'risolto' && !p.dataRisoluzione) {
         p.dataRisoluzione = new Date().toLocaleDateString('it-IT');
       } else if (stato !== 'risolto') {
@@ -10013,6 +10025,7 @@ function renderDashboard() {
   autoArchivePassedFixedSlots();
   renderFollowUpBanner();
   renderFollowUpAlerts();
+  renderPainUpdateAlert();
 
   // ── AGENDA OGGI nella dashboard ─────────────────────────────────────────
   const agendaOggiEl = document.getElementById('dash-agenda-oggi');
@@ -12130,6 +12143,68 @@ function _analyzeFollowup(doc, lastWorkout) {
   const order = { red: 0, orange: 1, yellow: 2 };
   const topPriority = signals.sort((a, b) => order[a.priority] - order[b.priority])[0].priority;
   return { priority: topPriority, signals };
+}
+
+// ── Render banner dolori cronici da aggiornare ────────────────────────
+function renderPainUpdateAlert() {
+  const el = document.getElementById('pain-update-alert-banner');
+  if (!el) return;
+
+  const DAYS_THRESHOLD = 30;
+  const now = new Date();
+
+  const toAlert = []; // { client, zones: string[] }
+
+  clients.forEach(c => {
+    if (c.sonoIo || c.exCliente) return;
+    if (!c.painPoints || c.painPoints.length === 0) return;
+
+    const staleZones = [];
+    c.painPoints.forEach(p => {
+      if (p.stato === 'risolto') return;
+      const stato = p.stato;
+      const needsUpdate =
+        !stato || stato === '?' ||
+        !p.dataUltimoAggiornamento ||
+        (() => {
+          const d = new Date(p.dataUltimoAggiornamento);
+          return isNaN(d.getTime()) || (now - d) / (1000 * 60 * 60 * 24) > DAYS_THRESHOLD;
+        })();
+      if (needsUpdate) staleZones.push(p.label);
+    });
+
+    if (staleZones.length > 0) toAlert.push({ client: c, zones: staleZones });
+  });
+
+  if (toAlert.length === 0) {
+    el.style.display = 'none';
+    return;
+  }
+
+  toAlert.sort((a, b) => b.zones.length - a.zones.length);
+
+  const rowsHTML = toAlert.map(({ client: c, zones }) => {
+    const initials = ((c.nome || '')[0] || '') + ((c.cognome || '')[0] || '');
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientPainTab(${c.id})">
+      <div style="width:28px;height:28px;min-width:28px;background:rgba(230,115,0,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:#e67300;">${initials.toUpperCase()}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;">${c.nome} ${c.cognome}</div>
+        <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);margin-top:2px;white-space:normal;">${zones.join(' · ')}</div>
+      </div>
+      <span style="font-family:'DM Mono';font-size:9px;color:#e67300;white-space:nowrap;">${zones.length} zona${zones.length > 1 ? 'e' : ''}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="border:1.5px solid rgba(230,115,0,0.35);border-radius:var(--radius);background:rgba(230,115,0,0.05);overflow:hidden;">
+      <div style="padding:9px 14px;background:rgba(230,115,0,0.08);border-bottom:1px solid rgba(230,115,0,0.2);display:flex;align-items:center;gap:8px;">
+        <span style="font-size:14px;">🦴</span>
+        <span style="font-size:12px;font-weight:700;color:var(--text);">Dolori cronici da aggiornare</span>
+        <span style="font-family:'DM Mono';font-size:10px;color:#e67300;margin-left:auto;">${toAlert.length} client${toAlert.length > 1 ? 'i' : 'e'}</span>
+      </div>
+      <div style="padding:4px 14px 6px;">${rowsHTML}</div>
+    </div>`;
+  el.style.display = 'block';
 }
 
 // ── Render banner alert clinici ──────────────────────────────────────
