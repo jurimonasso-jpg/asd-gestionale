@@ -6907,7 +6907,7 @@ function addBlocco(tipo) {
   const block = {
     tipo,
     rounds: tipo === 'fase1' || tipo === 'fase3' ? '3' : tipo === 'fase2' ? '3' : tipo === 'warmup' || tipo === 'workout' ? '3' : '',
-    pausaMode: tipo === 'fase2' ? 'pausa_tra' : 'no_pausa_fine',
+    pausaMode: tipo === 'workout' ? 'circuit_training' : tipo === 'fase2' ? 'pausa_tra' : 'no_pausa_fine',
     intervalOn: '40',
     intervalOff: '20',
     note: '',
@@ -6963,10 +6963,15 @@ function renderBloccoEditor(b, i) {
         <input class="round-config-input" type="text" value="${b.rounds||'3'}" placeholder="3" oninput="schedaBlocchi[${i}].rounds=this.value">
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
-        <span class="round-config-label">Pausa</span>
+        <span class="round-config-label">Tipo</span>
         <select class="round-config-input" style="width:auto;padding:4px 6px;" onchange="schedaBlocchi[${i}].pausaMode=this.value">
-          <option value="no_pausa_fine" ${b.pausaMode==='no_pausa_fine'?'selected':''}>No pausa — pausa 1' fine</option>
-          <option value="pausa_tra" ${b.pausaMode==='pausa_tra'?'selected':''}>Pausa 1' tra esercizi</option>
+          <option value="circuit_training" ${b.pausaMode==='circuit_training'?'selected':''}>Circuit Training</option>
+          <option value="amrap" ${b.pausaMode==='amrap'?'selected':''}>AMRAP</option>
+          <option value="interval_training" ${b.pausaMode==='interval_training'?'selected':''}>Interval Training</option>
+          <option value="emom" ${b.pausaMode==='emom'?'selected':''}>EMOM</option>
+          <option value="jump_set" ${b.pausaMode==='jump_set'?'selected':''}>Jump Set</option>
+          <option value="super_set" ${b.pausaMode==='super_set'?'selected':''}>Super Set</option>
+          <option value="triset" ${b.pausaMode==='triset'?'selected':''}>Triset</option>
         </select>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex:1;">
