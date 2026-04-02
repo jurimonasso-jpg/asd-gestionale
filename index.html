@@ -3693,6 +3693,14 @@ window.fbLoadFromCloud = async function() {
       </div>
     </div>
 
+    <!-- BANNER FEEDBACK -->
+    <div id="sn-banner-feedback" style="display:none;margin-bottom:4px;">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:9px;">💡 Il suggerimento era corretto?</div>
+        <div id="sn-bf-buttons" style="display:flex;gap:7px;flex-wrap:wrap;"></div>
+      </div>
+    </div>
+
     <div class="divider"></div>
     <div style="display:flex;justify-content:flex-end;gap:12px;">
       <button class="btn btn-secondary" onclick="closeModal('modal-session-note')">Annulla</button>
@@ -5590,6 +5598,7 @@ function renderPercorsoTestBridge(clientId) {
     </div>`;
 }
 let _sessionNoteClientId = null;
+let _wuCurrentBannerAlert = null; // { tipo: 'attenzione'|'progressione'|'monitorare', testo: '...' }
 // State for in-modal pain charts
 let _snPainStart = {}; // { label: intensity }
 let _snPainEnd   = {}; // { label: intensity }
@@ -6036,6 +6045,13 @@ function saveSessionNote() {
     painStart: tipo === 'dolori' ? painStart : [],
     painEnd:   tipo === 'dolori' ? painEnd   : []
   };
+
+  // Banner feedback loop
+  if (_wuCurrentBannerAlert) {
+    note.bannerAlert = { tipo: _wuCurrentBannerAlert.tipo, testo: _wuCurrentBannerAlert.testo };
+    const activeBtn = document.querySelector('#sn-bf-buttons [data-bf-value][data-active="1"]');
+    if (activeBtn) note.bannerFeedback = activeBtn.dataset.bfValue;
+  }
   if (existIdx >= 0) notes[existIdx] = note;
   else notes.unshift(note);
   localStorage.setItem(key, JSON.stringify(notes));
@@ -6220,9 +6236,73 @@ function _openUnifiedNote(clientId, workoutId, forceNoteId, prefillPain) {
   }
 
   snSetMode('guided');
+  _snRenderBannerFeedback(note?.bannerFeedback || null);
   openModal('modal-session-note');
 }
 
+
+function _snRenderBannerFeedback(existingFeedback) {
+  const block = document.getElementById('sn-banner-feedback');
+  const btnsEl = document.getElementById('sn-bf-buttons');
+  if (!block || !btnsEl) return;
+
+  if (!_wuCurrentBannerAlert) {
+    block.style.display = 'none';
+    return;
+  }
+
+  block.style.display = '';
+  btnsEl.innerHTML = '';
+
+  const tipo = _wuCurrentBannerAlert.tipo;
+  let opts = [];
+
+  if (tipo === 'attenzione' || tipo === 'monitorare') {
+    opts = [
+      { value: 'giusto',      label: '✅ Giusto — ho adattato',       color: 'var(--green)',   bg: 'var(--green-bg)'  },
+      { value: 'non_seguito', label: '⚠️ Non seguito — ok lo stesso',  color: 'var(--yellow)',  bg: 'var(--yellow-bg)' },
+      { value: 'sottostimato',label: '🔽 Sottostimato — era peggio',   color: 'var(--accent)',  bg: 'var(--red-bg)'    },
+    ];
+  } else {
+    opts = [
+      { value: 'giusto',      label: '✅ Giusto — ho caricato di più', color: 'var(--green)',   bg: 'var(--green-bg)'  },
+      { value: 'non_seguito', label: '⚠️ Non seguito — ho mantenuto',  color: 'var(--yellow)',  bg: 'var(--yellow-bg)' },
+    ];
+  }
+
+  opts.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.bfValue = opt.value;
+    const isActive = existingFeedback === opt.value;
+    btn.style.cssText = [
+      'font-family:\'DM Mono\',monospace',
+      'font-size:11px',
+      'font-weight:600',
+      'padding:5px 13px',
+      'border-radius:20px',
+      'border:1.5px solid ' + opt.color,
+      'background:' + (isActive ? opt.color : 'transparent'),
+      'color:' + (isActive ? '#fff' : opt.color),
+      'cursor:pointer',
+      'transition:background .15s,color .15s',
+      'line-height:1.4',
+    ].join(';');
+    btn.dataset.active = isActive ? '1' : '0';
+    btn.textContent = opt.label;
+    btn.onclick = function() {
+      btnsEl.querySelectorAll('[data-bf-value]').forEach(b => {
+        const bOpt = opts.find(o => o.value === b.dataset.bfValue);
+        if (!bOpt) return;
+        const sel = b.dataset.bfValue === opt.value;
+        b.style.background = sel ? bOpt.color : 'transparent';
+        b.style.color       = sel ? '#fff'     : bOpt.color;
+        b.dataset.active    = sel ? '1' : '0';
+      });
+    };
+    btnsEl.appendChild(btn);
+  });
+}
 
 function editSessionNote(clientId, noteId) {
   const note = getSessionNotes(clientId).find(n => n.id === noteId);
@@ -12965,6 +13045,7 @@ async function wuLoadFollowupBanner(clientId) {
 
   if (!docs.length) {
     nodata.style.display = 'block';
+    _wuCurrentBannerAlert = null;
     return;
   }
 
@@ -13052,14 +13133,17 @@ async function wuLoadFollowupBanner(clientId) {
     title = '🔴 Attenzione';
     sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10` + (lastDol > 0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : '');
     sugg  = '<strong>Riduci il carico oggi.</strong> Energia e/o sonno bassi — considera una seduta di recupero attivo o deload. Chiedi come si sente prima di iniziare.';
+    _wuCurrentBannerAlert = { tipo: 'attenzione', testo: 'Riduci il carico oggi' };
   } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
     color = 'fu-yellow';
     title = '🟡 Monitorare';
     sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10` + (lastDol > 0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : '');
     sugg  = '<strong>Mantieni il carico della scorsa seduta, non aumentare.</strong> Trend in leggero calo — allarga il warm-up e valuta come risponde.';
+    _wuCurrentBannerAlert = { tipo: 'monitorare', testo: 'Mantieni il carico, non aumentare' };
   } else {
     sub  = `Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
     sugg = '<strong>Buon momento per progredire.</strong> Energia e sonno stabili — puoi aumentare carico o volume su Fase 1 e 2.';
+    _wuCurrentBannerAlert = { tipo: 'progressione', testo: 'Energia ok, considera progressione' };
   }
 
   const bannerEl = document.getElementById('wu-followup-banner');
