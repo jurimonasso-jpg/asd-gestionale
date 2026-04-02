@@ -12185,26 +12185,28 @@ function renderPainUpdateAlert() {
 
   const rowsHTML = toAlert.map(({ client: c, zones }) => {
     const initials = ((c.nome || '')[0] || '') + ((c.cognome || '')[0] || '');
-    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="openClientPainTab(${c.id})">
-      <div style="width:28px;height:28px;min-width:28px;background:rgba(230,115,0,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:#e67300;">${initials.toUpperCase()}</div>
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;" onclick="openClientPainTab(${c.id})">
+      <div style="width:30px;height:30px;min-width:30px;background:rgba(230,115,0,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:#e67300;flex-shrink:0;">${initials.toUpperCase()}</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;">${c.nome} ${c.cognome}</div>
-        <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);margin-top:2px;white-space:normal;">${zones.join(' · ')}</div>
+        <div style="font-size:12px;font-weight:700;">${c.nome} ${c.cognome}</div>
+        <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);margin-top:3px;white-space:normal;">${zones.join(' · ')}</div>
       </div>
-      <span style="font-family:'DM Mono';font-size:9px;color:#e67300;white-space:nowrap;">${zones.length} zona${zones.length > 1 ? 'e' : ''}</span>
+      <span style="font-family:'DM Mono';font-size:9px;color:#e67300;white-space:nowrap;flex-shrink:0;padding-top:2px;">${zones.length} zona${zones.length > 1 ? 'e' : ''}</span>
     </div>`;
   }).join('');
 
+  el.style.display = '';
   el.innerHTML = `
-    <div style="border:1.5px solid rgba(230,115,0,0.35);border-radius:var(--radius);background:rgba(230,115,0,0.05);overflow:hidden;">
-      <div style="padding:9px 14px;background:rgba(230,115,0,0.08);border-bottom:1px solid rgba(230,115,0,0.2);display:flex;align-items:center;gap:8px;">
-        <span style="font-size:14px;">🦴</span>
-        <span style="font-size:12px;font-weight:700;color:var(--text);">Dolori cronici da aggiornare</span>
-        <span style="font-family:'DM Mono';font-size:10px;color:#e67300;margin-left:auto;">${toAlert.length} client${toAlert.length > 1 ? 'i' : 'e'}</span>
+    <div style="border:1px solid rgba(230,115,0,0.3);border-radius:10px;background:rgba(230,115,0,0.05);overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;user-select:none;"
+           onclick="(function(btn){var body=btn.parentElement.querySelector('.pain-banner-body');var open=body.style.display==='none';body.style.display=open?'block':'none';btn.querySelector('.pain-chevron').textContent=open?'▴':'▾';})(this)">
+        <span style="font-size:12px;font-weight:700;color:#e67300;">🦴 Dolori cronici da aggiornare (${toAlert.length})</span>
+        <span style="font-size:10px;color:var(--text3);font-family:DM Mono,monospace;">tocca per espandere <span class="pain-chevron">▾</span></span>
       </div>
-      <div style="padding:4px 14px 6px;">${rowsHTML}</div>
+      <div class="pain-banner-body" style="display:none;border-top:1px solid rgba(230,115,0,0.15);">
+        ${rowsHTML}
+      </div>
     </div>`;
-  el.style.display = 'block';
 }
 
 // ── Render banner alert clinici ──────────────────────────────────────
