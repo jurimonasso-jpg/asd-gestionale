@@ -6314,6 +6314,62 @@ function _snRenderBannerFeedback(existingFeedback) {
   });
 }
 
+function _sbRenderBannerFeedback(clientId) {
+  const block  = document.getElementById('sb-banner-feedback');
+  const btnsEl = document.getElementById('sb-bf-buttons');
+  if (!block || !btnsEl || !_wuCurrentBannerAlert) { if (block) block.style.display = 'none'; return; }
+
+  const today = new Date().toISOString().split('T')[0];
+  const existing = getSessionNotes(clientId).find(n => n.date === today);
+  const existingFeedback = existing?.bannerFeedback || null;
+
+  block.style.display = '';
+  btnsEl.innerHTML = '';
+
+  const tipo = _wuCurrentBannerAlert.tipo;
+  const opts = (tipo === 'attenzione' || tipo === 'monitorare') ? [
+    { value: 'giusto',       label: '✅ Giusto — ho adattato',       color: 'var(--green)'  },
+    { value: 'non_seguito',  label: '⚠️ Non seguito — ok lo stesso', color: 'var(--yellow)' },
+    { value: 'sottostimato', label: '🔽 Sottostimato — era peggio',  color: 'var(--accent)' },
+  ] : [
+    { value: 'giusto',       label: '✅ Giusto — ho caricato di più', color: 'var(--green)'  },
+    { value: 'non_seguito',  label: '⚠️ Non seguito — ho mantenuto', color: 'var(--yellow)' },
+  ];
+
+  opts.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.bfValue = opt.value;
+    const isActive = existingFeedback === opt.value;
+    btn.dataset.active = isActive ? '1' : '0';
+    btn.style.cssText = [
+      "font-family:'DM Mono',monospace",
+      'font-size:11px',
+      'font-weight:600',
+      'padding:5px 13px',
+      'border-radius:20px',
+      'border:1.5px solid ' + opt.color,
+      'background:' + (isActive ? opt.color : 'transparent'),
+      'color:' + (isActive ? '#fff' : opt.color),
+      'cursor:pointer',
+      'transition:background .15s,color .15s',
+      'line-height:1.4',
+    ].join(';');
+    btn.textContent = opt.label;
+    btn.onclick = function() {
+      btnsEl.querySelectorAll('[data-bf-value]').forEach(b => {
+        const bOpt = opts.find(o => o.value === b.dataset.bfValue);
+        if (!bOpt) return;
+        const sel = b.dataset.bfValue === opt.value;
+        b.style.background = sel ? bOpt.color : 'transparent';
+        b.style.color       = sel ? '#fff'     : bOpt.color;
+        b.dataset.active    = sel ? '1' : '0';
+      });
+    };
+    btnsEl.appendChild(btn);
+  });
+}
+
 function editSessionNote(clientId, noteId) {
   const note = getSessionNotes(clientId).find(n => n.id === noteId);
   if (!note) return;
@@ -11050,6 +11106,12 @@ function openExistingSeduta(workout, clientId) {
 
       <!-- FOLLOW-UP BANNER -->
       <div id="sb-fu-banner-wrap" style="margin-bottom:12px;"></div>
+      <div id="sb-banner-feedback" style="display:none;margin-bottom:12px;">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:9px;">💡 Il suggerimento era corretto?</div>
+          <div id="sb-bf-buttons" style="display:flex;gap:7px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
 
       <div id="sb-dolori-section" style="display:${tipoSeduta==='dolori'?'block':'none'};background:var(--surface);border:1px solid rgba(255,71,87,0.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;">
         <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;">🔴 Dolori inizio seduta</div>
@@ -11305,6 +11367,12 @@ function newSedutaBuilder(prefillDate) {
 
       <!-- FOLLOW-UP BANNER -->
       <div id="sb-fu-banner-wrap" style="margin-bottom:12px;"></div>
+      <div id="sb-banner-feedback" style="display:none;margin-bottom:12px;">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:9px;">💡 Il suggerimento era corretto?</div>
+          <div id="sb-bf-buttons" style="display:flex;gap:7px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
 
       <!-- 1. Dolori INIZIO — solo se dolori -->
       <div id="sb-dolori-section" style="display:none;background:var(--surface);border:1px solid rgba(255,71,87,0.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;">
@@ -11572,6 +11640,13 @@ function saveSedutaBuilder() {
       mood: existIdx >= 0 ? (existingNotes[existIdx].mood || '') : '',
       text: notes.trim()
     };
+
+    // Banner feedback loop
+    if (_wuCurrentBannerAlert) {
+      autoNote.bannerAlert = { tipo: _wuCurrentBannerAlert.tipo, testo: _wuCurrentBannerAlert.testo };
+      const activeBtn = document.querySelector('#sb-bf-buttons [data-bf-value][data-active="1"]');
+      if (activeBtn) autoNote.bannerFeedback = activeBtn.dataset.bfValue;
+    }
     if (existIdx >= 0) {
       // Se stiamo modificando una seduta esistente, forza sempre il testo aggiornato
       if (!_editingWasExisting) {
@@ -12941,17 +13016,23 @@ async function sbLoadFollowupBanner(clientId) {
     bEmoji='🔴'; bTitle='Attenzione';
     bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : ''}`;
     bSugg='<strong>Riduci il carico oggi.</strong> Trend negativo — considera una seduta di recupero attivo o deload.';
+    _wuCurrentBannerAlert = { tipo: 'attenzione', testo: 'Riduci il carico oggi' };
   } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
     bColor='#e65100'; bBg='#fffdf0'; bBorder='#ffe082';
     bEmoji='⚠️'; bTitle='Monitorare';
     bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : ''}`;
     bSugg='<strong>Mantieni il carico della scorsa seduta.</strong> Energia in calo — allarga il warm-up e verifica come risponde.';
+    _wuCurrentBannerAlert = { tipo: 'monitorare', testo: 'Mantieni il carico, non aumentare' };
   } else {
     bColor='#2e7d32'; bBg='#f1f8f2'; bBorder='#a5d6a7';
     bEmoji='🟢'; bTitle='In forma';
     bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
     bSugg='<strong>Buon momento per progredire.</strong> Energia e sonno stabili — puoi aumentare carico o volume.';
+    _wuCurrentBannerAlert = { tipo: 'progressione', testo: 'Energia ok, considera progressione' };
   }
+
+  // Render feedback buttons
+  _sbRenderBannerFeedback(clientId);
 
   // Last seduta difficulty
   const lastPost = [...docs].reverse().find(d => d.tipo === 'post_seduta');
