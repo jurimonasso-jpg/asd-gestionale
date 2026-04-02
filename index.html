@@ -6151,6 +6151,7 @@ function _openUnifiedNote(clientId, workoutId, forceNoteId, prefillPain) {
   _snPainStart   = {};
   _snPainEnd     = {};
   _snStatoMap    = {};
+  _wuCurrentBannerAlert = null; // evita che note vecchie ereditino il banner corrente
 
   const c = clients.find(cl => cl.id == cid);
 
@@ -6246,7 +6247,16 @@ function _snRenderBannerFeedback(existingFeedback) {
   const btnsEl = document.getElementById('sn-bf-buttons');
   if (!block || !btnsEl) return;
 
-  if (!_wuCurrentBannerAlert) {
+  // Recupera il bannerAlert dalla nota esistente se _wuCurrentBannerAlert è null
+  // (es. nota vecchia aperta direttamente dal profilo)
+  const noteId = _editingNoteId;
+  let bannerData = _wuCurrentBannerAlert;
+  if (!bannerData && noteId) {
+    const savedNote = getSessionNotes(_sessionNoteClientId).find(n => n.id === noteId);
+    if (savedNote?.bannerAlert) bannerData = savedNote.bannerAlert;
+  }
+
+  if (!bannerData) {
     block.style.display = 'none';
     return;
   }
@@ -6254,7 +6264,7 @@ function _snRenderBannerFeedback(existingFeedback) {
   block.style.display = '';
   btnsEl.innerHTML = '';
 
-  const tipo = _wuCurrentBannerAlert.tipo;
+  const tipo = bannerData.tipo;
   let opts = [];
 
   if (tipo === 'attenzione' || tipo === 'monitorare') {
