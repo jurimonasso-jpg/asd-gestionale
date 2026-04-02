@@ -4197,6 +4197,25 @@ function _buildBalanceCatMap() {
 }
 _buildBalanceCatMap();
 
+function _migraCategoriePregresse() {
+  if (localStorage.getItem('asd_migration_categoria_done')) return;
+  const ws = JSON.parse(localStorage.getItem('asd_workouts') || '[]');
+  let changed = false;
+  ws.forEach(workout => {
+    (workout.blocchi || []).forEach(blocco => {
+      (blocco.esercizi || []).forEach(ex => {
+        if (!ex.categoria) {
+          const cat = Object.keys(EXERCISES).find(c => EXERCISES[c]?.items?.includes(ex.nome));
+          if (cat) { ex.categoria = cat; changed = true; }
+        }
+      });
+    });
+  });
+  if (changed) localStorage.setItem('asd_workouts', JSON.stringify(ws));
+  localStorage.setItem('asd_migration_categoria_done', '1');
+}
+_migraCategoriePregresse();
+
 function _classifyExercise(nome) {
   if (!nome) return null;
   const low = nome.toLowerCase();
@@ -7124,8 +7143,9 @@ function confirmPickedExercises() {
   if (!exPickerTarget || !_pickedExercises.length) return;
   const { bi } = exPickerTarget;
   _pickedExercises.forEach(nome => {
+    const _catForEx = Object.keys(EXERCISES).find(cat => EXERCISES[cat]?.items?.includes(nome));
     schedaBlocchi[bi].esercizi.push({
-      nome, stimolo: '', serie: '', reps: '', pausa: '', noteEx: '', prog: [{},{},{},{}]
+      nome, categoria: _catForEx || '', stimolo: '', serie: '', reps: '', pausa: '', noteEx: '', prog: [{},{},{},{}]
     });
   });
   _pickedExercises = [];
