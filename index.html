@@ -4200,13 +4200,16 @@ _buildBalanceCatMap();
 function _migraCategoriePregresse() {
   if (localStorage.getItem('asd_migration_categoria_done')) return;
   const ws = JSON.parse(localStorage.getItem('asd_workouts') || '[]');
+  const customCatalog = JSON.parse(localStorage.getItem('asd_custom_exercises') || '[]');
   let changed = false;
   ws.forEach(workout => {
     (workout.blocchi || []).forEach(blocco => {
       (blocco.esercizi || []).forEach(ex => {
         if (!ex.categoria) {
           const cat = Object.keys(EXERCISES).find(c => EXERCISES[c]?.items?.includes(ex.nome));
-          if (cat) { ex.categoria = cat; changed = true; }
+          if (cat) { ex.categoria = cat; changed = true; return; }
+          const customEntry = customCatalog.find(c => c.nome === ex.nome);
+          if (customEntry?.cat) { ex.categoria = customEntry.cat; changed = true; }
         }
       });
     });
