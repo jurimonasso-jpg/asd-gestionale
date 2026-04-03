@@ -12384,63 +12384,73 @@ async function renderFollowUpAlerts() {
   const alertBanner = document.getElementById('fu-alert-banner');
   if (!alertBanner) return;
 
-  // Serve Firebase
-  if (!window._db || !window._fsCollection || !window._fsDocs || !window._fsQuery) {
-    alertBanner.style.display = 'none';
-    return;
-  }
-
   const fuClients = clients.filter(c => !c.sonoIo && c.followUpEnabled);
   if (!fuClients.length) { alertBanner.style.display = 'none'; return; }
 
-  // Finestra temporale: ultimi 5 giorni (abbastanza per non perdere nulla)
+  // Finestra temporale: ultimi 7 giorni
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 5);
+  cutoff.setDate(cutoff.getDate() - 7);
   const cutoffStr = cutoff.toISOString().split('T')[0];
 
   let allAlerts = []; // { priority, client, doc, signals, docId }
 
-  try {
-    await Promise.all(fuClients.map(async c => {
-      try {
-        const q = window._fsQuery(
-          window._fsCollection(window._db, 'followups'),
-          window._fsWhere('clientId', '==', String(c.id)),
-          window._fsOrderBy('timestamp', 'desc')
-        );
-        const snap = await window._fsDocs(q);
-        const docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
+  // ── Leggi da localStorage (fonte primaria) ──────────────────────────
+  fuClients.forEach(c => {
+    const lsKey = 'followup_notes_' + c.id;
+    const lsDocs = JSON.parse(localStorage.getItem(lsKey) || '[]');
+    const clientWorkouts = (JSON.parse(localStorage.getItem('asd_workouts') || '[]'))
+      .filter(w => String(w.clientId) === String(c.id))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const lastWorkout = clientWorkouts[0] || null;
 
-        // Considera solo i doc recenti non ancora letti
-        const recent = docs.filter(d => {
-          const dateStr = d.date || (d.timestamp?.toDate?.()?.toISOString().slice(0,10)) || '';
-          return dateStr >= cutoffStr;
-        });
+    lsDocs
+      .filter(d => (d.date || '') >= cutoffStr)
+      .forEach(doc => {
+        const docId = doc.id || ('ls_' + c.id + '_' + (doc.date || ''));
+        if (localStorage.getItem(_fuAlertReadKey(c.id, docId))) return;
+        const analysis = _analyzeFollowup(doc, lastWorkout);
+        if (!analysis) return;
+        allAlerts.push({ priority: analysis.priority, signals: analysis.signals, client: c, doc, docId });
+      });
+  });
 
-        for (const doc of recent) {
-          const docId = doc._docId;
-          if (localStorage.getItem(_fuAlertReadKey(c.id, docId))) continue; // già letto
+  // ── Leggi anche da Firebase se disponibile (integra senza duplicati) ─
+  if (window._db && window._fsCollection && window._fsDocs && window._fsQuery) {
+    try {
+      await Promise.all(fuClients.map(async c => {
+        try {
+          const q = window._fsQuery(
+            window._fsCollection(window._db, 'followups'),
+            window._fsWhere('clientId', '==', String(c.id)),
+            window._fsOrderBy('timestamp', 'desc')
+          );
+          const snap = await window._fsDocs(q);
+          const docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
 
-          // Trova l'ultima seduta del cliente per confronto delta
           const clientWorkouts = (JSON.parse(localStorage.getItem('asd_workouts') || '[]'))
             .filter(w => String(w.clientId) === String(c.id))
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
           const lastWorkout = clientWorkouts[0] || null;
 
-          const analysis = _analyzeFollowup(doc, lastWorkout);
-          if (!analysis) continue;
-
-          allAlerts.push({
-            priority: analysis.priority,
-            signals:  analysis.signals,
-            client:   c,
-            doc,
-            docId
-          });
-        }
-      } catch(_) {}
-    }));
-  } catch(_) {}
+          docs
+            .filter(d => {
+              const dateStr = d.date || (d.timestamp?.toDate?.()?.toISOString().slice(0,10)) || '';
+              return dateStr >= cutoffStr;
+            })
+            .forEach(doc => {
+              const docId = doc._docId;
+              if (localStorage.getItem(_fuAlertReadKey(c.id, docId))) return;
+              // Evita duplicati con quelli già trovati in localStorage
+              const alreadyIn = allAlerts.some(a => String(a.client.id) === String(c.id) && a.doc.date === doc.date && a.doc.tipo === doc.tipo);
+              if (alreadyIn) return;
+              const analysis = _analyzeFollowup(doc, lastWorkout);
+              if (!analysis) return;
+              allAlerts.push({ priority: analysis.priority, signals: analysis.signals, client: c, doc, docId });
+            });
+        } catch(_) {}
+      }));
+    } catch(_) {}
+  }
 
   if (!allAlerts.length) { alertBanner.style.display = 'none'; return; }
 
