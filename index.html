@@ -10177,6 +10177,8 @@ function renderDashboard() {
   renderFollowUpBanner();
   renderFollowUpAlerts();
   renderPainUpdateAlert();
+  // Re-render dopo 2s per dare tempo a Firebase di rispondere
+  setTimeout(() => { renderFollowUpAlerts(); }, 2000);
 
   // ── AGENDA OGGI nella dashboard ─────────────────────────────────────────
   const agendaOggiEl = document.getElementById('dash-agenda-oggi');
@@ -12394,27 +12396,7 @@ async function renderFollowUpAlerts() {
 
   let allAlerts = []; // { priority, client, doc, signals, docId }
 
-  // ── Leggi da localStorage (fonte primaria) ──────────────────────────
-  fuClients.forEach(c => {
-    const lsKey = 'followup_notes_' + c.id;
-    const lsDocs = JSON.parse(localStorage.getItem(lsKey) || '[]');
-    const clientWorkouts = (JSON.parse(localStorage.getItem('asd_workouts') || '[]'))
-      .filter(w => String(w.clientId) === String(c.id))
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    const lastWorkout = clientWorkouts[0] || null;
-
-    lsDocs
-      .filter(d => (d.date || '') >= cutoffStr)
-      .forEach(doc => {
-        const docId = doc.id || ('ls_' + c.id + '_' + (doc.date || ''));
-        if (localStorage.getItem(_fuAlertReadKey(c.id, docId))) return;
-        const analysis = _analyzeFollowup(doc, lastWorkout);
-        if (!analysis) return;
-        allAlerts.push({ priority: analysis.priority, signals: analysis.signals, client: c, doc, docId });
-      });
-  });
-
-  // ── Leggi anche da Firebase se disponibile (integra senza duplicati) ─
+  // ── Fonte primaria: Firebase ─────────────────────────────────────────
   if (window._db && window._fsCollection && window._fsDocs && window._fsQuery) {
     try {
       await Promise.all(fuClients.map(async c => {
@@ -12427,7 +12409,7 @@ async function renderFollowUpAlerts() {
           const snap = await window._fsDocs(q);
           const docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
 
-          const clientWorkouts = (JSON.parse(localStorage.getItem('asd_workouts') || '[]'))
+          const clientWorkouts = workouts
             .filter(w => String(w.clientId) === String(c.id))
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
           const lastWorkout = clientWorkouts[0] || null;
@@ -12440,9 +12422,6 @@ async function renderFollowUpAlerts() {
             .forEach(doc => {
               const docId = doc._docId;
               if (localStorage.getItem(_fuAlertReadKey(c.id, docId))) return;
-              // Evita duplicati con quelli già trovati in localStorage
-              const alreadyIn = allAlerts.some(a => String(a.client.id) === String(c.id) && a.doc.date === doc.date && a.doc.tipo === doc.tipo);
-              if (alreadyIn) return;
               const analysis = _analyzeFollowup(doc, lastWorkout);
               if (!analysis) return;
               allAlerts.push({ priority: analysis.priority, signals: analysis.signals, client: c, doc, docId });
@@ -12450,6 +12429,27 @@ async function renderFollowUpAlerts() {
         } catch(_) {}
       }));
     } catch(_) {}
+  }
+
+  // ── Fallback: localStorage (se Firebase non disponibile o vuoto) ─────
+  if (!allAlerts.length) {
+    fuClients.forEach(c => {
+      const lsDocs = JSON.parse(localStorage.getItem('followup_notes_' + c.id) || '[]');
+      const clientWorkouts = workouts
+        .filter(w => String(w.clientId) === String(c.id))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const lastWorkout = clientWorkouts[0] || null;
+
+      lsDocs
+        .filter(d => (d.date || '') >= cutoffStr)
+        .forEach(doc => {
+          const docId = doc.id || ('ls_' + c.id + '_' + (doc.date || ''));
+          if (localStorage.getItem(_fuAlertReadKey(c.id, docId))) return;
+          const analysis = _analyzeFollowup(doc, lastWorkout);
+          if (!analysis) return;
+          allAlerts.push({ priority: analysis.priority, signals: analysis.signals, client: c, doc, docId });
+        });
+    });
   }
 
   if (!allAlerts.length) { alertBanner.style.display = 'none'; return; }
