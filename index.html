@@ -12050,17 +12050,23 @@ function _aiGenerateProposta(clientId, client) {
     return true;
   }
 
-  // Esercizi usati nelle ultime 3 sedute → evita ripetizioni, varia espressione del pattern
-  const allDates = [...new Set(Object.values(exHistory).map(h => h.date))].sort().reverse();
-  const last3Dates = new Set(allDates.slice(0, 3));
+  // Esercizi usati nelle ultime 4 sedute → evita ripetizioni, varia espressione del pattern
+  // Fonte: recentSedute (workouts salvati) — fonte reale usata dal PT, non exHistory
   const recentExNames = new Set();
-  Object.entries(exHistory).forEach(([k, d]) => { if (last3Dates.has(d.date)) recentExNames.add(k); });
+  recentSedute.slice(0, 4).forEach(sed => {
+    (sed.blocchi || []).forEach(b => {
+      (b.esercizi || []).forEach(ex => {
+        if (ex.nome) recentExNames.add(ex.nome.trim().toLowerCase());
+      });
+    });
+  });
 
   const usedInSession = new Set();
 
-  // Esercizi TOLLERATI BENE di recente (dallo storico senza note negative)
+  // Esercizi TOLLERATI BENE di recente (sedute 5-8, fuori dalla finestra di rotazione)
+  // Priorità alta in pickEx: esercizi "rodati" ma non fatti nelle ultime 4 sedute
   const tolleratiStoric = new Set();
-  recentSedute.slice(0, 4).forEach(sed => {
+  recentSedute.slice(4, 8).forEach(sed => {
     const n = sessionNotes.find(n => n.date === sed.createdAt?.split('T')[0]);
     const hasProblem = (n?.text || '').match(/⚠️[^|]*(?:compensaz|ginocch|spalla|schiena|dolore)/i);
     if (!hasProblem) {
