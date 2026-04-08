@@ -12706,6 +12706,17 @@ function saveSedutaBuilder() {
     });
   });
 
+  // ── Aggiorna exHistory per il generatore AI (rotazione esercizi) ──────
+  // saveSedutaBuilder è il path principale — senza questo, recentExNames
+  // resta vuoto e il generatore non riesce ad alternare gli esercizi.
+  workout.blocchi.forEach(b => {
+    (b.esercizi || []).forEach(ex => {
+      if (ex.nome) {
+        saveExData(_prCid, ex.nome, ex.serie || '', ex.reps || '', ex.kg || '', '');
+      }
+    });
+  });
+
   // ── Auto-save nota post-seduta se c'è testo nelle note builder ──────────
   if (notes.trim()) {
     const _cid = parseInt(clientId);
