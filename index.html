@@ -9626,64 +9626,81 @@ function generateEvidenceSession(clientId) {
   const coreF1Ex = pick(coreF1Pool, 1);
 
   // ── BLOCCO FASE 2: gambe + parte alta ────────────────────────────────────
-  const blocked = testAnalysis.blockedExercises;
+  const blocked = testAnalysis.blockedExercises; // è sempre un Set
+
+  // Helper: verifica se esercizio è bloccato (blocked è sempre un Set)
+  function isBlocked(e) { return blocked.has(e); }
 
   // Gambe: hinge o squat — dipende da zone critiche
   const gambePool = [
     ...(EXERCISES['Hip Dominant / Glutei']?.items || []),
     ...(EXERCISES['Knee Dominant / Squat']?.items || []),
-  ].filter(e => !blocked.has?.(e) && !blocked.includes?.(e));
-  // Se ginocchio critico, priorità hinge
+  ].filter(e => !isBlocked(e));
+  // Se ginocchio critico, priorità hinge (metti hip dominant in testa)
   if (allCriticalZones.has('knee')) {
-    gambePool.unshift(...(EXERCISES['Hip Dominant / Glutei']?.items || []));
+    gambePool.unshift(...(EXERCISES['Hip Dominant / Glutei']?.items || []).filter(e => !isBlocked(e)));
   }
   const gambeEx = pick(gambePool, 1);
 
-  // Parte alta: pull prima di push (gerarchia evidence-based)
-  const altoPool = [
-    ...(EXERCISES['Pull Verticale']?.items || []),
-    ...(EXERCISES['Pull Orizzontale']?.items || []),
-    ...(EXERCISES['Push Orizzontale']?.items || []),
-    ...(EXERCISES['Push Verticale']?.items || []),
-  ].filter(e => !blocked.has?.(e) && !blocked.includes?.(e));
-  // Escludi spalla se critica
-  const altoPoolFinal = allCriticalZones.has('scapola') || allCriticalZones.has('spalla')
-    ? altoPool.filter(e => !e.toLowerCase().includes('press') && !e.toLowerCase().includes('push'))
-    : altoPool;
-  const altoEx = pick(altoPoolFinal.length ? altoPoolFinal : altoPool, 1);
+  // ── Parte alta F2: distribuzione basata su pattern reali
+  // pushH 36% · pullH 31% · pushV 20% · pullV 13%
+  // Escludi overhead (push verticale) se spalla/scapola critica
+  const hasShoulderIssue = allCriticalZones.has('scapola') || allCriticalZones.has('spalla');
 
-  // ── BLOCCO FASE 3: 2-3 esercizi misti core+gambe+parte alta ─────────────
-  // Alterna pattern: se Fase2 era hinge → Fase3 squat, e viceversa
-  const wasHinge = gambeEx[0] && EXERCISES['Hip Dominant / Glutei']?.items?.includes(gambeEx[0]);
-  const gambeF3Pool = wasHinge
-    ? [...(EXERCISES['Knee Dominant / Squat']?.items || [])].filter(e => !blocked.includes?.(e) && !blocked.has?.(e))
-    : [...(EXERCISES['Hip Dominant / Glutei']?.items || [])].filter(e => !blocked.includes?.(e) && !blocked.has?.(e));
+  // Costruisci pool per ogni pattern
+  const pushHPool = (EXERCISES['Push Orizzontale']?.items || []).filter(e => !isBlocked(e));
+  const pullHPool = (EXERCISES['Pull Orizzontale']?.items || []).filter(e => !isBlocked(e));
+  const pushVPool = hasShoulderIssue ? [] : (EXERCISES['Push Verticale']?.items || []).filter(e => !isBlocked(e));
+  const pullVPool = (EXERCISES['Pull Verticale']?.items || []).filter(e => !isBlocked(e));
 
-  // Parte alta F3: opposta a F2 (se F2 era pull → F3 push, viceversa)
-  const wasPull = altoEx[0] && (
-    EXERCISES['Pull Verticale']?.items?.includes(altoEx[0]) ||
-    EXERCISES['Pull Orizzontale']?.items?.includes(altoEx[0])
-  );
-  const altoF3Pool = wasPull
-    ? [...(EXERCISES['Push Orizzontale']?.items || []), ...(EXERCISES['Push Verticale']?.items || [])]
-    : [...(EXERCISES['Pull Orizzontale']?.items || []), ...(EXERCISES['Pull Verticale']?.items || [])];
+  // Scegli il pattern F2 con probabilità pesate sui dati reali
+  // se spalla compromessa: solo pullH e pushH in proporzione 50/50
+  let f2AltoPattern;
+  if (hasShoulderIssue) {
+    f2AltoPattern = Math.random() < 0.5 ? 'pullH' : 'pushH';
+  } else {
+    const r = Math.random();
+    if (r < 0.36)      f2AltoPattern = 'pushH';
+    else if (r < 0.67) f2AltoPattern = 'pullH';
+    else if (r < 0.87) f2AltoPattern = 'pushV';
+    else               f2AltoPattern = 'pullV';
+  }
+  const f2AltoPoolMap = { pushH: pushHPool, pullH: pullHPool, pushV: pushVPool, pullV: pullVPool };
+  // Fallback al pool non vuoto più vicino
+  const f2PatternOrder = ['pushH','pullH','pushV','pullV'];
+  let f2ChosenPool = f2AltoPoolMap[f2AltoPattern];
+  if (!f2ChosenPool.length) {
+    for (const p of f2PatternOrder) {
+      if (f2AltoPoolMap[p].length) { f2ChosenPool = f2AltoPoolMap[p]; f2AltoPattern = p; break; }
+    }
+  }
+  const altoEx = pick(f2ChosenPool, 1);
+
+  // ── BLOCCO FASE 3: potenza/Rastapower + core, con pull se F2 era push ────
+  // Pattern dai dati: F3 è quasi sempre potenza/Rastapower + core
+  // Se F2 aveva push → F3 può includere pull; se F2 aveva pull → F3 potenza+core
+  const wasF2Push = f2AltoPattern === 'pushH' || f2AltoPattern === 'pushV';
+
+  const potenzaF3Pool = [
+    ...(EXERCISES['Potenza']?.items || []),
+    ...(EXERCISES['🔴 Rastapower']?.items || []),
+    ...(EXERCISES['Cardio']?.items || []),
+  ];
 
   const coreF3Pool = (allCriticalZones.has('colonna') || isPRT)
     ? [...(EXERCISES['Core — Isometria']?.items || [])]
     : [...(EXERCISES['Core — Dinamico']?.items || []), ...(EXERCISES['Core — Isometria']?.items || [])];
 
-  // Mescola i tre pool e prendi 3 esercizi (1 per tipo, nell'ordine: gambe → core → alto)
-  const f3Gambe = pick(gambeF3Pool, 1);
-  const f3Core  = pick(coreF3Pool, 1);
-  const f3Alto  = pick(altoF3Pool, 1);
-  const fase3Exs = [...f3Gambe, ...f3Core, ...f3Alto].filter(Boolean);
+  // Se F2 era push, aggiungi un pull orizzontale in F3 (pattern osservato)
+  const f3Pull = wasF2Push ? pick([...pullHPool], 1) : [];
 
-  // ── NOTE CLINICHE ────────────────────────────────────────────────────────
-  const clinicalNotes = [...new Set([
-    ...testAnalysis.notes,
-    isPRT ? '🧠 PRT attivo — inizia lento, monitora risposta sistema nervioso' : null,
-    painAnalysis.hasPain ? `💢 Dolore attivo in ${painAnalysis.activePain.length} zone — NRS inizio/fine` : null,
-  ].filter(Boolean))];
+  const f3Pot  = pick(potenzaF3Pool, 1);
+  const f3Core = pick(coreF3Pool, 1);
+
+  // Ordine: potenza → core → pull (se presente)
+  const fase3Exs = [...f3Pot, ...f3Core, ...f3Pull].filter(Boolean);
+
+  const clinicalNotes = [];
 
   return {
     client: c,
@@ -9885,11 +9902,6 @@ function openQuickTemplate(clientId) {
     </div>`;
   });
 
-  const notesHtml = session.clinicalNotes.length
-    ? `<div style="margin-bottom:10px;padding:8px 12px;background:rgba(255,212,71,0.06);border:1px solid rgba(255,212,71,0.2);border-radius:8px;">
-        ${session.clinicalNotes.map(n=>`<div style="font-size:11px;color:var(--yellow);font-family:monospace;">⚠ ${n}</div>`).join('')}
-       </div>` : '';
-
   const div = document.createElement('div');
   div.id = 'qt-' + clientId;
   div.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-top:2px solid var(--accent);border-radius:var(--radius);padding:16px 18px;margin-top:8px;';
@@ -9904,7 +9916,6 @@ function openQuickTemplate(clientId) {
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('qt-${clientId}').remove()">✕</button>
       </div>
     </div>
-    ${notesHtml}
     ${blocksHtml}
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px;">
       <button class="btn btn-primary btn-sm" onclick="saveQuickTemplate(${clientId})">✓ Segna completata</button>
@@ -13391,12 +13402,6 @@ function renderSedutaEditable(session, clientId) {
       <button class="btn btn-secondary btn-sm" onclick="generateSeduta()">↺ Rigenera</button>
     </div>`;
 
-  if (session.clinicalNotes.length) {
-    html += `<div style="background:rgba(255,212,71,0.06);border:1px solid rgba(255,212,71,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;">
-      ${session.clinicalNotes.map(n=>`<div style="font-size:11px;color:var(--yellow);font-family:'DM Mono';margin-bottom:2px;">⚠ ${n}</div>`).join('')}
-    </div>`;
-  }
-
   const blockColors = { release:'#e65100', attivazione:'#1565c0', mobilita:'#00838f', core:'#c62828', pull:'#2e7d32', push:'#e53935', hinge:'#e65100', knee:'#6a1b9a' };
 
   session.blocks.forEach((block, bi) => {
@@ -13455,12 +13460,6 @@ function renderSedutaEditable(session, clientId) {
           <span>Esercizio</span><span style="text-align:center;">Serie</span><span style="text-align:center;">Reps</span><span style="text-align:center;color:var(--accent);">Kg</span><span></span>
         </div>
         <div id="block-rows-${clientId}-${block.id}">${rows}</div>
-        <div style="margin-top:8px;">
-          <input placeholder="Note tecniche, carico, avvertenze..." id="block-note-${clientId}-${block.id}"
-            style="width:100%;background:transparent;border:none;border-bottom:1px dashed var(--border);color:var(--text3);font-size:11px;font-family:'DM Mono';padding:4px;outline:none;"
-            value="${(block.note||'').replace(/"/g,'&quot;')}"
-            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
-        </div>
       </div>`;
   });
 
