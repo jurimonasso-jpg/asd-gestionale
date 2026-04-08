@@ -1321,6 +1321,7 @@ textarea.form-input {
   transition: background 0.15s;
 }
 .scheda-block-header:hover { background: #ebedf1; }
+.sb-drag-handle { touch-action: none; }
 .sb-drag-handle:hover { color: var(--accent) !important; }
 .scheda-block[draggable] { transition: opacity 0.15s; }
 .scheda-block-title {
@@ -1401,8 +1402,28 @@ textarea.form-input {
   transition: opacity 0.15s;
   line-height: 1;
   flex-shrink: 0;
+  touch-action: none;
 }
 .fase-ex-row:hover .ex-drag-handle { opacity: 1; }
+.sb-drag-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.85;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: rotate(1.5deg);
+}
 .fase-ex-name {
   font-size: 14px;
   font-weight: 800;
@@ -7163,8 +7184,9 @@ function renderBloccoEditor(b, i) {
           onmousedown="event.stopPropagation()"
           ondragstart="_sbDragStart(event,${i})"
           ondragend="_sbDragEnd(event)"
+          ontouchstart="_sbTouchStart(event,${i})"
           title="Trascina per riordinare"
-          style="cursor:grab;padding:4px 6px;color:var(--text3);font-size:16px;line-height:1;user-select:none;">⠿</span>
+          style="cursor:grab;padding:4px 6px;color:var(--text3);font-size:16px;line-height:1;user-select:none;touch-action:none;">⠿</span>
         <button class="btn btn-danger" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();removeBlocco(${i})">✕</button>
         <span style="color:var(--text3);font-size:14px;" id="blocco-chevron-${i}">▾</span>
       </div>
@@ -7187,25 +7209,37 @@ function toggleBlocco(i) {
   chev.textContent = isOpen ? '▸' : '▾';
 }
 
-// ── Drag & Drop blocchi seduta ────────────────────────────────────
-let _sbDragIdx = null;
+// ══════════════════════════════════════════════════════════════════
+// Drag & Drop BLOCCHI + ESERCIZI — mouse & touch unificati
+// ══════════════════════════════════════════════════════════════════
 
-function _sbDragStart(event, idx) {
-  _sbDragIdx = idx;
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('text/plain', String(idx));
-  // Stile visivo sul blocco trascinato
-  setTimeout(() => {
-    const el = document.getElementById('blocco-' + idx);
-    if (el) el.style.opacity = '0.45';
-  }, 0);
+// ── stato condiviso ───────────────────────────────────────────────
+let _dnd = {
+  mode: null,        // 'block' | 'ex'
+  bi: null,          // block index (drag source)
+  ei: null,          // ex index (drag source, solo mode=ex)
+  ghost: null,       // elemento ghost touch
+  lastTarget: null   // ultimo target evidenziato
+};
+
+// ── ghost touch ───────────────────────────────────────────────────
+function _dndCreateGhost(label) {
+  const g = document.createElement('div');
+  g.className = 'sb-drag-ghost';
+  g.textContent = label;
+  document.body.appendChild(g);
+  return g;
+}
+function _dndMoveGhost(x, y) {
+  if (!_dnd.ghost) return;
+  _dnd.ghost.style.left = (x + 16) + 'px';
+  _dnd.ghost.style.top  = (y - 20) + 'px';
+}
+function _dndRemoveGhost() {
+  if (_dnd.ghost) { _dnd.ghost.remove(); _dnd.ghost = null; }
 }
 
-function _sbDragEnd(event) {
-  _sbCleanDragStyles();
-  _sbDragIdx = null;
-}
-
+// ── clean stili ───────────────────────────────────────────────────
 function _sbCleanDragStyles() {
   document.querySelectorAll('.scheda-block').forEach(el => {
     el.style.opacity = '';
@@ -7213,41 +7247,113 @@ function _sbCleanDragStyles() {
     el.style.borderBottom = '';
   });
 }
+function _sbExCleanStyles(bi) {
+  if (bi === null || bi === undefined) {
+    document.querySelectorAll('.fase-ex-row').forEach(el => {
+      el.classList.remove('ex-dragging','ex-drag-over-top','ex-drag-over-bot');
+    });
+    return;
+  }
+  const blk = schedaBlocchi[bi];
+  if (!blk) return;
+  blk.esercizi.forEach((_, j) => {
+    const el = document.getElementById('ex-' + bi + '-' + j);
+    if (el) el.classList.remove('ex-dragging','ex-drag-over-top','ex-drag-over-bot');
+  });
+}
 
+// ══ BLOCCHI — mouse ══════════════════════════════════════════════
+function _sbDragStart(event, idx) {
+  _dnd.mode = 'block'; _dnd.bi = idx;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', String(idx));
+  setTimeout(() => {
+    const el = document.getElementById('blocco-' + idx);
+    if (el) el.style.opacity = '0.45';
+  }, 0);
+}
+function _sbDragEnd(event) {
+  _sbCleanDragStyles();
+  _dnd.mode = null; _dnd.bi = null;
+}
 function _sbDragOver(event, targetIdx) {
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
-  if (_sbDragIdx === null || _sbDragIdx === targetIdx) return;
+  if (_dnd.bi === null || _dnd.bi === targetIdx) return;
   _sbCleanDragStyles();
-  const dragged = document.getElementById('blocco-' + _sbDragIdx);
+  const dragged = document.getElementById('blocco-' + _dnd.bi);
   if (dragged) dragged.style.opacity = '0.45';
   const targetEl = document.getElementById('blocco-' + targetIdx);
   if (targetEl) {
-    if (targetIdx > _sbDragIdx) targetEl.style.borderBottom = '2px solid var(--accent)';
+    if (targetIdx > _dnd.bi) targetEl.style.borderBottom = '2px solid var(--accent)';
     else targetEl.style.borderTop = '2px solid var(--accent)';
   }
 }
-
 function _sbDrop(event, targetIdx) {
   event.preventDefault();
   _sbCleanDragStyles();
-  if (_sbDragIdx === null || _sbDragIdx === targetIdx) { _sbDragIdx = null; return; }
-  const arr = schedaBlocchi;
-  const moved = arr.splice(_sbDragIdx, 1)[0];
-  const adjustedTarget = _sbDragIdx < targetIdx ? targetIdx - 1 : targetIdx;
-  arr.splice(adjustedTarget, 0, moved);
-  _sbDragIdx = null;
-  // Aggiorna entrambi i container (seduta builder + modal schede)
+  if (_dnd.bi === null || _dnd.bi === targetIdx) { _dnd.bi = null; return; }
+  const moved = schedaBlocchi.splice(_dnd.bi, 1)[0];
+  const adj = _dnd.bi < targetIdx ? targetIdx - 1 : targetIdx;
+  schedaBlocchi.splice(adj, 0, moved);
+  _dnd.mode = null; _dnd.bi = null;
   renderSchedaBlocchi();
 }
-// ──────────────────────────────────────────────────────────────────
 
-// ── Drag & Drop esercizi dentro un blocco ────────────────────────
-let _sbExDragBi = null, _sbExDragEi = null;
+// ══ BLOCCHI — touch ══════════════════════════════════════════════
+function _sbTouchStart(event, idx) {
+  event.stopPropagation();
+  _dnd.mode = 'block'; _dnd.bi = idx;
+  const el = document.getElementById('blocco-' + idx);
+  if (el) el.style.opacity = '0.45';
+  const meta = BLOCK_META[schedaBlocchi[idx].tipo] || {};
+  _dnd.ghost = _dndCreateGhost((meta.icon || '') + ' ' + (meta.label || 'Blocco ' + idx));
+  const t = event.touches[0];
+  _dndMoveGhost(t.clientX, t.clientY);
+}
+function _sbTouchMove(event) {
+  if (_dnd.mode !== 'block') return;
+  event.preventDefault();
+  const t = event.touches[0];
+  _dndMoveGhost(t.clientX, t.clientY);
+  // trova target sotto il dito
+  _dnd.ghost.style.display = 'none';
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  _dnd.ghost.style.display = '';
+  _sbCleanDragStyles();
+  const dragged = document.getElementById('blocco-' + _dnd.bi);
+  if (dragged) dragged.style.opacity = '0.45';
+  const row = el ? el.closest('.scheda-block') : null;
+  if (row) {
+    const id = row.id; // blocco-N
+    const tidx = parseInt(id.replace('blocco-',''));
+    if (!isNaN(tidx) && tidx !== _dnd.bi) {
+      if (tidx > _dnd.bi) row.style.borderBottom = '2px solid var(--accent)';
+      else row.style.borderTop = '2px solid var(--accent)';
+      _dnd.lastTarget = tidx;
+    }
+  } else {
+    _dnd.lastTarget = null;
+  }
+}
+function _sbTouchEnd(event) {
+  if (_dnd.mode !== 'block') return;
+  _dndRemoveGhost();
+  _sbCleanDragStyles();
+  const targetIdx = _dnd.lastTarget;
+  const srcIdx = _dnd.bi;
+  _dnd.mode = null; _dnd.bi = null; _dnd.lastTarget = null;
+  if (targetIdx !== null && targetIdx !== srcIdx) {
+    const moved = schedaBlocchi.splice(srcIdx, 1)[0];
+    const adj = srcIdx < targetIdx ? targetIdx - 1 : targetIdx;
+    schedaBlocchi.splice(adj, 0, moved);
+    renderSchedaBlocchi();
+  }
+}
 
+// ══ ESERCIZI — mouse ═════════════════════════════════════════════
 function _sbExDragStart(event, bi, ei) {
-  _sbExDragBi = bi;
-  _sbExDragEi = ei;
+  _dnd.mode = 'ex'; _dnd.bi = bi; _dnd.ei = ei;
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', bi + ',' + ei);
   setTimeout(() => {
@@ -7255,61 +7361,112 @@ function _sbExDragStart(event, bi, ei) {
     if (el) el.classList.add('ex-dragging');
   }, 0);
 }
-
 function _sbExDragEnd(event, bi, ei) {
   _sbExCleanStyles(bi);
-  _sbExDragBi = null;
-  _sbExDragEi = null;
+  _dnd.mode = null; _dnd.bi = null; _dnd.ei = null;
 }
-
-function _sbExCleanStyles(bi) {
-  const blk = schedaBlocchi[bi];
-  if (!blk) return;
-  blk.esercizi.forEach((_, j) => {
-    const el = document.getElementById('ex-' + bi + '-' + j);
-    if (el) {
-      el.classList.remove('ex-dragging','ex-drag-over-top','ex-drag-over-bot');
-    }
-  });
-}
-
 function _sbExDragOver(event, bi, ei) {
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
-  if (_sbExDragBi === null || (_sbExDragBi === bi && _sbExDragEi === ei)) return;
-  if (_sbExDragBi !== bi) return; // solo dentro lo stesso blocco
+  if (_dnd.ei === null || (_dnd.bi === bi && _dnd.ei === ei)) return;
+  if (_dnd.bi !== bi) return;
   _sbExCleanStyles(bi);
-  const dragging = document.getElementById('ex-' + _sbExDragBi + '-' + _sbExDragEi);
+  const dragging = document.getElementById('ex-' + _dnd.bi + '-' + _dnd.ei);
   if (dragging) dragging.classList.add('ex-dragging');
   const targetEl = document.getElementById('ex-' + bi + '-' + ei);
   if (targetEl) {
-    if (ei > _sbExDragEi) targetEl.classList.add('ex-drag-over-bot');
+    if (ei > _dnd.ei) targetEl.classList.add('ex-drag-over-bot');
     else targetEl.classList.add('ex-drag-over-top');
   }
 }
-
 function _sbExDragLeave(event, bi, ei) {
   const el = document.getElementById('ex-' + bi + '-' + ei);
-  if (el) {
-    el.classList.remove('ex-drag-over-top','ex-drag-over-bot');
-  }
+  if (el) el.classList.remove('ex-drag-over-top','ex-drag-over-bot');
 }
-
 function _sbExDrop(event, bi, ei) {
   event.preventDefault();
-  if (_sbExDragBi === null || _sbExDragBi !== bi || _sbExDragEi === ei) {
+  if (_dnd.ei === null || _dnd.bi !== bi || _dnd.ei === ei) {
     _sbExCleanStyles(bi);
-    _sbExDragBi = null; _sbExDragEi = null;
+    _dnd.mode = null; _dnd.bi = null; _dnd.ei = null;
     return;
   }
   const arr = schedaBlocchi[bi].esercizi;
-  const moved = arr.splice(_sbExDragEi, 1)[0];
-  const adjustedTarget = _sbExDragEi < ei ? ei - 1 : ei;
-  arr.splice(adjustedTarget, 0, moved);
-  _sbExDragBi = null; _sbExDragEi = null;
+  const moved = arr.splice(_dnd.ei, 1)[0];
+  const adj = _dnd.ei < ei ? ei - 1 : ei;
+  arr.splice(adj, 0, moved);
+  _dnd.mode = null; _dnd.bi = null; _dnd.ei = null;
   renderSchedaBlocchi();
 }
-// ─────────────────────────────────────────────────────────────────
+
+// ══ ESERCIZI — touch ═════════════════════════════════════════════
+function _sbExTouchStart(event, bi, ei) {
+  event.stopPropagation();
+  _dnd.mode = 'ex'; _dnd.bi = bi; _dnd.ei = ei; _dnd.lastTarget = null;
+  const el = document.getElementById('ex-' + bi + '-' + ei);
+  if (el) el.classList.add('ex-dragging');
+  const exName = schedaBlocchi[bi]?.esercizi[ei]?.nome || 'Esercizio';
+  _dnd.ghost = _dndCreateGhost(exName);
+  const t = event.touches[0];
+  _dndMoveGhost(t.clientX, t.clientY);
+}
+function _sbExTouchMove(event) {
+  if (_dnd.mode !== 'ex') return;
+  event.preventDefault();
+  const t = event.touches[0];
+  _dndMoveGhost(t.clientX, t.clientY);
+  _dnd.ghost.style.display = 'none';
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  _dnd.ghost.style.display = '';
+  _sbExCleanStyles(_dnd.bi);
+  const srcEl = document.getElementById('ex-' + _dnd.bi + '-' + _dnd.ei);
+  if (srcEl) srcEl.classList.add('ex-dragging');
+  const row = el ? el.closest('.fase-ex-row') : null;
+  if (row) {
+    const id = row.id; // ex-BI-EI
+    const parts = id.replace('ex-','').split('-');
+    const tbi = parseInt(parts[0]), tei = parseInt(parts[1]);
+    if (!isNaN(tbi) && !isNaN(tei) && tbi === _dnd.bi && tei !== _dnd.ei) {
+      if (tei > _dnd.ei) row.classList.add('ex-drag-over-bot');
+      else row.classList.add('ex-drag-over-top');
+      _dnd.lastTarget = tei;
+    } else {
+      _dnd.lastTarget = null;
+    }
+  } else {
+    _dnd.lastTarget = null;
+  }
+}
+function _sbExTouchEnd(event) {
+  if (_dnd.mode !== 'ex') return;
+  _dndRemoveGhost();
+  const srcBi = _dnd.bi, srcEi = _dnd.ei, targetEi = _dnd.lastTarget;
+  _sbExCleanStyles(srcBi);
+  _dnd.mode = null; _dnd.bi = null; _dnd.ei = null; _dnd.lastTarget = null;
+  if (targetEi !== null && targetEi !== srcEi) {
+    const arr = schedaBlocchi[srcBi].esercizi;
+    const moved = arr.splice(srcEi, 1)[0];
+    const adj = srcEi < targetEi ? targetEi - 1 : targetEi;
+    arr.splice(adj, 0, moved);
+    renderSchedaBlocchi();
+  }
+}
+
+// ── listener touch globali (delegati su document) ─────────────────
+document.addEventListener('touchmove', function(e) {
+  if (_dnd.mode === 'block') _sbTouchMove(e);
+  else if (_dnd.mode === 'ex') _sbExTouchMove(e);
+}, { passive: false });
+document.addEventListener('touchend', function(e) {
+  if (_dnd.mode === 'block') _sbTouchEnd(e);
+  else if (_dnd.mode === 'ex') _sbExTouchEnd(e);
+});
+document.addEventListener('touchcancel', function() {
+  _dndRemoveGhost();
+  _sbCleanDragStyles();
+  _sbExCleanStyles(_dnd.bi);
+  _dnd = { mode: null, bi: null, ei: null, ghost: null, lastTarget: null };
+});
+// ══════════════════════════════════════════════════════════════════
 
 function renderEsercizioEditor(ex, bi, ei) {
   const clientId = document.getElementById('seduta-client-select')?.value || '';
@@ -7344,6 +7501,7 @@ function renderEsercizioEditor(ex, bi, ei) {
         <span class="ex-drag-handle" draggable="true"
           ondragstart="_sbExDragStart(event,${bi},${ei})"
           ondragend="_sbExDragEnd(event,${bi},${ei})"
+          ontouchstart="_sbExTouchStart(event,${bi},${ei})"
           title="Trascina per riordinare">⠿</span>
         <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ex.nome}</span>
       </div>
