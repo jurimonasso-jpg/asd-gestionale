@@ -9626,81 +9626,64 @@ function generateEvidenceSession(clientId) {
   const coreF1Ex = pick(coreF1Pool, 1);
 
   // ── BLOCCO FASE 2: gambe + parte alta ────────────────────────────────────
-  const blocked = testAnalysis.blockedExercises; // è sempre un Set
-
-  // Helper: verifica se esercizio è bloccato (blocked è sempre un Set)
-  function isBlocked(e) { return blocked.has(e); }
+  const blocked = testAnalysis.blockedExercises;
 
   // Gambe: hinge o squat — dipende da zone critiche
   const gambePool = [
     ...(EXERCISES['Hip Dominant / Glutei']?.items || []),
     ...(EXERCISES['Knee Dominant / Squat']?.items || []),
-  ].filter(e => !isBlocked(e));
-  // Se ginocchio critico, priorità hinge (metti hip dominant in testa)
+  ].filter(e => !blocked.has?.(e) && !blocked.includes?.(e));
+  // Se ginocchio critico, priorità hinge
   if (allCriticalZones.has('knee')) {
-    gambePool.unshift(...(EXERCISES['Hip Dominant / Glutei']?.items || []).filter(e => !isBlocked(e)));
+    gambePool.unshift(...(EXERCISES['Hip Dominant / Glutei']?.items || []));
   }
   const gambeEx = pick(gambePool, 1);
 
-  // ── Parte alta F2: distribuzione basata su pattern reali
-  // pushH 36% · pullH 31% · pushV 20% · pullV 13%
-  // Escludi overhead (push verticale) se spalla/scapola critica
-  const hasShoulderIssue = allCriticalZones.has('scapola') || allCriticalZones.has('spalla');
+  // Parte alta: pull prima di push (gerarchia evidence-based)
+  const altoPool = [
+    ...(EXERCISES['Pull Verticale']?.items || []),
+    ...(EXERCISES['Pull Orizzontale']?.items || []),
+    ...(EXERCISES['Push Orizzontale']?.items || []),
+    ...(EXERCISES['Push Verticale']?.items || []),
+  ].filter(e => !blocked.has?.(e) && !blocked.includes?.(e));
+  // Escludi spalla se critica
+  const altoPoolFinal = allCriticalZones.has('scapola') || allCriticalZones.has('spalla')
+    ? altoPool.filter(e => !e.toLowerCase().includes('press') && !e.toLowerCase().includes('push'))
+    : altoPool;
+  const altoEx = pick(altoPoolFinal.length ? altoPoolFinal : altoPool, 1);
 
-  // Costruisci pool per ogni pattern
-  const pushHPool = (EXERCISES['Push Orizzontale']?.items || []).filter(e => !isBlocked(e));
-  const pullHPool = (EXERCISES['Pull Orizzontale']?.items || []).filter(e => !isBlocked(e));
-  const pushVPool = hasShoulderIssue ? [] : (EXERCISES['Push Verticale']?.items || []).filter(e => !isBlocked(e));
-  const pullVPool = (EXERCISES['Pull Verticale']?.items || []).filter(e => !isBlocked(e));
+  // ── BLOCCO FASE 3: 2-3 esercizi misti core+gambe+parte alta ─────────────
+  // Alterna pattern: se Fase2 era hinge → Fase3 squat, e viceversa
+  const wasHinge = gambeEx[0] && EXERCISES['Hip Dominant / Glutei']?.items?.includes(gambeEx[0]);
+  const gambeF3Pool = wasHinge
+    ? [...(EXERCISES['Knee Dominant / Squat']?.items || [])].filter(e => !blocked.includes?.(e) && !blocked.has?.(e))
+    : [...(EXERCISES['Hip Dominant / Glutei']?.items || [])].filter(e => !blocked.includes?.(e) && !blocked.has?.(e));
 
-  // Scegli il pattern F2 con probabilità pesate sui dati reali
-  // se spalla compromessa: solo pullH e pushH in proporzione 50/50
-  let f2AltoPattern;
-  if (hasShoulderIssue) {
-    f2AltoPattern = Math.random() < 0.5 ? 'pullH' : 'pushH';
-  } else {
-    const r = Math.random();
-    if (r < 0.36)      f2AltoPattern = 'pushH';
-    else if (r < 0.67) f2AltoPattern = 'pullH';
-    else if (r < 0.87) f2AltoPattern = 'pushV';
-    else               f2AltoPattern = 'pullV';
-  }
-  const f2AltoPoolMap = { pushH: pushHPool, pullH: pullHPool, pushV: pushVPool, pullV: pullVPool };
-  // Fallback al pool non vuoto più vicino
-  const f2PatternOrder = ['pushH','pullH','pushV','pullV'];
-  let f2ChosenPool = f2AltoPoolMap[f2AltoPattern];
-  if (!f2ChosenPool.length) {
-    for (const p of f2PatternOrder) {
-      if (f2AltoPoolMap[p].length) { f2ChosenPool = f2AltoPoolMap[p]; f2AltoPattern = p; break; }
-    }
-  }
-  const altoEx = pick(f2ChosenPool, 1);
-
-  // ── BLOCCO FASE 3: potenza/Rastapower + core, con pull se F2 era push ────
-  // Pattern dai dati: F3 è quasi sempre potenza/Rastapower + core
-  // Se F2 aveva push → F3 può includere pull; se F2 aveva pull → F3 potenza+core
-  const wasF2Push = f2AltoPattern === 'pushH' || f2AltoPattern === 'pushV';
-
-  const potenzaF3Pool = [
-    ...(EXERCISES['Potenza']?.items || []),
-    ...(EXERCISES['🔴 Rastapower']?.items || []),
-    ...(EXERCISES['Cardio']?.items || []),
-  ];
+  // Parte alta F3: opposta a F2 (se F2 era pull → F3 push, viceversa)
+  const wasPull = altoEx[0] && (
+    EXERCISES['Pull Verticale']?.items?.includes(altoEx[0]) ||
+    EXERCISES['Pull Orizzontale']?.items?.includes(altoEx[0])
+  );
+  const altoF3Pool = wasPull
+    ? [...(EXERCISES['Push Orizzontale']?.items || []), ...(EXERCISES['Push Verticale']?.items || [])]
+    : [...(EXERCISES['Pull Orizzontale']?.items || []), ...(EXERCISES['Pull Verticale']?.items || [])];
 
   const coreF3Pool = (allCriticalZones.has('colonna') || isPRT)
     ? [...(EXERCISES['Core — Isometria']?.items || [])]
     : [...(EXERCISES['Core — Dinamico']?.items || []), ...(EXERCISES['Core — Isometria']?.items || [])];
 
-  // Se F2 era push, aggiungi un pull orizzontale in F3 (pattern osservato)
-  const f3Pull = wasF2Push ? pick([...pullHPool], 1) : [];
+  // Mescola i tre pool e prendi 3 esercizi (1 per tipo, nell'ordine: gambe → core → alto)
+  const f3Gambe = pick(gambeF3Pool, 1);
+  const f3Core  = pick(coreF3Pool, 1);
+  const f3Alto  = pick(altoF3Pool, 1);
+  const fase3Exs = [...f3Gambe, ...f3Core, ...f3Alto].filter(Boolean);
 
-  const f3Pot  = pick(potenzaF3Pool, 1);
-  const f3Core = pick(coreF3Pool, 1);
-
-  // Ordine: potenza → core → pull (se presente)
-  const fase3Exs = [...f3Pot, ...f3Core, ...f3Pull].filter(Boolean);
-
-  const clinicalNotes = [];
+  // ── NOTE CLINICHE ────────────────────────────────────────────────────────
+  const clinicalNotes = [...new Set([
+    ...testAnalysis.notes,
+    isPRT ? '🧠 PRT attivo — inizia lento, monitora risposta sistema nervioso' : null,
+    painAnalysis.hasPain ? `💢 Dolore attivo in ${painAnalysis.activePain.length} zone — NRS inizio/fine` : null,
+  ].filter(Boolean))];
 
   return {
     client: c,
@@ -9902,6 +9885,11 @@ function openQuickTemplate(clientId) {
     </div>`;
   });
 
+  const notesHtml = session.clinicalNotes.length
+    ? `<div style="margin-bottom:10px;padding:8px 12px;background:rgba(255,212,71,0.06);border:1px solid rgba(255,212,71,0.2);border-radius:8px;">
+        ${session.clinicalNotes.map(n=>`<div style="font-size:11px;color:var(--yellow);font-family:monospace;">⚠ ${n}</div>`).join('')}
+       </div>` : '';
+
   const div = document.createElement('div');
   div.id = 'qt-' + clientId;
   div.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-top:2px solid var(--accent);border-radius:var(--radius);padding:16px 18px;margin-top:8px;';
@@ -9916,6 +9904,7 @@ function openQuickTemplate(clientId) {
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('qt-${clientId}').remove()">✕</button>
       </div>
     </div>
+    ${notesHtml}
     ${blocksHtml}
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:10px;">
       <button class="btn btn-primary btn-sm" onclick="saveQuickTemplate(${clientId})">✓ Segna completata</button>
@@ -12642,23 +12631,28 @@ function _getCatForEx(nome) {
 }
 
 // ── Analizza la struttura tipica delle sedute di un cliente ──────────
-// Restituisce: { tipiPrincipali, nEserciziTarget, bloccoTarget }
+// Restituisce: { tipiPrincipali, nEserciziTarget, nExPerBlocco, bloccoTarget, haMobilita }
 function _aiAnalizzaStruttura(clientId) {
   const sedute = workouts
     .filter(w => w.clientId == clientId && w.categoria === 'seduta')
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     .slice(0, 8);
 
-  if (sedute.length === 0) return { tipiPrincipali: null, nEserciziTarget: 4, bloccoTarget: null };
+  if (sedute.length === 0) return { tipiPrincipali: null, nEserciziTarget: 4, nExPerBlocco: {}, bloccoTarget: null, haMobilita: true };
 
-  // Conta occorrenze di ogni tipo di blocco (esclude mobilita come "struttura principale")
+  // Conta occorrenze di ogni tipo di blocco
   const tipoCount = {};
-  const nEsercizi = [];
+  const nExPerTipo = {}; // { fase1: [2,3,2], fase2: [2,2], ... }
+
   sedute.forEach(s => {
-    const totalEx = (s.blocchi || []).reduce((sum, b) => sum + (b.esercizi || []).length, 0);
-    if (totalEx > 0) nEsercizi.push(totalEx);
     (s.blocchi || []).forEach(b => {
-      tipoCount[b.tipo] = (tipoCount[b.tipo] || 0) + 1;
+      const t = b.tipo;
+      tipoCount[t] = (tipoCount[t] || 0) + 1;
+      const nEx = (b.esercizi || []).length;
+      if (nEx > 0) {
+        if (!nExPerTipo[t]) nExPerTipo[t] = [];
+        nExPerTipo[t].push(nEx);
+      }
     });
   });
 
@@ -12667,27 +12661,29 @@ function _aiAnalizzaStruttura(clientId) {
     .filter(([t]) => t !== 'mobilita')
     .sort((a, b) => b[1] - a[1]);
   const bloccoTarget = tipiOrdinati[0]?.[0] || null;
-  const tipiPrincipali = tipiOrdinati.map(([t]) => t);
 
-  // Media esercizi nelle ultime sedute (solo nel blocco principale, esclude mobilita)
-  const nExBloccoMain = [];
-  sedute.forEach(s => {
-    const b = (s.blocchi || []).find(b => b.tipo === bloccoTarget);
-    if (b) nExBloccoMain.push((b.esercizi || []).length);
-  });
-  const avgExMain = nExBloccoMain.length > 0
-    ? Math.round(nExBloccoMain.reduce((a, b) => a + b, 0) / nExBloccoMain.length)
-    : 4;
+  // Solo blocchi presenti in almeno metà delle sedute sono "struttura tipica"
+  const soglia = Math.ceil(sedute.length * 0.5);
+  const tipiPrincipali = tipiOrdinati
+    .filter(([t, cnt]) => cnt >= soglia)
+    .map(([t]) => t);
+  if (tipiPrincipali.length === 0 && bloccoTarget) tipiPrincipali.push(bloccoTarget);
 
-  // Target: usa la mediana per essere robusto agli outlier
-  const sorted = [...nExBloccoMain].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)] || avgExMain;
+  // Mediana esercizi per tipo di blocco
+  function mediana(arr) {
+    if (!arr || arr.length === 0) return 2;
+    const s = [...arr].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)];
+  }
+  const nExPerBlocco = {};
+  tipiPrincipali.forEach(t => { nExPerBlocco[t] = mediana(nExPerTipo[t]); });
 
   return {
     tipiPrincipali,
-    bloccoTarget,          // tipo di blocco più usato (es. 'fase1', 'workout')
-    nEserciziTarget: median, // numero tipico di esercizi nel blocco principale
-    haMobilita: (tipoCount['mobilita'] || 0) >= Math.ceil(sedute.length * 0.5), // mobilita presente in ≥50% sedute
+    bloccoTarget,
+    nEserciziTarget: nExPerBlocco[bloccoTarget] || 2,
+    nExPerBlocco,
+    haMobilita: (tipoCount['mobilita'] || 0) >= soglia,
   };
 }
 
@@ -12736,32 +12732,7 @@ function _aiApplyProposta(result) {
     const patHtml = patSorted.slice(0, 4)
       .map(p => `<span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${p.l}: <b style="color:var(--text2);">${p.v}</b></span>`).join('  ·  ');
 
-    if (sintesiEl) {
-      sintesiEl.style.display = 'block';
-      sintesiEl.innerHTML = `
-        <div style="background:rgba(255,71,87,0.05);border:1px solid rgba(255,71,87,0.25);border-radius:8px;padding:14px 16px;">
-          <div style="font-family:'DM Mono';font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">✦ AI — Supporto decisionale · seduta con dolori</div>
-          <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:4px;">📍 Quadro attuale</div>
-          <div style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5;">
-            ${painAnalysis.activePain.length > 0 ? painAnalysis.activePain.map(p => `<span style="color:var(--red);">${p.label}</span>`).join(', ') : 'Dolore segnalato in sessione'}
-            ${fuDolore !== null ? ` · Follow-up dolore: <b style="color:var(--red);">${fuDolore}/10</b>` : ''}
-            ${fuTesto ? `<div style="margin-top:4px;font-style:italic;color:var(--text3);">"${fuTesto.substring(0, 100)}${fuTesto.length > 100 ? '…' : ''}"</div>` : ''}
-            ${prossimaNote ? `<div style="margin-top:6px;padding:5px 8px;background:rgba(255,200,0,0.07);border-radius:6px;font-size:11px;color:var(--yellow);">💡 Nota precedente: ${prossimaNote}</div>` : ''}
-          </div>
-          ${fbNote ? `<div style="font-size:11px;margin-bottom:8px;">${fbNote}</div>` : ''}
-          ${tolleratiHtml ? `<div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:5px;">✅ Tollerati bene di recente</div><div style="margin-bottom:10px;line-height:1.8;">${tolleratiHtml}</div>` : ''}
-          ${patHtml ? `<div style="margin-bottom:10px;font-size:11px;">${patHtml}</div>` : ''}
-          ${attenzioniSet.size > 0 ? `<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px;">⚠️ Da note recenti</div><div style="font-size:11px;color:var(--text3);margin-bottom:10px;">${[...attenzioniSet].slice(0,5).join(' · ')}</div>` : ''}
-          ${segnaliContrad.length > 0 ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:8px;">⚡ ${segnaliContrad[0]}</div>` : ''}
-          <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:6px;">💡 3 suggerimenti prudenti</div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.8;">
-            <div>1. Parti da mobilità e attivazione — valuta la risposta prima di caricare</div>
-            <div>2. Usa esercizi già tollerati bene — evita novità oggi</div>
-            <div>3. NRS inizio e fine — se dolore aumenta ≥ 2 punti sull'esercizio, fermati</div>
-          </div>
-          <div style="margin-top:10px;font-size:10px;color:var(--text3);font-family:'DM Mono';">⚠️ Seduta con dolori — i blocchi NON sono stati pre-compilati. Usa i pulsanti manuali qui sotto.</div>
-        </div>`;
-    }
+    if (sintesiEl) sintesiEl.style.display = 'none';
     return;
   }
 
@@ -12776,59 +12747,58 @@ function _aiApplyProposta(result) {
   let blocchiFinali = blocchi;
 
   if (struttura.bloccoTarget) {
-    // 1. Riorganizza i blocchi rispettando la struttura storica del cliente
-    //    Es. se il cliente fa sempre workout, convertiamo il blocco principale in workout
-    const bloccoMainStorico = struttura.bloccoTarget;
-
-    // Raccogli tutti gli esercizi proposti (esclusa mobilita)
-    const tuttiExProsti = [];
-    blocchi.forEach(b => {
-      if (b.tipo !== 'mobilita') {
-        (b.esercizi || []).forEach(ex => tuttiExProsti.push({ ...ex }));
-      }
-    });
-
-    // Adatta al numero target di esercizi del cliente
-    const nTarget = struttura.nEserciziTarget;
-    const exSelezionati = tuttiExProsti.slice(0, Math.max(nTarget, 2));
-
-    // Ricostruisci: mobilita (se il cliente la fa) + blocco principale con esercizi adatti
+    const blocchiStorici = struttura.tipiPrincipali; // es. ['fase1','fase2','fase3']
     blocchiFinali = [];
+
+    // 1. Mobilità (se il cliente la fa tipicamente)
     if (struttura.haMobilita) {
       const mobBlocco = blocchi.find(b => b.tipo === 'mobilita');
       if (mobBlocco) blocchiFinali.push(mobBlocco);
     }
 
-    // Se il cliente usa un unico blocco principale, usa quello
-    if (struttura.tipiPrincipali.length === 1 || bloccoMainStorico === 'workout' || bloccoMainStorico === 'fase1') {
-      const templateBlocco = blocchi.find(b => b.tipo === bloccoMainStorico)
+    // 2. Ricrea ogni blocco storico con il numero corretto di esercizi
+    //    Prende gli esercizi proposti dallo stesso tipo di blocco (se disponibile),
+    //    altrimenti pesca dal pool generale
+    const tuttiExProsti = {}; // { fase1: [...], fase2: [...], fase3: [...] }
+    blocchi.forEach(b => {
+      if (b.tipo !== 'mobilita') tuttiExProsti[b.tipo] = [...(b.esercizi || [])];
+    });
+    // Pool globale di fallback (tutti gli esercizi non-mobilita)
+    const poolGlobale = blocchi
+      .filter(b => b.tipo !== 'mobilita')
+      .flatMap(b => b.esercizi || []);
+    const usatiIdx = new Set();
+
+    blocchiStorici.forEach(tipo => {
+      // Numero target di esercizi per questo blocco (dalla mediana storica)
+      const nTarget = Math.max(struttura.nExPerBlocco[tipo] || 2, 1);
+
+      // Template blocco: usa quello dello stesso tipo se disponibile, altrimenti il primo non-mobilita
+      const templateBlocco = blocchi.find(b => b.tipo === tipo)
         || blocchi.find(b => b.tipo !== 'mobilita');
-      if (templateBlocco) {
-        blocchiFinali.push({
-          ...templateBlocco,
-          tipo: bloccoMainStorico,
-          esercizi: exSelezionati
-        });
-      }
-    } else {
-      // Cliente usa più blocchi — mantieni la struttura proposta ma adatta i conteggi
-      // Distribuisci gli esercizi nei blocchi storici (non-mobilita)
-      const blocchiStorici = struttura.tipiPrincipali;
-      const blocchiProposti = blocchi.filter(b => b.tipo !== 'mobilita');
-      let exIdx = 0;
-      blocchiStorici.forEach((tipo, i) => {
-        const template = blocchiProposti.find(b => b.tipo === tipo) || blocchiProposti[i] || blocchiProposti[0];
-        if (!template) return;
-        // Quota di esercizi per questo blocco
-        const quota = i === blocchiStorici.length - 1
-          ? exSelezionati.slice(exIdx).length
-          : Math.ceil(exSelezionati.length / blocchiStorici.length);
-        const exBlocco = exSelezionati.slice(exIdx, exIdx + quota);
-        exIdx += quota;
-        if (exBlocco.length > 0) {
-          blocchiFinali.push({ ...template, tipo, esercizi: exBlocco });
-        }
+      if (!templateBlocco) return;
+
+      // Esercizi: prima dal pool dello stesso tipo, poi dal globale
+      const candidati = [...(tuttiExProsti[tipo] || [])];
+      poolGlobale.forEach((ex, i) => {
+        if (!usatiIdx.has(i) && !candidati.find(c => c.nome === ex.nome)) candidati.push(ex);
       });
+
+      const exBlocco = candidati.slice(0, nTarget);
+      // Segna come usati nel pool globale
+      exBlocco.forEach(ex => {
+        const idx = poolGlobale.findIndex((e, i) => !usatiIdx.has(i) && e.nome === ex.nome);
+        if (idx >= 0) usatiIdx.add(idx);
+      });
+
+      if (exBlocco.length > 0) {
+        blocchiFinali.push({ ...templateBlocco, tipo, esercizi: exBlocco });
+      }
+    });
+
+    // Se non abbiamo prodotto nulla, usa i blocchi proposti originali
+    if (blocchiFinali.filter(b => b.tipo !== 'mobilita').length === 0) {
+      blocchiFinali = blocchi;
     }
   }
 
@@ -12869,32 +12839,8 @@ function _aiApplyProposta(result) {
       ${check.alertContrad ? `<div style="padding:7px 10px;background:rgba(255,200,0,0.06);border:1px solid rgba(255,200,0,0.2);border-radius:6px;grid-column:1/-1;"><div style="font-size:11px;color:var(--yellow);">⚡ Segnali contrastanti: ${check.alertContrad} — scelta conservativa</div></div>` : ''}
     </div>`;
 
-  if (sintesiEl) {
-    sintesiEl.style.display = 'block';
-    sintesiEl.innerHTML = `
-      <div style="background:${ms.bg};border:1px solid ${ms.border};border-radius:8px;padding:12px 14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="
-          const body=this.nextElementSibling;
-          const arr=this.querySelector('.ai-chev');
-          body.style.display=body.style.display==='none'?'block':'none';
-          arr.textContent=body.style.display==='none'?'▸':'▾';
-        ">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:15px;">${ms.icon}</span>
-            <span style="font-family:'DM Mono';font-size:9px;color:${ms.color};text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">✦ AI — ${ms.label}</span>
-          </div>
-          <span class="ai-chev" style="font-size:11px;color:var(--text3);">▾</span>
-        </div>
-        <div>
-          <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5;">${motivazione}</div>
-          ${strutturaNote}
-          ${prossimaNote ? `<div style="margin-top:7px;padding:6px 10px;background:rgba(255,200,0,0.07);border-radius:6px;font-size:11px;color:var(--yellow);">💡 Dalla seduta precedente: ${prossimaNote}</div>` : ''}
-          ${avvisiCoach && avvisiCoach.length > 0 ? `<div style="margin-top:7px;display:flex;flex-direction:column;gap:4px;">${avvisiCoach.map(a => `<div style="padding:5px 9px;background:rgba(255,152,0,0.07);border:1px solid rgba(255,152,0,0.22);border-radius:6px;font-size:11px;color:var(--yellow);line-height:1.4;">${a}</div>`).join('')}</div>` : ''}
-          ${checkHtml}
-          <div style="margin-top:8px;font-size:10px;color:var(--text3);font-family:'DM Mono';">Bozza modificabile — aggiungi, rimuovi o modifica qualsiasi blocco</div>
-        </div>
-      </div>`;
-  }
+  // Banner AI Progressione rimosso — la logica di generazione blocchi è preservata
+  if (sintesiEl) sintesiEl.style.display = 'none';
 }
 // ============================================================
 
@@ -13402,6 +13348,12 @@ function renderSedutaEditable(session, clientId) {
       <button class="btn btn-secondary btn-sm" onclick="generateSeduta()">↺ Rigenera</button>
     </div>`;
 
+  if (session.clinicalNotes.length) {
+    html += `<div style="background:rgba(255,212,71,0.06);border:1px solid rgba(255,212,71,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+      ${session.clinicalNotes.map(n=>`<div style="font-size:11px;color:var(--yellow);font-family:'DM Mono';margin-bottom:2px;">⚠ ${n}</div>`).join('')}
+    </div>`;
+  }
+
   const blockColors = { release:'#e65100', attivazione:'#1565c0', mobilita:'#00838f', core:'#c62828', pull:'#2e7d32', push:'#e53935', hinge:'#e65100', knee:'#6a1b9a' };
 
   session.blocks.forEach((block, bi) => {
@@ -13460,6 +13412,12 @@ function renderSedutaEditable(session, clientId) {
           <span>Esercizio</span><span style="text-align:center;">Serie</span><span style="text-align:center;">Reps</span><span style="text-align:center;color:var(--accent);">Kg</span><span></span>
         </div>
         <div id="block-rows-${clientId}-${block.id}">${rows}</div>
+        <div style="margin-top:8px;">
+          <input placeholder="Note tecniche, carico, avvertenze..." id="block-note-${clientId}-${block.id}"
+            style="width:100%;background:transparent;border:none;border-bottom:1px dashed var(--border);color:var(--text3);font-size:11px;font-family:'DM Mono';padding:4px;outline:none;"
+            value="${(block.note||'').replace(/"/g,'&quot;')}"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
       </div>`;
   });
 
