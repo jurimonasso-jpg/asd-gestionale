@@ -12242,13 +12242,17 @@ function _aiGenerateProposta(clientId, client) {
   const pushHPool = (EXERCISES['Push Orizzontale']?.items|| []).filter(notBlocked);
   const pushVPool = (!painZones.has('spalla') ? (EXERCISES['Push Verticale']?.items || []) : []).filter(notBlocked);
 
-  // Pattern trascurato: se è pull, prioritizzalo qui; altrimenti ordine standard
-  let altoPool;
-  if (recuperaTrascurato && trascurato.key === 'pullH') altoPool = [...pullHPool, ...pullVPool, ...pushHPool, ...pushVPool];
-  else if (recuperaTrascurato && trascurato.key === 'pullV') altoPool = [...pullVPool, ...pullHPool, ...pushHPool, ...pushVPool];
-  else if (recuperaTrascurato && trascurato.key === 'pushH') altoPool = [...pushHPool, ...pullHPool, ...pullVPool, ...pushVPool];
-  else if (recuperaTrascurato && trascurato.key === 'pushV') altoPool = [...pushVPool, ...pushHPool, ...pullHPool, ...pullVPool];
-  else altoPool = [...pullHPool, ...pullVPool, ...pushHPool, ...pushVPool]; // default: pull > push
+  // Pool alto F2 — default: pull > push (Mike Boyle: pull più sicuro del push come pattern base).
+  // Se c'è un pattern trascurato compatibile con questa fase (non in conflitto con l'alternanza),
+  // lo aggiungiamo in testa come soft-priority — pickEx sceglierà comunque il più fresco/tollerato.
+  // Non sovrascriviamo l'intero pool: è il coach a decidere se seguire il suggerimento.
+  let altoPool = [...pullHPool, ...pullVPool, ...pushHPool, ...pushVPool]; // default: pull > push
+  if (recuperaTrascurato) {
+    const tCatsF2 = trascurato.cats || [];
+    const tPoolF2 = tCatsF2.flatMap(cat => (EXERCISES[cat]?.items || [])).filter(notBlocked);
+    // Soft-priority: inserisci in testa al pool esistente, senza sostituirlo
+    if (tPoolF2.length > 0) altoPool = [...tPoolF2, ...altoPool.filter(e => !tPoolF2.includes(e))];
+  }
 
   const altoEx = pickEx(altoPool, 1);
 
@@ -12273,11 +12277,12 @@ function _aiGenerateProposta(clientId, client) {
   const wasPull = altoEx[0] && [...pullHPool, ...pullVPool].some(e => e.toLowerCase() === altoEx[0]?.toLowerCase());
   let altoF3Pool = wasPull ? [...pushHPool, ...pushVPool] : [...pullHPool, ...pullVPool];
 
-  // Se pattern trascurato non è stato recuperato in F2, recuperalo qui in F3
+  // Pattern trascurato in F3: soft-priority — aggiungi in testa senza sovrascrivere la logica
+  // di alternanza pull/push. Il coach vede l'alert nel check e decide se seguirlo.
   if (recuperaTrascurato) {
     const tCats = trascurato.cats || [];
     const tPool = tCats.flatMap(cat => (EXERCISES[cat]?.items || [])).filter(notBlocked);
-    if (tPool.length > 0) altoF3Pool = [...tPool, ...altoF3Pool];
+    if (tPool.length > 0) altoF3Pool = [...tPool, ...altoF3Pool.filter(e => !tPool.includes(e))];
   }
 
   const coreF3Pool = [
@@ -12347,7 +12352,11 @@ function _aiGenerateProposta(clientId, client) {
   return {
     tipo: 'normale', modalita, motivazione,
     blocchi, prossimaNote, segnaliContrad, avvisiCoach,
-    check: { monitorare, adattare, candidatoProgressione, alertTrasc: alertTrasc && !recuperaTrascurato ? alertTrasc : null, alertContrad: hasSegnaliContrad ? segnaliContrad[0] : null }
+    check: { monitorare, adattare, candidatoProgressione,
+      // alertTrasc sempre visibile: il coach deve sapere se il pattern è trascurato,
+      // indipendentemente dal fatto che il sistema l'abbia già soft-prioritizzato nei pool.
+      alertTrasc: alertTrasc ? alertTrasc + (recuperaTrascurato ? ' — ho dato priorità a questo pattern nei pool, verifica tu' : ' — da recuperare nelle prossime sedute') : null,
+      alertContrad: hasSegnaliContrad ? segnaliContrad[0] : null }
   };
 }
 
