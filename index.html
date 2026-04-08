@@ -1382,12 +1382,27 @@ textarea.form-input {
   padding: 12px 14px;
   margin-bottom: 8px;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow 0.15s, border-color 0.15s, opacity 0.15s;
 }
 .fase-ex-row:focus-within {
   border-color: rgba(229,57,53,0.3);
   box-shadow: 0 0 0 3px rgba(229,57,53,0.06), var(--shadow-sm);
 }
+.fase-ex-row.ex-dragging { opacity: 0.4; }
+.fase-ex-row.ex-drag-over-top { border-top: 2px solid var(--accent); }
+.fase-ex-row.ex-drag-over-bot { border-bottom: 2px solid var(--accent); }
+.ex-drag-handle {
+  cursor: grab;
+  color: var(--text3);
+  font-size: 14px;
+  padding: 2px 4px;
+  user-select: none;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.fase-ex-row:hover .ex-drag-handle { opacity: 1; }
 .fase-ex-name {
   font-size: 14px;
   font-weight: 800;
@@ -7227,6 +7242,75 @@ function _sbDrop(event, targetIdx) {
 }
 // ──────────────────────────────────────────────────────────────────
 
+// ── Drag & Drop esercizi dentro un blocco ────────────────────────
+let _sbExDragBi = null, _sbExDragEi = null;
+
+function _sbExDragStart(event, bi, ei) {
+  _sbExDragBi = bi;
+  _sbExDragEi = ei;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', bi + ',' + ei);
+  setTimeout(() => {
+    const el = document.getElementById('ex-' + bi + '-' + ei);
+    if (el) el.classList.add('ex-dragging');
+  }, 0);
+}
+
+function _sbExDragEnd(event, bi, ei) {
+  _sbExCleanStyles(bi);
+  _sbExDragBi = null;
+  _sbExDragEi = null;
+}
+
+function _sbExCleanStyles(bi) {
+  const blk = schedaBlocchi[bi];
+  if (!blk) return;
+  blk.esercizi.forEach((_, j) => {
+    const el = document.getElementById('ex-' + bi + '-' + j);
+    if (el) {
+      el.classList.remove('ex-dragging','ex-drag-over-top','ex-drag-over-bot');
+    }
+  });
+}
+
+function _sbExDragOver(event, bi, ei) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  if (_sbExDragBi === null || (_sbExDragBi === bi && _sbExDragEi === ei)) return;
+  if (_sbExDragBi !== bi) return; // solo dentro lo stesso blocco
+  _sbExCleanStyles(bi);
+  const dragging = document.getElementById('ex-' + _sbExDragBi + '-' + _sbExDragEi);
+  if (dragging) dragging.classList.add('ex-dragging');
+  const targetEl = document.getElementById('ex-' + bi + '-' + ei);
+  if (targetEl) {
+    if (ei > _sbExDragEi) targetEl.classList.add('ex-drag-over-bot');
+    else targetEl.classList.add('ex-drag-over-top');
+  }
+}
+
+function _sbExDragLeave(event, bi, ei) {
+  const el = document.getElementById('ex-' + bi + '-' + ei);
+  if (el) {
+    el.classList.remove('ex-drag-over-top','ex-drag-over-bot');
+  }
+}
+
+function _sbExDrop(event, bi, ei) {
+  event.preventDefault();
+  if (_sbExDragBi === null || _sbExDragBi !== bi || _sbExDragEi === ei) {
+    _sbExCleanStyles(bi);
+    _sbExDragBi = null; _sbExDragEi = null;
+    return;
+  }
+  const arr = schedaBlocchi[bi].esercizi;
+  const moved = arr.splice(_sbExDragEi, 1)[0];
+  const adjustedTarget = _sbExDragEi < ei ? ei - 1 : ei;
+  arr.splice(adjustedTarget, 0, moved);
+  _sbExDragBi = null; _sbExDragEi = null;
+  renderSchedaBlocchi();
+}
+// ─────────────────────────────────────────────────────────────────
+
 function renderEsercizioEditor(ex, bi, ei) {
   const clientId = document.getElementById('seduta-client-select')?.value || '';
   const prHTML   = clientId ? buildRepPRBadgeHTML(clientId, ex.nome, ex.reps, ex.kg) : '';
@@ -7251,9 +7335,18 @@ function renderEsercizioEditor(ex, bi, ei) {
   </div>
   ${prHTML ? `<div id="rep-pr-${bi}-${ei}">${prHTML}</div>` : `<div id="rep-pr-${bi}-${ei}"></div>`}`;
 
-  return `<div class="fase-ex-row" id="ex-${bi}-${ei}">
+  return `<div class="fase-ex-row" id="ex-${bi}-${ei}"
+    ondragover="_sbExDragOver(event,${bi},${ei})"
+    ondrop="_sbExDrop(event,${bi},${ei})"
+    ondragleave="_sbExDragLeave(event,${bi},${ei})">
     <div class="fase-ex-name">
-      <span>${ex.nome}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+        <span class="ex-drag-handle" draggable="true"
+          ondragstart="_sbExDragStart(event,${bi},${ei})"
+          ondragend="_sbExDragEnd(event,${bi},${ei})"
+          title="Trascina per riordinare">⠿</span>
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ex.nome}</span>
+      </div>
       <button class="remove-ex" onclick="removeEsercizio(${bi},${ei})">×</button>
     </div>
     ${params}
