@@ -11121,6 +11121,15 @@ function openExistingSeduta(workout, clientId) {
       </div>
 
       <div id="seduta-builder-blocchi"></div>
+
+      <!-- AI PROPOSE BUTTON -->
+      <div style="margin-bottom:10px;">
+        <button onclick="aiProposiSeduta()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:10px 16px;background:rgba(229,57,53,0.07);border:1px solid rgba(229,57,53,0.35);border-radius:8px;color:var(--accent);font-family:'Outfit',sans-serif;font-weight:800;font-size:13px;cursor:pointer;letter-spacing:0.02em;" id="sb-ai-btn">
+          <span style="font-size:15px;">✦</span> Proponi seduta con AI
+        </button>
+        <div id="sb-ai-sintesi" style="display:none;margin-top:8px;"></div>
+      </div>
+
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <button class="btn btn-secondary" onclick="addSedutaBlocco('mobilita')">+ Mobilità</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('warmup')">+ Warm Up</button>
@@ -11384,6 +11393,15 @@ function newSedutaBuilder(prefillDate) {
 
       <!-- 2. Blocchi esercizi -->
       <div id="seduta-builder-blocchi"></div>
+
+      <!-- AI PROPOSE BUTTON -->
+      <div style="margin-bottom:10px;">
+        <button onclick="aiProposiSeduta()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:10px 16px;background:rgba(229,57,53,0.07);border:1px solid rgba(229,57,53,0.35);border-radius:8px;color:var(--accent);font-family:'Outfit',sans-serif;font-weight:800;font-size:13px;cursor:pointer;letter-spacing:0.02em;" id="sb-ai-btn">
+          <span style="font-size:15px;">✦</span> Proponi seduta con AI
+        </button>
+        <div id="sb-ai-sintesi" style="display:none;margin-top:8px;"></div>
+      </div>
+
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <button class="btn btn-secondary" onclick="addSedutaBlocco('mobilita')">+ Mobilità</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('warmup')">+ Warm Up</button>
@@ -11545,6 +11563,867 @@ function renderSedutaBuilderBlocchi() {
   if (schedaBlocchi.length === 0) { container.innerHTML = ''; return; }
   container.innerHTML = schedaBlocchi.map((b, i) => renderBloccoEditor(b, i)).join('');
 }
+
+// ============================================================
+// ✦ AI PROPOSTA SEDUTA — logica interna, nessuna API esterna
+// ============================================================
+function aiProposiSeduta() {
+  const clientId = document.getElementById('seduta-client-select')?.value;
+  if (!clientId) return;
+  const client = clients.find(c => c.id == clientId);
+  if (!client) return;
+
+  const btn = document.getElementById('sb-ai-btn');
+  if (btn) { btn.innerHTML = '⏳ Analisi in corso…'; btn.disabled = true; }
+
+  setTimeout(() => {
+    try {
+      const result = _aiGenerateProposta(clientId, client);
+      _aiApplyProposta(result);
+    } catch(e) {
+      const sintesi = document.getElementById('sb-ai-sintesi');
+      if (sintesi) {
+        sintesi.style.display = 'block';
+        sintesi.innerHTML = `<div style="padding:10px 14px;background:rgba(255,71,87,0.08);border:1px solid rgba(255,71,87,0.3);border-radius:8px;font-size:12px;color:var(--red);">⚠️ Errore nella proposta AI: ${e.message}</div>`;
+      }
+    } finally {
+      if (btn) { btn.innerHTML = '<span style="font-size:15px;">✦</span> Rigenera proposta'; btn.disabled = false; }
+    }
+  }, 30);
+}
+
+function _aiGenerateProposta(clientId, client) {
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 1 — CAPISCI IL CONTESTO
+  // ══════════════════════════════════════════════════════════════
+
+  const tipoSedutaUI = document.querySelector('input[name="sb-tipo"]:checked')?.value || 'normale';
+  const painAnalysis  = analyzeClientPain(client);
+  const testAnalysis  = analyzeClientTests(clientId);
+  const isPRT         = !!(client.prt && client.prt !== 'no');
+  const exHistory     = getExHistory(clientId);
+  const repPR         = getRepPR(clientId);
+  const balance90     = computeBalanceData(clientId, 90);
+
+  // Ultime 8 sedute ordinate dal più recente
+  const recentSedute = workouts
+    .filter(w => w.clientId == clientId && w.categoria === 'seduta')
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    .slice(0, 8);
+
+  // Note di sessione (già ordinate dal più recente)
+  const sessionNotes = getSessionNotes(clientId).slice(0, 8);
+
+  // Follow-up recenti (Firebase via localStorage)
+  const followupNotes = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]')
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+    .slice(0, 5);
+
+  // Note "prossima seduta" (➡️) dall'ultima nota con quel campo
+  let prossimaNote = '';
+  for (const n of sessionNotes) {
+    if (n.text && n.text.includes('➡️')) {
+      const chunk = n.text.split(' | ').find(p => p.startsWith('➡️'));
+      if (chunk) { prossimaNote = chunk.replace('➡️ ', '').trim(); break; }
+    }
+  }
+
+  // Percorso Fit — step attuale
+  const percorsoProgress = JSON.parse(localStorage.getItem('percorso_' + clientId) || '{}');
+  const percorsoStepIdx  = PERCORSO_FIT.findIndex(s => { const p = percorsoProgress[s.id]; return !p || !p.done; });
+  const isInPercorso     = percorsoStepIdx >= 0 && recentSedute.length < 20; // cliente ancora nelle fasi iniziali del percorso
+  const percorsoStep     = isInPercorso ? PERCORSO_FIT[percorsoStepIdx] : null;
+  const percorsoSessione = isInPercorso ? ((percorsoProgress[percorsoStep.id]?.currentSession || 0) + 1) : null;
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 2 — LEGGI LA STORIA RECENTE
+  // ══════════════════════════════════════════════════════════════
+
+  // Ultima nota e penultima
+  const lastNote    = sessionNotes[0] || null;
+  const prevNote    = sessionNotes[1] || null;
+  const lastSeduta  = recentSedute[0] || null;
+
+  // Energia dall'ultima nota guidata
+  let energiaUltima = 7;
+  if (lastNote?.text) {
+    const m = lastNote.text.match(/Energia:\s*(\d+)/);
+    if (m) energiaUltima = parseInt(m[1]);
+  }
+
+  // "Cosa ha funzionato" e "da rivedere" ultima nota
+  const testoFunzionato = lastNote?.text
+    ? (lastNote.text.split(' | ').find(p => p.startsWith('✅')) || '').replace('✅ ', '')
+    : '';
+  const testoRivedere = lastNote?.text
+    ? (lastNote.text.split(' | ').find(p => p.startsWith('⚠️')) || '').replace('⚠️ ', '')
+    : '';
+
+  // Banner feedback dall'ultima nota (esito del suggerimento AI precedente)
+  // Valori: 'giusto' | 'non_seguito' | 'sottostimato'
+  const lastBannerFeedback = lastNote?.bannerFeedback || null;
+
+  // Follow-up più recente
+  const lastFU = followupNotes[0] || null;
+  const fuDolore  = lastFU?.pain ?? null;
+  const fuTesto   = lastFU?.testo || lastFU?.text || lastFU?.note || '';
+
+  // Banner alert corrente (dal sistema follow-up live)
+  const bannerTipo = _wuCurrentBannerAlert?.tipo || null; // 'attenzione' | 'monitorare' | 'progressione'
+
+  // Tag delle ultime 3 note
+  const recentTags = sessionNotes.slice(0, 3).flatMap(n =>
+    (n.text || '').match(/#[\w-]+/g) || []
+  );
+  const nTagPositivi = recentTags.filter(t => ['#progresso','#tecnica-ok','#motivazione-alta'].includes(t)).length;
+  const nTagNegativi = recentTags.filter(t => ['#compensazione','#tecnica-da-lavorare','#regressione','#plateau'].includes(t)).length;
+
+  // ── Valuta "seduta buona" per ogni seduta recente ────────────────────
+  // Una seduta è buona se: nessun tag negativo, tipo non 'dolori', note positive o neutre
+  function isSedutaBuona(sed) {
+    if (!sed || sed.tipoSeduta === 'dolori') return false;
+    const n = sessionNotes.find(n => n.date === sed.createdAt?.split('T')[0]);
+    const tags = (n?.text || '').match(/#[\w-]+/g) || [];
+    const hasNeg = tags.some(t => ['#compensazione','#regressione','#tecnica-da-lavorare'].includes(t));
+    if (hasNeg) return false;
+    // Dolore nella nota di sessione
+    if (n?.pain && n.pain >= 5) return false;
+    return true;
+  }
+
+  let seduteBuoneConsecutive = 0;
+  for (const sed of recentSedute.slice(0, 3)) {
+    if (isSedutaBuona(sed)) seduteBuoneConsecutive++;
+    else break;
+  }
+
+  // ── Tecnica per esercizio specifico ─────────────────────────────────
+  // Cerca nel testo "funzionato" e "rivedere" delle ultime note
+  function isTecnicaOkPerEx(exName) {
+    const key = exName.trim().toLowerCase();
+    for (const n of sessionNotes.slice(0, 3)) {
+      const text = (n?.text || '').toLowerCase();
+      // Se appare nel "da rivedere" → tecnica NON ok
+      const revPart = text.split('⚠️')[1]?.split('|')[0] || '';
+      if (revPart.includes(key)) return false;
+      // Se appare nel "funzionato" → tecnica ok
+      const funzPart = text.split('✅')[1]?.split('|')[0] || '';
+      if (funzPart.includes(key)) return true;
+    }
+    return null; // dato non disponibile
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 2 (cont.) — INTERPRETA BANNER FEEDBACK
+  // ══════════════════════════════════════════════════════════════
+  // giusto → aumenta fiducia nel suggerimento, possiamo progredire
+  // non_seguito → dato neutro
+  // sottostimato → era peggio → aumenta prudenza, sii conservativo
+  let prudenzeExtra = 0;
+  let fiduciaExtra  = 0;
+  if (lastBannerFeedback === 'sottostimato') prudenzeExtra = 2;
+  if (lastBannerFeedback === 'giusto')       fiduciaExtra  = 1;
+  if (lastBannerFeedback === 'non_seguito')  { /* neutro */ }
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 2 (cont.) — SEGNALI CONTRADDITTORI
+  // ══════════════════════════════════════════════════════════════
+  // Se segnali si contraddicono, dai priorità al dato più recente
+  // (ultima seduta / follow-up) interpretato alla luce del trend
+  const segnaliContrad = [];
+  if (bannerTipo === 'progressione' && nTagNegativi > 0)
+    segnaliContrad.push('Banner suggerisce progressione ma ci sono tag negativi recenti');
+  if (seduteBuoneConsecutive >= 2 && (fuDolore !== null && fuDolore >= 4))
+    segnaliContrad.push('Sedute buone ma follow-up segnala dolore');
+  if (energiaUltima >= 7 && bannerTipo === 'attenzione')
+    segnaliContrad.push('Energia ok in seduta ma banner attenzione da follow-up');
+
+  // In caso contraddittorio: priorità al dato più recente (follow-up > ultima seduta)
+  // e scelta conservativa
+  const hasSegnaliContrad = segnaliContrad.length > 0;
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 2 — TIPO SEDUTA
+  // ══════════════════════════════════════════════════════════════
+  const isSedutaDolori =
+    tipoSedutaUI === 'dolori' ||
+    (lastSeduta?.tipoSeduta === 'dolori' && !lastNote?.date) || // se ultima registrata era dolori e non c'è ancora nota
+    (fuDolore !== null && fuDolore >= 7) || // follow-up segnala dolore alto
+    prudenzeExtra >= 2; // sottostimato
+
+  if (isSedutaDolori || (painAnalysis.hasPain && (fuDolore !== null && fuDolore >= 5))) {
+    return {
+      tipo: 'dolori',
+      client, painAnalysis, lastNote, fuTesto, fuDolore,
+      recentSedute, sessionNotes, followupNotes,
+      lastBannerFeedback, prossimaNote,
+      segnaliContrad
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 3 — VALUTA PROGRESSIONE O MANTENIMENTO
+  // ══════════════════════════════════════════════════════════════
+  // Ordine progressione: 1. tecnica → 2. volume → 3. carico
+  // Non aumentare carico se prima non c'è segnale tecnica + volume consolidati
+
+  let modalita, motivazione, motivazioneDettaglio = [];
+
+  // Priorità 1: SEMPLIFICA
+  if (bannerTipo === 'attenzione' || energiaUltima <= 5 || prudenzeExtra >= 2 ||
+      (fuDolore !== null && fuDolore >= 4) || nTagNegativi >= 2) {
+    modalita = 'semplifica';
+    if (bannerTipo === 'attenzione')           motivazioneDettaglio.push('banner: attenzione');
+    if (energiaUltima <= 5)                    motivazioneDettaglio.push(`energia ultima seduta: ${energiaUltima}/10`);
+    if (prudenzeExtra >= 2)                    motivazioneDettaglio.push('feedback precedente: sottostimato');
+    if (fuDolore !== null && fuDolore >= 4)    motivazioneDettaglio.push(`dolore follow-up: ${fuDolore}/10`);
+    if (nTagNegativi >= 2)                     motivazioneDettaglio.push(`${nTagNegativi} tag negativi recenti`);
+    motivazione = 'Seduta semplificata — ' + motivazioneDettaglio.join(', ');
+  }
+
+  // Priorità 2: nessuno storico → percorso fit / inizio
+  else if (recentSedute.length === 0) {
+    modalita = isInPercorso ? 'percorso' : 'inizio';
+    motivazione = isInPercorso
+      ? `Percorso Fit: ${percorsoStep.icon} ${percorsoStep.title} — seduta ${percorsoSessione}/${percorsoStep.sessions}`
+      : 'Prima seduta o nessuno storico — struttura base, apprendimento motorio';
+  }
+
+  // Priorità 3: segnali contraddittori → conservativo
+  else if (hasSegnaliContrad && prudenzeExtra === 0) {
+    modalita = 'consolidamento';
+    motivazione = 'Segnali contrastanti (' + segnaliContrad[0] + ') — scelgo opzione conservativa';
+  }
+
+  // Priorità 4: PROGRESSIONE
+  // Solo se: 2+ sedute buone, nessun tag negativo, banner non "attenzione",
+  // banner "progressione" o fiduciaExtra, e dati non contraddittori
+  else if (
+    seduteBuoneConsecutive >= 2 &&
+    nTagNegativi === 0 &&
+    bannerTipo !== 'attenzione' &&
+    (bannerTipo === 'progressione' || fiduciaExtra > 0 || (nTagPositivi >= 1 && bannerTipo !== 'monitorare')) &&
+    !hasSegnaliContrad
+  ) {
+    // Verifica ordine progressione: tecnica → volume → carico
+    // Tecnica: c'è almeno un tag #tecnica-ok nelle ultime 2 note?
+    const tecnicaOk = recentTags.slice(0, 4).includes('#tecnica-ok') ||
+                      (testoFunzionato.length > 10 && testoRivedere.length === 0);
+    if (tecnicaOk) {
+      modalita = 'progressione';
+      motivazione = `${seduteBuoneConsecutive} sedute buone consecutive — tecnica ok — valuto progressione (tecnica → volume → carico)`;
+      if (fiduciaExtra > 0) motivazione += ' — feedback precedente confermato';
+    } else {
+      // Tecnica non confermata → consolida prima
+      modalita = 'consolidamento';
+      motivazione = `${seduteBuoneConsecutive} sedute buone ma tecnica non ancora confermata — consolido prima di progredire`;
+    }
+  }
+
+  // Priorità 5: MONITORARE (banner o segnali misti)
+  else if (bannerTipo === 'monitorare' || nTagNegativi === 1) {
+    modalita = 'consolidamento';
+    motivazione = bannerTipo === 'monitorare'
+      ? 'Banner: mantieni il carico — monitora la risposta'
+      : 'Compensazione o tecnica da lavorare in una delle ultime note — consolido';
+  }
+
+  // Default: CONSOLIDAMENTO
+  else {
+    modalita = 'consolidamento';
+    motivazione = recentSedute.length < 3
+      ? 'Poche sedute registrate — consolido il pattern base'
+      : 'Andamento stabile — seduta di consolidamento';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 4 — PERCORSO FIT (se cliente in fase iniziale)
+  // ══════════════════════════════════════════════════════════════
+  if (modalita === 'percorso' && percorsoStep) {
+    const progIdx = Math.min(percorsoSessione || 1, Object.keys(percorsoStep.progressions || {}).length);
+    const prog    = percorsoStep.progressions?.[progIdx] || percorsoStep.progressions?.[1];
+    const f1Text  = prog?.fase1 || '';
+    const f2Text  = prog?.fase2 || '';
+
+    // Costruisci esercizi da testo progressione (es. "Tripod Foot x10 — Short Foot x10")
+    function parseProg(text) {
+      return text.split('—').map(s => s.trim()).filter(Boolean).map(s => {
+        const nomeParts = s.split(/x\d|per lato|\d+s/).map(p => p.trim()).filter(Boolean);
+        return nomeParts[0] || s;
+      });
+    }
+
+    const f1Exs = parseProg(f1Text);
+    const f2Exs = parseProg(f2Text);
+
+    const mobPool2 = [
+      ...(percorsoStep.foamRoll || []),
+      ...(percorsoStep.primal || [])
+    ];
+
+    const blocchi = [];
+
+    // Mobilità dal percorso fit
+    if (mobPool2.length > 0) {
+      blocchi.push({
+        tipo: 'mobilita', rounds: '', pausaMode: 'no_pausa_fine',
+        intervalOn: '40', intervalOff: '20',
+        note: `${percorsoStep.icon} Percorso Fit — release e attivazione ${percorsoStep.title}`,
+        esercizi: mobPool2.slice(0, 3).map(nome => ({
+          nome, categoria: _getCatForEx(nome), stimolo: '', serie: '1', reps: '10',
+          kg: '', pausa: '', noteEx: 'Dal percorso fit', prog: [{},{},{},{}]
+        }))
+      });
+    }
+
+    // Fase 1 dal percorso fit
+    if (f1Exs.length > 0) {
+      const f1Def = percorsoStep.fase1 || [];
+      blocchi.push({
+        tipo: 'fase1', rounds: '3', pausaMode: 'no_pausa_fine',
+        intervalOn: '40', intervalOff: '20',
+        note: `Progressione ${progIdx}/${Object.keys(percorsoStep.progressions||{1:1}).length} — apprendimento motorio`,
+        esercizi: f1Exs.map((nome, i) => {
+          const def = f1Def[i] || {};
+          return {
+            nome, categoria: _getCatForEx(nome), stimolo: '', serie: def.sets || '3',
+            reps: def.reps || '10', kg: '', pausa: '', noteEx: def.note || '', prog: [{},{},{},{}]
+          };
+        })
+      });
+    }
+
+    // Fase 2 dal percorso fit
+    if (f2Exs.length > 0) {
+      const f2Def = percorsoStep.fase2 || [];
+      blocchi.push({
+        tipo: 'fase2', rounds: '3', pausaMode: 'pausa_tra',
+        intervalOn: '40', intervalOff: '20',
+        note: 'Controllo motorio — qualità del gesto prima del carico',
+        esercizi: f2Exs.map((nome, i) => {
+          const def = f2Def[i] || {};
+          return {
+            nome, categoria: _getCatForEx(nome), stimolo: '', serie: def.sets || '3',
+            reps: def.reps || '10', kg: '', pausa: "60''", noteEx: def.note || '', prog: [{},{},{},{}]
+          };
+        })
+      });
+    }
+
+    return {
+      tipo: 'normale', modalita: 'percorso', motivazione,
+      blocchi,
+      prossimaNote, segnaliContrad,
+      check: {
+        monitorare: 'Qualità del gesto — percezione del movimento — assenza di compensi',
+        adattare: 'Se il cliente non "sente" il muscolo target → regredisci l\'esercizio',
+        candidatoProgressione: `Prossima sessione percorso: ${percorsoStep.title} — seduta ${(percorsoSessione || 1) + 1}/${percorsoStep.sessions}`,
+        alertTrasc: null,
+        alertContrad: null
+      }
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 5 — BILANCIAMENTO PATTERN (ultimi 90gg)
+  // ══════════════════════════════════════════════════════════════
+  const patternMap = [
+    { key: 'pushH', label: 'Push orizzontale', cats: ['Push Orizzontale'] },
+    { key: 'pullH', label: 'Pull orizzontale', cats: ['Pull Orizzontale'] },
+    { key: 'pushV', label: 'Push verticale',   cats: ['Push Verticale'] },
+    { key: 'pullV', label: 'Pull verticale',   cats: ['Pull Verticale'] },
+    { key: 'hipD',  label: 'Hip dominant',     cats: ['Hip Dominant / Glutei'] },
+    { key: 'kneeD', label: 'Knee dominant',    cats: ['Knee Dominant / Squat'] },
+    { key: 'coreI', label: 'Core isometrico',  cats: ['Core — Isometria'] },
+    { key: 'coreD', label: 'Core dinamico',    cats: ['Core — Dinamico'] },
+  ];
+  const totalPat = patternMap.reduce((s, p) => s + (balance90[p.key] || 0), 0) || 1;
+  const sortedPat = [...patternMap].sort((a, b) => (balance90[a.key] || 0) - (balance90[b.key] || 0));
+  const trascurato = sortedPat[0];
+  const pctTrasc = totalPat > 0 ? Math.round((balance90[trascurato.key] || 0) / totalPat * 100) : 0;
+  // Solo segnalare se c'è abbastanza storico e il pattern è veramente trascurato
+  const alertTrasc = pctTrasc < 8 && balance90._sedute >= 4
+    ? `Pattern "${trascurato.label}" poco usato (${pctTrasc}% su 90gg)`
+    : null;
+  // Non forzare il bilanciamento se il contesto suggerisce prudenza
+  const recuperaTrascurato = alertTrasc && modalita !== 'semplifica' && !hasSegnaliContrad;
+
+  // ══════════════════════════════════════════════════════════════
+  // FASE 6 — SCEGLI ESERCIZI COERENTI
+  // ══════════════════════════════════════════════════════════════
+  const painZones = painAnalysis.painZones;
+  const blocked   = testAnalysis.blockedExercises;
+
+  function notBlocked(e) {
+    if (!blocked) return true;
+    if (blocked.has) return !blocked.has(e);
+    if (Array.isArray(blocked)) return !blocked.includes(e);
+    return true;
+  }
+
+  // Esercizi usati nelle ultime 3 sedute → evita ripetizioni, varia espressione del pattern
+  const allDates = [...new Set(Object.values(exHistory).map(h => h.date))].sort().reverse();
+  const last3Dates = new Set(allDates.slice(0, 3));
+  const recentExNames = new Set();
+  Object.entries(exHistory).forEach(([k, d]) => { if (last3Dates.has(d.date)) recentExNames.add(k); });
+
+  const usedInSession = new Set();
+
+  // Esercizi TOLLERATI BENE di recente (dallo storico senza note negative)
+  const tolleratiStoric = new Set();
+  recentSedute.slice(0, 4).forEach(sed => {
+    const n = sessionNotes.find(n => n.date === sed.createdAt?.split('T')[0]);
+    const hasProblem = (n?.text || '').match(/⚠️[^|]*(?:compensaz|ginocch|spalla|schiena|dolore)/i);
+    if (!hasProblem) {
+      (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => {
+        if (ex.nome) tolleratiStoric.add(ex.nome.trim().toLowerCase());
+      }));
+    }
+  });
+
+  function pickEx(pool, n) {
+    // Priorità: tollerati bene > freschi > già usati di recente
+    const tolleratiPool = [], freshPool = [], fallback = [];
+    const seen = new Set();
+    pool.forEach(e => {
+      if (!e || seen.has(e)) return;
+      seen.add(e);
+      const key = e.trim().toLowerCase();
+      if (usedInSession.has(key)) return; // mai ripetere nella stessa seduta
+      const isTollerato = tolleratiStoric.has(key);
+      const isFresh     = !recentExNames.has(key);
+      if (isTollerato && isFresh) tolleratiPool.push(e);
+      else if (isFresh)           freshPool.push(e);
+      else                        fallback.push(e);
+    });
+    const result = [...tolleratiPool, ...freshPool, ...fallback].filter(Boolean).slice(0, n);
+    result.forEach(e => usedInSession.add(e.trim().toLowerCase()));
+    return result;
+  }
+
+  // ── Suggerimento carico — segue ordine progressione ────────────────
+  // Tecnica → Volume → Carico. Non aumentare carico se tecnica non confermata.
+  function suggestKgAndNote(exName) {
+    const h   = exHistory[exName.trim().toLowerCase()];
+    const pr  = repPR[exName.trim().toLowerCase()];
+    const tec = isTecnicaOkPerEx(exName); // true / false / null
+
+    if (!h) return { kg: '', noteEx: 'Prima volta — partiamo leggeri' };
+
+    const kgNum = parseFloat(h.kg);
+    const kgDisplay = h.kg || '';
+
+    if (modalita === 'semplifica') {
+      // Riduci o mantieni
+      const ridotto = (!isNaN(kgNum) && kgNum > 0)
+        ? String(Math.max(kgNum - (kgNum < 10 ? 1 : 2.5), 0))
+        : kgDisplay;
+      return { kg: ridotto, noteEx: `Semplificato rispetto a ${kgDisplay}kg — ${h.reps || ''}reps` };
+    }
+
+    if (modalita === 'progressione') {
+      // Ordine: prima volume (reps), poi carico — solo se tecnica confermata
+      if (tec === false) {
+        return { kg: kgDisplay, noteEx: `Mantieni ${kgDisplay}kg — lavora sulla tecnica prima` };
+      }
+
+      // Controlla se ha già raggiunto il top del range di reps
+      const repsNum = parseInt(h.reps);
+      // Se reps < 10 e tecnica ok/null → prima aumenta reps (volume), non carico
+      if (!isNaN(repsNum) && repsNum < 10 && tec !== false) {
+        return { kg: kgDisplay, noteEx: `Volume: porta a 10-12 reps (attuale: ${h.reps}) prima di aumentare il carico` };
+      }
+
+      // Reps ok → ora puoi aumentare carico
+      if (!isNaN(kgNum) && kgNum > 0) {
+        const step = kgNum < 10 ? 1 : kgNum < 30 ? 2.5 : 5;
+        const newKg = String(kgNum + step);
+        const prNote = pr ? ` (PR ${Object.values(pr).map(r => r.kg + 'kg×' + Object.keys(pr).find(k => pr[k] === r) + 'reps').join(', ')})` : '';
+        return { kg: newKg, noteEx: `Progressione carico: ${kgDisplay}→${newKg}kg${prNote}` };
+      }
+
+      return { kg: kgDisplay, noteEx: `Progressione volume — aumenta reps se tecnica ok` };
+    }
+
+    // consolidamento / inizio → mantieni carichi storici, i PR sono contesto non obbligo
+    return { kg: kgDisplay, noteEx: h.reps ? `Mantieni ${kgDisplay}kg × ${h.reps}reps` : '' };
+  }
+
+  // ── Volume e rounds per modalità ────────────────────────────────────
+  const roundsF1  = modalita === 'semplifica' ? '2' : '3';
+  const roundsF2  = modalita === 'semplifica' ? '2' : (modalita === 'progressione' ? '4' : '3');
+  const roundsF3  = modalita === 'semplifica' ? '2' : '3';
+  const repsF1    = isPRT ? '30-45s' : (modalita === 'semplifica' ? '5-6' : '6-8');
+  const repsF2    = modalita === 'semplifica' ? '8' : (modalita === 'progressione' ? '10-12' : '8-10');
+  const repsF3    = modalita === 'semplifica' ? '8' : '10-12';
+
+  // ══════════════════════════════════════════════════════════════
+  // COSTRUZIONE BLOCCHI
+  // ══════════════════════════════════════════════════════════════
+  const blocchi = [];
+
+  // ── MOBILITÀ — sempre presente ──────────────────────────────────────
+  const mobPool = [];
+  if (painZones.has('colonna')) mobPool.push('Cat Cow', 'Hip Hinge', 'T-Spine Rotation', 'Respirazione Diaframmatica');
+  if (painZones.has('spalla'))  mobPool.push('Attivazione Scapole', 'T-Spine Rotation', 'Pendolo Spalla', 'Wall Shrug');
+  if (painZones.has('anca'))    mobPool.push('Hip Hinge', 'Clam Shell', 'Piriforme Stretch', 'Bird Dog');
+  if (painZones.has('knee'))    mobPool.push('Ciclista', 'Foam Roll Quadricipiti', 'Leg Swing');
+  if (painZones.has('piede'))   mobPool.push('Tripod Foot', 'Short Foot', 'Ciclista');
+  if (mobPool.length < 3)      mobPool.push('Respirazione Diaframmatica','Cat Cow','Hip Hinge','T-Spine Rotation','Attivazione Scapole','Clam Shell','Bird Dog');
+  const mobExs = pickEx(mobPool, 3);
+
+  blocchi.push({
+    tipo: 'mobilita', rounds: '', pausaMode: 'no_pausa_fine',
+    intervalOn: '40', intervalOff: '20',
+    note: mobPool.length > 3 ? 'Mobilità mirata su zone critiche' : 'Mobilità e attivazione',
+    esercizi: mobExs.map(nome => ({
+      nome, categoria: _getCatForEx(nome), stimolo: '', serie: '1', reps: '8-10',
+      kg: '', pausa: '', noteEx: '', prog: [{},{},{},{}]
+    }))
+  });
+
+  // ── FASE 1: Potenza (esplosivo) + Core ──────────────────────────────
+  // Rastapower: all'INIZIO come stimolo di potenza (se coerente col profilo)
+  const potenzaPool = [];
+  if (!isPRT && modalita !== 'semplifica') {
+    potenzaPool.push(...(EXERCISES['Potenza']?.items || []));
+    // Rastapower come stimolo potenza in apertura — solo se cliente adatto
+    if (!painZones.has('colonna') && !painZones.has('knee')) {
+      potenzaPool.push(...(EXERCISES['🔴 Rastapower']?.items || []).slice(0, 5));
+    }
+  }
+  const coreF1Pool = [
+    ...(EXERCISES['Core — Isometria']?.items || []),
+    ...(painZones.has('colonna') ? [] : (EXERCISES['Core — Dinamico']?.items || []).slice(0, 4))
+  ].filter(notBlocked);
+
+  const potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
+  const coreF1Ex  = pickEx(coreF1Pool, 1);
+  const fase1Exs  = [...potenzaEx, ...coreF1Ex].filter(Boolean);
+
+  if (fase1Exs.length > 0) {
+    blocchi.push({
+      tipo: 'fase1', rounds: roundsF1, pausaMode: 'no_pausa_fine',
+      intervalOn: '40', intervalOff: '20',
+      note: isPRT ? 'Core isometrico — no esplosivo' : (potenzaEx.length ? 'Potenza in apertura + stabilità core' : 'Core — stabilità'),
+      esercizi: fase1Exs.map(nome => {
+        const { kg, noteEx } = suggestKgAndNote(nome);
+        return { nome, categoria: _getCatForEx(nome), stimolo: '', serie: '', reps: repsF1, kg, pausa: '', noteEx, prog: [{},{},{},{}] };
+      })
+    });
+  }
+
+  // ── FASE 2: Gambe + Parte alta (almeno 1 alto + 1 basso) ────────────
+  // Gambe
+  const hingePool = (EXERCISES['Hip Dominant / Glutei']?.items || []).filter(notBlocked);
+  const kneePool2 = (EXERCISES['Knee Dominant / Squat']?.items || []).filter(notBlocked);
+  // Se knee critico → priorità hinge; altrimenti alterna rispetto alla seduta precedente
+  let gambePool;
+  if (painZones.has('knee')) {
+    gambePool = [...hingePool, ...kneePool2];
+  } else {
+    // Guarda cosa ha fatto nell'ultima seduta — alterna
+    const lastGambeEx = recentSedute[0]?.blocchi?.flatMap(b => b.esercizi || [])
+      .find(ex => {
+        const cat = _getCatForEx(ex.nome);
+        return cat === 'Hip Dominant / Glutei' || cat === 'Knee Dominant / Squat';
+      })?.nome || '';
+    const lastWasHinge = hingePool.some(e => e.toLowerCase() === lastGambeEx.toLowerCase());
+    gambePool = lastWasHinge ? [...kneePool2, ...hingePool] : [...hingePool, ...kneePool2];
+  }
+  const gambeEx = pickEx(gambePool, 1);
+
+  // Parte alta: pull prima di push
+  const pullHPool = (EXERCISES['Pull Orizzontale']?.items || []).filter(notBlocked);
+  const pullVPool = (EXERCISES['Pull Verticale']?.items  || []).filter(notBlocked);
+  const pushHPool = (EXERCISES['Push Orizzontale']?.items|| []).filter(notBlocked);
+  const pushVPool = (!painZones.has('spalla') ? (EXERCISES['Push Verticale']?.items || []) : []).filter(notBlocked);
+
+  // Pattern trascurato: se è pull, prioritizzalo qui; altrimenti ordine standard
+  let altoPool;
+  if (recuperaTrascurato && trascurato.key === 'pullH') altoPool = [...pullHPool, ...pullVPool, ...pushHPool, ...pushVPool];
+  else if (recuperaTrascurato && trascurato.key === 'pullV') altoPool = [...pullVPool, ...pullHPool, ...pushHPool, ...pushVPool];
+  else if (recuperaTrascurato && trascurato.key === 'pushH') altoPool = [...pushHPool, ...pullHPool, ...pullVPool, ...pushVPool];
+  else if (recuperaTrascurato && trascurato.key === 'pushV') altoPool = [...pushVPool, ...pushHPool, ...pullHPool, ...pullVPool];
+  else altoPool = [...pullHPool, ...pullVPool, ...pushHPool, ...pushVPool]; // default: pull > push
+
+  const altoEx = pickEx(altoPool, 1);
+
+  const fase2Exs = [...gambeEx, ...altoEx].filter(Boolean);
+
+  if (fase2Exs.length > 0) {
+    blocchi.push({
+      tipo: 'fase2', rounds: roundsF2, pausaMode: 'pausa_tra',
+      intervalOn: '40', intervalOff: '20',
+      note: 'Schema motorio principale — controllo tecnico prima del carico',
+      esercizi: fase2Exs.map(nome => {
+        const { kg, noteEx } = suggestKgAndNote(nome);
+        return { nome, categoria: _getCatForEx(nome), stimolo: '', serie: '', reps: repsF2, kg, pausa: "60''", noteEx, prog: [{},{},{},{}] };
+      })
+    });
+  }
+
+  // ── FASE 3: Circuito finale — alta + bassa + core (alterna pattern F2) ──
+  const wasHinge = gambeEx[0] && hingePool.some(e => e.toLowerCase() === gambeEx[0]?.toLowerCase());
+  const gambeF3Pool = (wasHinge ? [...kneePool2, ...hingePool] : [...hingePool, ...kneePool2]).filter(notBlocked);
+
+  const wasPull = altoEx[0] && [...pullHPool, ...pullVPool].some(e => e.toLowerCase() === altoEx[0]?.toLowerCase());
+  let altoF3Pool = wasPull ? [...pushHPool, ...pushVPool] : [...pullHPool, ...pullVPool];
+
+  // Se pattern trascurato non è stato recuperato in F2, recuperalo qui in F3
+  if (recuperaTrascurato) {
+    const tCats = trascurato.cats || [];
+    const tPool = tCats.flatMap(cat => (EXERCISES[cat]?.items || [])).filter(notBlocked);
+    if (tPool.length > 0) altoF3Pool = [...tPool, ...altoF3Pool];
+  }
+
+  const coreF3Pool = [
+    ...(EXERCISES['Core — Dinamico']?.items || []),
+    ...(EXERCISES['Core — Isometria']?.items || []),
+  ].filter(notBlocked);
+
+  // Rastapower DURANTE la seduta come total body (coordinazione + forza/resistenza)
+  // Solo se cliente adatto, non in semplifica, e non già usato in F1
+  const rastaInF3 = !isPRT && modalita !== 'semplifica'
+    && !painZones.has('colonna') && !painZones.has('knee')
+    && !potenzaEx.some(e => (EXERCISES['🔴 Rastapower']?.items || []).includes(e));
+  if (rastaInF3) {
+    const rastaPool = (EXERCISES['🔴 Rastapower']?.items || []).filter(notBlocked);
+    if (rastaPool.length > 0) coreF3Pool.push(...rastaPool.slice(0, 3));
+  }
+
+  const f3Gambe = pickEx(gambeF3Pool, 1);
+  const f3Core  = pickEx(coreF3Pool, 1);
+  const f3Alto  = pickEx(altoF3Pool, 1);
+  const fase3Exs = [...f3Gambe, ...f3Core, ...f3Alto].filter(Boolean);
+
+  if (fase3Exs.length > 0) {
+    blocchi.push({
+      tipo: 'fase3', rounds: roundsF3, pausaMode: 'no_pausa_fine',
+      intervalOn: '40', intervalOff: '20',
+      note: 'Circuito finale — alterna pattern rispetto Fase 2' + (recuperaTrascurato ? ` — recupera ${trascurato.label}` : ''),
+      esercizi: fase3Exs.map(nome => {
+        const { kg, noteEx } = suggestKgAndNote(nome);
+        return { nome, categoria: _getCatForEx(nome), stimolo: '', serie: '', reps: repsF3, kg, pausa: '', noteEx, prog: [{},{},{},{}] };
+      })
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // CHECK FINALE
+  // ══════════════════════════════════════════════════════════════
+  // Candidato progressione futura: esercizio di F2 con più storia positiva
+  let candidatoProgressione = 'da valutare live';
+  for (const nome of fase2Exs) {
+    const h = exHistory[nome.trim().toLowerCase()];
+    if (h?.kg) {
+      const tec = isTecnicaOkPerEx(nome);
+      const repsNum = parseInt(h.reps || '0');
+      if (tec !== false && repsNum >= 10) {
+        candidatoProgressione = `${nome} — pronto per +carico (attuale: ${h.kg}kg × ${h.reps}reps)`;
+        break;
+      } else if (tec !== false) {
+        candidatoProgressione = `${nome} — porta a 10 reps prima di aumentare il carico`;
+        break;
+      }
+    }
+  }
+
+  const adattare = modalita === 'semplifica'
+    ? 'Se risponde bene → aggiungi 1 round alla Fase 2 nella prossima'
+    : modalita === 'progressione'
+    ? 'Se tecnica non è pulita → non aumentare il carico, aggiungi reps invece'
+    : 'Se energia cala → riduci i round della Fase 3 prima della Fase 2';
+
+  const monitorare = (painAnalysis.hasPain || tipoSedutaUI === 'dolori')
+    ? 'Dolore — NRS inizio e fine seduta'
+    : energiaUltima <= 6
+    ? `Energia — era ${energiaUltima}/10 ultima volta`
+    : 'Tecnica sui pattern di Fase 2 — percezione e controllo';
+
+  return {
+    tipo: 'normale', modalita, motivazione,
+    blocchi, prossimaNote, segnaliContrad,
+    check: { monitorare, adattare, candidatoProgressione, alertTrasc: alertTrasc && !recuperaTrascurato ? alertTrasc : null, alertContrad: hasSegnaliContrad ? segnaliContrad[0] : null }
+  };
+}
+
+// Helper: trova categoria per un esercizio
+function _getCatForEx(nome) {
+  if (!nome) return '';
+  const key = nome.trim().toLowerCase();
+  // Cerca prima nei custom
+  const custom = JSON.parse(localStorage.getItem('asd_custom_exercises') || '[]');
+  const found = custom.find(e => e.nome.trim().toLowerCase() === key);
+  if (found?.cat) return found.cat;
+  // Cerca in EXERCISES
+  for (const cat of Object.keys(EXERCISES)) {
+    if (EXERCISES[cat]?.items?.some(e => e.trim().toLowerCase() === key)) return cat;
+  }
+  return '';
+}
+
+function _aiApplyProposta(result) {
+  const sintesiEl = document.getElementById('sb-ai-sintesi');
+
+  // ══════════════════════════════════════════════════════════════
+  // CASO DOLORI — solo supporto decisionale, NO blocchi
+  // ══════════════════════════════════════════════════════════════
+  if (result.tipo === 'dolori') {
+    const { client, painAnalysis, lastNote, fuTesto, fuDolore, recentSedute, sessionNotes, lastBannerFeedback, prossimaNote, segnaliContrad } = result;
+
+    // Esercizi tollerati bene di recente
+    const tolleratiSet = new Set();
+    recentSedute.slice(0, 4).forEach(sed => {
+      const n = sessionNotes.find(n => n.date === sed.createdAt?.split('T')[0]);
+      const hasProblem = (n?.text || '').match(/⚠️[^|]*(?:compensaz|ginocch|spalla|schiena|dolore)/i);
+      if (!hasProblem && sed.tipoSeduta !== 'dolori') {
+        (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => { if (ex.nome) tolleratiSet.add(ex.nome); }));
+      }
+    });
+
+    // Pattern recenti (ultimi 90gg)
+    const bal = computeBalanceData(clientId, 90);
+    const patLabels = { pushH:'Push H', pullH:'Pull H', pushV:'Push V', pullV:'Pull V', hipD:'Hip dom.', kneeD:'Knee dom.', coreI:'Core iso.', coreD:'Core din.' };
+    const patSorted = Object.entries(patLabels)
+      .map(([k, l]) => ({ k, l, v: bal[k] || 0 }))
+      .sort((a, b) => b.v - a.v);
+
+    // Attenzioni: esercizi con note negative recenti
+    const attenzioniSet = new Set();
+    sessionNotes.slice(0, 4).forEach(n => {
+      const rev = (n?.text || '').split('⚠️')[1]?.split('|')[0] || '';
+      if (rev.trim()) {
+        // estraiamo parole chiave significative
+        const words = rev.toLowerCase().match(/[a-zàèìòù ]{4,}/g) || [];
+        words.forEach(w => attenzioniSet.add(w.trim()));
+      }
+    });
+
+    // Feedback precedente
+    const fbNote = lastBannerFeedback === 'sottostimato'
+      ? '🔴 Feedback precedente: era peggio del previsto — massima prudenza'
+      : lastBannerFeedback === 'giusto'
+      ? '🟢 Feedback precedente: suggerimento confermato'
+      : null;
+
+    const tolleratiHtml = [...tolleratiSet].slice(0, 8)
+      .map(e => `<span style="background:rgba(71,255,160,0.1);border:1px solid rgba(71,255,160,0.25);border-radius:20px;padding:2px 8px;font-size:11px;color:var(--green);margin:2px;display:inline-block;">${e}</span>`).join('');
+
+    const patHtml = patSorted.slice(0, 4)
+      .map(p => `<span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${p.l}: <b style="color:var(--text2);">${p.v}</b></span>`).join('  ·  ');
+
+    if (sintesiEl) {
+      sintesiEl.style.display = 'block';
+      sintesiEl.innerHTML = `
+        <div style="background:rgba(255,71,87,0.05);border:1px solid rgba(255,71,87,0.25);border-radius:8px;padding:14px 16px;">
+          <div style="font-family:'DM Mono';font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">✦ AI — Supporto decisionale · seduta con dolori</div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:4px;">📍 Quadro attuale</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5;">
+            ${painAnalysis.activePain.length > 0
+              ? painAnalysis.activePain.map(p => `<span style="color:var(--red);">${p.label}</span>`).join(', ')
+              : 'Dolore segnalato in sessione'}
+            ${fuDolore !== null ? ` · Follow-up dolore: <b style="color:var(--red);">${fuDolore}/10</b>` : ''}
+            ${fuTesto ? `<div style="margin-top:4px;font-style:italic;color:var(--text3);">"${fuTesto.substring(0, 100)}${fuTesto.length > 100 ? '…' : ''}"</div>` : ''}
+            ${prossimaNote ? `<div style="margin-top:6px;padding:5px 8px;background:rgba(255,200,0,0.07);border-radius:6px;font-size:11px;color:var(--yellow);">💡 Nota precedente: ${prossimaNote}</div>` : ''}
+          </div>
+
+          ${fbNote ? `<div style="font-size:11px;margin-bottom:8px;">${fbNote}</div>` : ''}
+
+          ${tolleratiHtml ? `
+          <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:5px;">✅ Tollerati bene di recente</div>
+          <div style="margin-bottom:10px;line-height:1.8;">${tolleratiHtml}</div>` : ''}
+
+          ${patHtml ? `<div style="margin-bottom:10px;font-size:11px;">${patHtml}</div>` : ''}
+
+          ${attenzioniSet.size > 0 ? `
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px;">⚠️ Attenzioni da note recenti</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">${[...attenzioniSet].slice(0,5).join(' · ')}</div>` : ''}
+
+          ${segnaliContrad.length > 0 ? `
+          <div style="font-size:11px;color:var(--yellow);margin-bottom:8px;">⚡ Segnale contraddittorio: ${segnaliContrad[0]}</div>` : ''}
+
+          <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:6px;">💡 3 suggerimenti prudenti</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.8;">
+            <div>1. Parti da mobilità e attivazione — valuta la risposta prima di caricare</div>
+            <div>2. Usa esercizi già tollerati bene — evita novità oggi</div>
+            <div>3. NRS inizio e fine seduta — se dolore aumenta ≥ 2 punti sull'esercizio, fermati</div>
+          </div>
+          <div style="margin-top:10px;font-size:10px;color:var(--text3);font-family:'DM Mono';">⚠️ Seduta con dolori — i blocchi NON sono stati pre-compilati. Usa i pulsanti manuali qui sotto.</div>
+        </div>`;
+    }
+    return; // non popolare schedaBlocchi
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // CASO NORMALE — popola blocchi nel builder
+  // ══════════════════════════════════════════════════════════════
+  const { modalita, motivazione, blocchi, check, prossimaNote, segnaliContrad } = result;
+
+  schedaBlocchi = [];
+  blocchi.forEach(b => schedaBlocchi.push(b));
+  renderSedutaBuilderBlocchi();
+
+  // ── Sintesi collassabile ───────────────────────────────────────────
+  const modalitaStyle = {
+    progressione: { bg: 'rgba(71,255,160,0.06)', border: 'rgba(71,255,160,0.25)', color: 'var(--green)', icon: '🚀', label: 'Progressione' },
+    consolidamento:{ bg: 'rgba(255,200,0,0.06)', border: 'rgba(255,200,0,0.25)', color: 'var(--yellow)', icon: '⚖️', label: 'Consolidamento' },
+    semplifica:   { bg: 'rgba(255,71,87,0.06)',  border: 'rgba(255,71,87,0.25)',  color: 'var(--red)',    icon: '⬇️', label: 'Semplificata' },
+    inizio:       { bg: 'rgba(21,101,192,0.06)', border: 'rgba(21,101,192,0.25)', color: '#64b5f6',       icon: '🌱', label: 'Prima seduta' },
+    percorso:     { bg: 'rgba(21,101,192,0.06)', border: 'rgba(21,101,192,0.25)', color: '#64b5f6',       icon: '📋', label: 'Percorso Fit' },
+  };
+  const ms = modalitaStyle[modalita] || modalitaStyle.consolidamento;
+
+  const checkHtml = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;">
+      <div style="padding:7px 10px;background:var(--surface);border-radius:6px;">
+        <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">👁 Monitorare oggi</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.4;">${check.monitorare}</div>
+      </div>
+      <div style="padding:7px 10px;background:var(--surface);border-radius:6px;">
+        <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">🔧 Dove adattare</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.4;">${check.adattare}</div>
+      </div>
+      <div style="padding:7px 10px;background:var(--surface);border-radius:6px;grid-column:1/-1;">
+        <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">📈 Candidato progressione futura</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.4;">${check.candidatoProgressione}</div>
+      </div>
+      ${check.alertTrasc ? `<div style="padding:7px 10px;background:rgba(255,200,0,0.06);border:1px solid rgba(255,200,0,0.2);border-radius:6px;grid-column:1/-1;">
+        <div style="font-size:11px;color:var(--yellow);">⚠️ ${check.alertTrasc} — da recuperare nelle prossime sedute</div>
+      </div>` : ''}
+      ${check.alertContrad ? `<div style="padding:7px 10px;background:rgba(255,200,0,0.06);border:1px solid rgba(255,200,0,0.2);border-radius:6px;grid-column:1/-1;">
+        <div style="font-size:11px;color:var(--yellow);">⚡ Segnali contrastanti: ${check.alertContrad} — ho scelto l'opzione conservativa</div>
+      </div>` : ''}
+    </div>`;
+
+  if (sintesiEl) {
+    sintesiEl.style.display = 'block';
+    sintesiEl.innerHTML = `
+      <div style="background:${ms.bg};border:1px solid ${ms.border};border-radius:8px;padding:12px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="
+          const body=this.nextElementSibling;
+          const arr=this.querySelector('.ai-chev');
+          body.style.display=body.style.display==='none'?'block':'none';
+          arr.textContent=body.style.display==='none'?'▸':'▾';
+        ">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:15px;">${ms.icon}</span>
+            <span style="font-family:'DM Mono';font-size:9px;color:${ms.color};text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">✦ AI — ${ms.label}</span>
+          </div>
+          <span class="ai-chev" style="font-size:11px;color:var(--text3);">▾</span>
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5;">${motivazione}</div>
+          ${prossimaNote ? `<div style="margin-top:7px;padding:6px 10px;background:rgba(255,200,0,0.07);border-radius:6px;font-size:11px;color:var(--yellow);">💡 Dalla seduta precedente: ${prossimaNote}</div>` : ''}
+          ${checkHtml}
+          <div style="margin-top:8px;font-size:10px;color:var(--text3);font-family:'DM Mono';">Bozza modificabile — aggiungi, rimuovi o modifica qualsiasi blocco qui sotto</div>
+        </div>
+      </div>`;
+  }
+}
+// ============================================================
 
 function saveSedutaBuilder() {
   const clientId = document.getElementById('seduta-client-select').value;
