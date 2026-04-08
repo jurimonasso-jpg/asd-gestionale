@@ -1321,6 +1321,8 @@ textarea.form-input {
   transition: background 0.15s;
 }
 .scheda-block-header:hover { background: #ebedf1; }
+.sb-drag-handle:hover { color: var(--accent) !important; }
+.scheda-block[draggable] { transition: opacity 0.15s; }
 .scheda-block-title {
   font-size: 12px;
   font-weight: 800;
@@ -7129,8 +7131,12 @@ function renderBloccoEditor(b, i) {
 
   const esHtml = b.esercizi.map((ex, j) => renderEsercizioEditor(ex, i, j)).join('');
 
-  return `<div class="scheda-block" id="blocco-${i}">
-    <div class="scheda-block-header" onclick="toggleBlocco(${i})">
+  return `<div class="scheda-block" id="blocco-${i}"
+    ondragover="_sbDragOver(event,${i})"
+    ondrop="_sbDrop(event,${i})">
+    <div class="scheda-block-header" onclick="toggleBlocco(${i})"
+      ondragover="event.preventDefault()"
+      ondrop="_sbDrop(event,${i})">
       <div class="scheda-block-title">
         <span>${meta.icon}</span>
         <span>${meta.label}</span>
@@ -7138,11 +7144,19 @@ function renderBloccoEditor(b, i) {
         ${b.rounds ? `<span class="scheda-block-badge" style="background:rgba(255,255,255,0.05);color:var(--text3);border:1px solid var(--border);">${b.rounds} round</span>` : ''}
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
+        <span class="sb-drag-handle" draggable="true"
+          onmousedown="event.stopPropagation()"
+          ondragstart="_sbDragStart(event,${i})"
+          ondragend="_sbDragEnd(event)"
+          title="Trascina per riordinare"
+          style="cursor:grab;padding:4px 6px;color:var(--text3);font-size:16px;line-height:1;user-select:none;">⠿</span>
         <button class="btn btn-danger" style="padding:4px 8px;font-size:11px;" onclick="event.stopPropagation();removeBlocco(${i})">✕</button>
         <span style="color:var(--text3);font-size:14px;" id="blocco-chevron-${i}">▾</span>
       </div>
     </div>
-    <div class="scheda-block-body" id="blocco-body-${i}">
+    <div class="scheda-block-body" id="blocco-body-${i}"
+      ondragover="_sbDragOver(event,${i})"
+      ondrop="_sbDrop(event,${i})">
       ${configHtml}
       ${esHtml}
       <button class="add-ex-btn" onclick="openExPicker(${i})">+ Aggiungi esercizio</button>
@@ -7157,6 +7171,61 @@ function toggleBlocco(i) {
   body.style.display = isOpen ? 'none' : 'block';
   chev.textContent = isOpen ? '▸' : '▾';
 }
+
+// ── Drag & Drop blocchi seduta ────────────────────────────────────
+let _sbDragIdx = null;
+
+function _sbDragStart(event, idx) {
+  _sbDragIdx = idx;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', String(idx));
+  // Stile visivo sul blocco trascinato
+  setTimeout(() => {
+    const el = document.getElementById('blocco-' + idx);
+    if (el) el.style.opacity = '0.45';
+  }, 0);
+}
+
+function _sbDragEnd(event) {
+  _sbCleanDragStyles();
+  _sbDragIdx = null;
+}
+
+function _sbCleanDragStyles() {
+  document.querySelectorAll('.scheda-block').forEach(el => {
+    el.style.opacity = '';
+    el.style.borderTop = '';
+    el.style.borderBottom = '';
+  });
+}
+
+function _sbDragOver(event, targetIdx) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  if (_sbDragIdx === null || _sbDragIdx === targetIdx) return;
+  _sbCleanDragStyles();
+  const dragged = document.getElementById('blocco-' + _sbDragIdx);
+  if (dragged) dragged.style.opacity = '0.45';
+  const targetEl = document.getElementById('blocco-' + targetIdx);
+  if (targetEl) {
+    if (targetIdx > _sbDragIdx) targetEl.style.borderBottom = '2px solid var(--accent)';
+    else targetEl.style.borderTop = '2px solid var(--accent)';
+  }
+}
+
+function _sbDrop(event, targetIdx) {
+  event.preventDefault();
+  _sbCleanDragStyles();
+  if (_sbDragIdx === null || _sbDragIdx === targetIdx) { _sbDragIdx = null; return; }
+  const arr = schedaBlocchi;
+  const moved = arr.splice(_sbDragIdx, 1)[0];
+  const adjustedTarget = _sbDragIdx < targetIdx ? targetIdx - 1 : targetIdx;
+  arr.splice(adjustedTarget, 0, moved);
+  _sbDragIdx = null;
+  // Aggiorna entrambi i container (seduta builder + modal schede)
+  renderSchedaBlocchi();
+}
+// ──────────────────────────────────────────────────────────────────
 
 function renderEsercizioEditor(ex, bi, ei) {
   const clientId = document.getElementById('seduta-client-select')?.value || '';
@@ -11574,6 +11643,10 @@ function aiProposiSeduta() {
   if (!client) return;
 
   const btn = document.getElementById('sb-ai-btn');
+  const sintesi = document.getElementById('sb-ai-sintesi');
+
+  // Reset stato precedente
+  if (sintesi) { sintesi.style.display = 'none'; sintesi.innerHTML = ''; }
   if (btn) { btn.innerHTML = '⏳ Analisi in corso…'; btn.disabled = true; }
 
   setTimeout(() => {
@@ -11581,10 +11654,9 @@ function aiProposiSeduta() {
       const result = _aiGenerateProposta(clientId, client);
       _aiApplyProposta(result);
     } catch(e) {
-      const sintesi = document.getElementById('sb-ai-sintesi');
       if (sintesi) {
         sintesi.style.display = 'block';
-        sintesi.innerHTML = `<div style="padding:10px 14px;background:rgba(255,71,87,0.08);border:1px solid rgba(255,71,87,0.3);border-radius:8px;font-size:12px;color:var(--red);">⚠️ Errore nella proposta AI: ${e.message}</div>`;
+        sintesi.innerHTML = `<div style="padding:10px 14px;background:rgba(255,71,87,0.08);border:1px solid rgba(255,71,87,0.3);border-radius:8px;font-size:12px;color:var(--red);">⚠️ Errore: ${e.message}<br><span style="font-size:10px;color:var(--text3);">${e.stack?.split('\n')[1]||''}</span></div>`;
       }
     } finally {
       if (btn) { btn.innerHTML = '<span style="font-size:15px;">✦</span> Rigenera proposta'; btn.disabled = false; }
@@ -12253,27 +12325,75 @@ function _aiGenerateProposta(clientId, client) {
 function _getCatForEx(nome) {
   if (!nome) return '';
   const key = nome.trim().toLowerCase();
-  // Cerca prima nei custom
   const custom = JSON.parse(localStorage.getItem('asd_custom_exercises') || '[]');
   const found = custom.find(e => e.nome.trim().toLowerCase() === key);
   if (found?.cat) return found.cat;
-  // Cerca in EXERCISES
   for (const cat of Object.keys(EXERCISES)) {
     if (EXERCISES[cat]?.items?.some(e => e.trim().toLowerCase() === key)) return cat;
   }
   return '';
 }
 
+// ── Analizza la struttura tipica delle sedute di un cliente ──────────
+// Restituisce: { tipiPrincipali, nEserciziTarget, bloccoTarget }
+function _aiAnalizzaStruttura(clientId) {
+  const sedute = workouts
+    .filter(w => w.clientId == clientId && w.categoria === 'seduta')
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    .slice(0, 8);
+
+  if (sedute.length === 0) return { tipiPrincipali: null, nEserciziTarget: 4, bloccoTarget: null };
+
+  // Conta occorrenze di ogni tipo di blocco (esclude mobilita come "struttura principale")
+  const tipoCount = {};
+  const nEsercizi = [];
+  sedute.forEach(s => {
+    const totalEx = (s.blocchi || []).reduce((sum, b) => sum + (b.esercizi || []).length, 0);
+    if (totalEx > 0) nEsercizi.push(totalEx);
+    (s.blocchi || []).forEach(b => {
+      tipoCount[b.tipo] = (tipoCount[b.tipo] || 0) + 1;
+    });
+  });
+
+  // Blocco principale (non-mobilita più frequente)
+  const tipiOrdinati = Object.entries(tipoCount)
+    .filter(([t]) => t !== 'mobilita')
+    .sort((a, b) => b[1] - a[1]);
+  const bloccoTarget = tipiOrdinati[0]?.[0] || null;
+  const tipiPrincipali = tipiOrdinati.map(([t]) => t);
+
+  // Media esercizi nelle ultime sedute (solo nel blocco principale, esclude mobilita)
+  const nExBloccoMain = [];
+  sedute.forEach(s => {
+    const b = (s.blocchi || []).find(b => b.tipo === bloccoTarget);
+    if (b) nExBloccoMain.push((b.esercizi || []).length);
+  });
+  const avgExMain = nExBloccoMain.length > 0
+    ? Math.round(nExBloccoMain.reduce((a, b) => a + b, 0) / nExBloccoMain.length)
+    : 4;
+
+  // Target: usa la mediana per essere robusto agli outlier
+  const sorted = [...nExBloccoMain].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] || avgExMain;
+
+  return {
+    tipiPrincipali,
+    bloccoTarget,          // tipo di blocco più usato (es. 'fase1', 'workout')
+    nEserciziTarget: median, // numero tipico di esercizi nel blocco principale
+    haMobilita: (tipoCount['mobilita'] || 0) >= Math.ceil(sedute.length * 0.5), // mobilita presente in ≥50% sedute
+  };
+}
+
 function _aiApplyProposta(result) {
+  const clientId = document.getElementById('seduta-client-select')?.value;
   const sintesiEl = document.getElementById('sb-ai-sintesi');
 
   // ══════════════════════════════════════════════════════════════
   // CASO DOLORI — solo supporto decisionale, NO blocchi
   // ══════════════════════════════════════════════════════════════
   if (result.tipo === 'dolori') {
-    const { client, painAnalysis, lastNote, fuTesto, fuDolore, recentSedute, sessionNotes, lastBannerFeedback, prossimaNote, segnaliContrad } = result;
+    const { painAnalysis, lastNote, fuTesto, fuDolore, recentSedute, sessionNotes, lastBannerFeedback, prossimaNote, segnaliContrad } = result;
 
-    // Esercizi tollerati bene di recente
     const tolleratiSet = new Set();
     recentSedute.slice(0, 4).forEach(sed => {
       const n = sessionNotes.find(n => n.date === sed.createdAt?.split('T')[0]);
@@ -12283,25 +12403,21 @@ function _aiApplyProposta(result) {
       }
     });
 
-    // Pattern recenti (ultimi 90gg)
-    const bal = computeBalanceData(clientId, 90);
+    const bal = clientId ? computeBalanceData(clientId, 90) : {};
     const patLabels = { pushH:'Push H', pullH:'Pull H', pushV:'Push V', pullV:'Pull V', hipD:'Hip dom.', kneeD:'Knee dom.', coreI:'Core iso.', coreD:'Core din.' };
     const patSorted = Object.entries(patLabels)
       .map(([k, l]) => ({ k, l, v: bal[k] || 0 }))
       .sort((a, b) => b.v - a.v);
 
-    // Attenzioni: esercizi con note negative recenti
     const attenzioniSet = new Set();
     sessionNotes.slice(0, 4).forEach(n => {
       const rev = (n?.text || '').split('⚠️')[1]?.split('|')[0] || '';
       if (rev.trim()) {
-        // estraiamo parole chiave significative
-        const words = rev.toLowerCase().match(/[a-zàèìòù ]{4,}/g) || [];
+        const words = rev.toLowerCase().match(/[a-zàèìòù]{4,}/g) || [];
         words.forEach(w => attenzioniSet.add(w.trim()));
       }
     });
 
-    // Feedback precedente
     const fbNote = lastBannerFeedback === 'sottostimato'
       ? '🔴 Feedback precedente: era peggio del previsto — massima prudenza'
       : lastBannerFeedback === 'giusto'
@@ -12310,7 +12426,6 @@ function _aiApplyProposta(result) {
 
     const tolleratiHtml = [...tolleratiSet].slice(0, 8)
       .map(e => `<span style="background:rgba(71,255,160,0.1);border:1px solid rgba(71,255,160,0.25);border-radius:20px;padding:2px 8px;font-size:11px;color:var(--green);margin:2px;display:inline-block;">${e}</span>`).join('');
-
     const patHtml = patSorted.slice(0, 4)
       .map(p => `<span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${p.l}: <b style="color:var(--text2);">${p.v}</b></span>`).join('  ·  ');
 
@@ -12319,62 +12434,115 @@ function _aiApplyProposta(result) {
       sintesiEl.innerHTML = `
         <div style="background:rgba(255,71,87,0.05);border:1px solid rgba(255,71,87,0.25);border-radius:8px;padding:14px 16px;">
           <div style="font-family:'DM Mono';font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;">✦ AI — Supporto decisionale · seduta con dolori</div>
-
           <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:4px;">📍 Quadro attuale</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5;">
-            ${painAnalysis.activePain.length > 0
-              ? painAnalysis.activePain.map(p => `<span style="color:var(--red);">${p.label}</span>`).join(', ')
-              : 'Dolore segnalato in sessione'}
+            ${painAnalysis.activePain.length > 0 ? painAnalysis.activePain.map(p => `<span style="color:var(--red);">${p.label}</span>`).join(', ') : 'Dolore segnalato in sessione'}
             ${fuDolore !== null ? ` · Follow-up dolore: <b style="color:var(--red);">${fuDolore}/10</b>` : ''}
             ${fuTesto ? `<div style="margin-top:4px;font-style:italic;color:var(--text3);">"${fuTesto.substring(0, 100)}${fuTesto.length > 100 ? '…' : ''}"</div>` : ''}
             ${prossimaNote ? `<div style="margin-top:6px;padding:5px 8px;background:rgba(255,200,0,0.07);border-radius:6px;font-size:11px;color:var(--yellow);">💡 Nota precedente: ${prossimaNote}</div>` : ''}
           </div>
-
           ${fbNote ? `<div style="font-size:11px;margin-bottom:8px;">${fbNote}</div>` : ''}
-
-          ${tolleratiHtml ? `
-          <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:5px;">✅ Tollerati bene di recente</div>
-          <div style="margin-bottom:10px;line-height:1.8;">${tolleratiHtml}</div>` : ''}
-
+          ${tolleratiHtml ? `<div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:5px;">✅ Tollerati bene di recente</div><div style="margin-bottom:10px;line-height:1.8;">${tolleratiHtml}</div>` : ''}
           ${patHtml ? `<div style="margin-bottom:10px;font-size:11px;">${patHtml}</div>` : ''}
-
-          ${attenzioniSet.size > 0 ? `
-          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px;">⚠️ Attenzioni da note recenti</div>
-          <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">${[...attenzioniSet].slice(0,5).join(' · ')}</div>` : ''}
-
-          ${segnaliContrad.length > 0 ? `
-          <div style="font-size:11px;color:var(--yellow);margin-bottom:8px;">⚡ Segnale contraddittorio: ${segnaliContrad[0]}</div>` : ''}
-
+          ${attenzioniSet.size > 0 ? `<div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px;">⚠️ Da note recenti</div><div style="font-size:11px;color:var(--text3);margin-bottom:10px;">${[...attenzioniSet].slice(0,5).join(' · ')}</div>` : ''}
+          ${segnaliContrad.length > 0 ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:8px;">⚡ ${segnaliContrad[0]}</div>` : ''}
           <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:6px;">💡 3 suggerimenti prudenti</div>
           <div style="font-size:12px;color:var(--text2);line-height:1.8;">
             <div>1. Parti da mobilità e attivazione — valuta la risposta prima di caricare</div>
             <div>2. Usa esercizi già tollerati bene — evita novità oggi</div>
-            <div>3. NRS inizio e fine seduta — se dolore aumenta ≥ 2 punti sull'esercizio, fermati</div>
+            <div>3. NRS inizio e fine — se dolore aumenta ≥ 2 punti sull'esercizio, fermati</div>
           </div>
           <div style="margin-top:10px;font-size:10px;color:var(--text3);font-family:'DM Mono';">⚠️ Seduta con dolori — i blocchi NON sono stati pre-compilati. Usa i pulsanti manuali qui sotto.</div>
         </div>`;
     }
-    return; // non popolare schedaBlocchi
+    return;
   }
 
   // ══════════════════════════════════════════════════════════════
-  // CASO NORMALE — popola blocchi nel builder
+  // CASO NORMALE — adatta la struttura allo storico del cliente
   // ══════════════════════════════════════════════════════════════
   const { modalita, motivazione, blocchi, check, prossimaNote, segnaliContrad } = result;
 
+  // Analizza struttura tipica del cliente e adatta i blocchi proposti
+  const struttura = clientId ? _aiAnalizzaStruttura(clientId) : { tipiPrincipali: null, nEserciziTarget: 4, bloccoTarget: null, haMobilita: true };
+
+  let blocchiFinali = blocchi;
+
+  if (struttura.bloccoTarget) {
+    // 1. Riorganizza i blocchi rispettando la struttura storica del cliente
+    //    Es. se il cliente fa sempre workout, convertiamo il blocco principale in workout
+    const bloccoMainStorico = struttura.bloccoTarget;
+
+    // Raccogli tutti gli esercizi proposti (esclusa mobilita)
+    const tuttiExProsti = [];
+    blocchi.forEach(b => {
+      if (b.tipo !== 'mobilita') {
+        (b.esercizi || []).forEach(ex => tuttiExProsti.push({ ...ex }));
+      }
+    });
+
+    // Adatta al numero target di esercizi del cliente
+    const nTarget = struttura.nEserciziTarget;
+    const exSelezionati = tuttiExProsti.slice(0, Math.max(nTarget, 2));
+
+    // Ricostruisci: mobilita (se il cliente la fa) + blocco principale con esercizi adatti
+    blocchiFinali = [];
+    if (struttura.haMobilita) {
+      const mobBlocco = blocchi.find(b => b.tipo === 'mobilita');
+      if (mobBlocco) blocchiFinali.push(mobBlocco);
+    }
+
+    // Se il cliente usa un unico blocco principale, usa quello
+    if (struttura.tipiPrincipali.length === 1 || bloccoMainStorico === 'workout' || bloccoMainStorico === 'fase1') {
+      const templateBlocco = blocchi.find(b => b.tipo === bloccoMainStorico)
+        || blocchi.find(b => b.tipo !== 'mobilita');
+      if (templateBlocco) {
+        blocchiFinali.push({
+          ...templateBlocco,
+          tipo: bloccoMainStorico,
+          esercizi: exSelezionati
+        });
+      }
+    } else {
+      // Cliente usa più blocchi — mantieni la struttura proposta ma adatta i conteggi
+      // Distribuisci gli esercizi nei blocchi storici (non-mobilita)
+      const blocchiStorici = struttura.tipiPrincipali;
+      const blocchiProposti = blocchi.filter(b => b.tipo !== 'mobilita');
+      let exIdx = 0;
+      blocchiStorici.forEach((tipo, i) => {
+        const template = blocchiProposti.find(b => b.tipo === tipo) || blocchiProposti[i] || blocchiProposti[0];
+        if (!template) return;
+        // Quota di esercizi per questo blocco
+        const quota = i === blocchiStorici.length - 1
+          ? exSelezionati.slice(exIdx).length
+          : Math.ceil(exSelezionati.length / blocchiStorici.length);
+        const exBlocco = exSelezionati.slice(exIdx, exIdx + quota);
+        exIdx += quota;
+        if (exBlocco.length > 0) {
+          blocchiFinali.push({ ...template, tipo, esercizi: exBlocco });
+        }
+      });
+    }
+  }
+
+  // Applica al builder
   schedaBlocchi = [];
-  blocchi.forEach(b => schedaBlocchi.push(b));
+  blocchiFinali.forEach(b => schedaBlocchi.push(b));
   renderSedutaBuilderBlocchi();
 
   // ── Sintesi collassabile ───────────────────────────────────────────
   const modalitaStyle = {
-    progressione: { bg: 'rgba(71,255,160,0.06)', border: 'rgba(71,255,160,0.25)', color: 'var(--green)', icon: '🚀', label: 'Progressione' },
-    consolidamento:{ bg: 'rgba(255,200,0,0.06)', border: 'rgba(255,200,0,0.25)', color: 'var(--yellow)', icon: '⚖️', label: 'Consolidamento' },
-    semplifica:   { bg: 'rgba(255,71,87,0.06)',  border: 'rgba(255,71,87,0.25)',  color: 'var(--red)',    icon: '⬇️', label: 'Semplificata' },
-    inizio:       { bg: 'rgba(21,101,192,0.06)', border: 'rgba(21,101,192,0.25)', color: '#64b5f6',       icon: '🌱', label: 'Prima seduta' },
-    percorso:     { bg: 'rgba(21,101,192,0.06)', border: 'rgba(21,101,192,0.25)', color: '#64b5f6',       icon: '📋', label: 'Percorso Fit' },
+    progressione:  { bg:'rgba(71,255,160,0.06)', border:'rgba(71,255,160,0.25)', color:'var(--green)', icon:'🚀', label:'Progressione' },
+    consolidamento:{ bg:'rgba(255,200,0,0.06)',  border:'rgba(255,200,0,0.25)',  color:'var(--yellow)',icon:'⚖️', label:'Consolidamento' },
+    semplifica:    { bg:'rgba(255,71,87,0.06)',  border:'rgba(255,71,87,0.25)',  color:'var(--red)',   icon:'⬇️', label:'Semplificata' },
+    inizio:        { bg:'rgba(21,101,192,0.06)', border:'rgba(21,101,192,0.25)', color:'#64b5f6',      icon:'🌱', label:'Prima seduta' },
+    percorso:      { bg:'rgba(21,101,192,0.06)', border:'rgba(21,101,192,0.25)', color:'#64b5f6',      icon:'📋', label:'Percorso Fit' },
   };
   const ms = modalitaStyle[modalita] || modalitaStyle.consolidamento;
+
+  const strutturaNote = struttura.bloccoTarget
+    ? `<div style="font-size:10px;color:var(--text3);font-family:'DM Mono';margin-top:5px;">Struttura adattata allo storico: ${struttura.bloccoTarget} · ${struttura.nEserciziTarget} esercizi tipici</div>`
+    : '';
 
   const checkHtml = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;">
@@ -12390,12 +12558,8 @@ function _aiApplyProposta(result) {
         <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">📈 Candidato progressione futura</div>
         <div style="font-size:11px;color:var(--text2);line-height:1.4;">${check.candidatoProgressione}</div>
       </div>
-      ${check.alertTrasc ? `<div style="padding:7px 10px;background:rgba(255,200,0,0.06);border:1px solid rgba(255,200,0,0.2);border-radius:6px;grid-column:1/-1;">
-        <div style="font-size:11px;color:var(--yellow);">⚠️ ${check.alertTrasc} — da recuperare nelle prossime sedute</div>
-      </div>` : ''}
-      ${check.alertContrad ? `<div style="padding:7px 10px;background:rgba(255,200,0,0.06);border:1px solid rgba(255,200,0,0.2);border-radius:6px;grid-column:1/-1;">
-        <div style="font-size:11px;color:var(--yellow);">⚡ Segnali contrastanti: ${check.alertContrad} — ho scelto l'opzione conservativa</div>
-      </div>` : ''}
+      ${check.alertTrasc ? `<div style="padding:7px 10px;background:rgba(255,200,0,0.06);border:1px solid rgba(255,200,0,0.2);border-radius:6px;grid-column:1/-1;"><div style="font-size:11px;color:var(--yellow);">⚠️ ${check.alertTrasc} — da recuperare nelle prossime sedute</div></div>` : ''}
+      ${check.alertContrad ? `<div style="padding:7px 10px;background:rgba(255,200,0,0.06);border:1px solid rgba(255,200,0,0.2);border-radius:6px;grid-column:1/-1;"><div style="font-size:11px;color:var(--yellow);">⚡ Segnali contrastanti: ${check.alertContrad} — scelta conservativa</div></div>` : ''}
     </div>`;
 
   if (sintesiEl) {
@@ -12416,9 +12580,10 @@ function _aiApplyProposta(result) {
         </div>
         <div>
           <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5;">${motivazione}</div>
+          ${strutturaNote}
           ${prossimaNote ? `<div style="margin-top:7px;padding:6px 10px;background:rgba(255,200,0,0.07);border-radius:6px;font-size:11px;color:var(--yellow);">💡 Dalla seduta precedente: ${prossimaNote}</div>` : ''}
           ${checkHtml}
-          <div style="margin-top:8px;font-size:10px;color:var(--text3);font-family:'DM Mono';">Bozza modificabile — aggiungi, rimuovi o modifica qualsiasi blocco qui sotto</div>
+          <div style="margin-top:8px;font-size:10px;color:var(--text3);font-family:'DM Mono';">Bozza modificabile — aggiungi, rimuovi o modifica qualsiasi blocco</div>
         </div>
       </div>`;
   }
