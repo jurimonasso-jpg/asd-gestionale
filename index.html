@@ -12265,7 +12265,7 @@ function _aiGenerateProposta(clientId, client) {
   }
 
   // ══════════════════════════════════════════════════════════════
-  // FASE 5 — BILANCIAMENTO PATTERN (ultimi 90gg)
+  // FASE 5 — BILANCIAMENTO PATTERN (ultime 6 sedute)
   // ══════════════════════════════════════════════════════════════
   const patternMap = [
     { key: 'pushH', label: 'Push orizzontale', cats: ['Push Orizzontale'] },
@@ -12277,16 +12277,76 @@ function _aiGenerateProposta(clientId, client) {
     { key: 'coreI', label: 'Core isometrico',  cats: ['Core — Isometria'] },
     { key: 'coreD', label: 'Core dinamico',    cats: ['Core — Dinamico'] },
   ];
+
+  // Conta pattern nelle ultime 6 sedute (non 90gg)
+  const ultSei = recentSedute.slice(0, 6);
+  const countsSei = { pushH:0, pullH:0, pushV:0, pullV:0, hipD:0, kneeD:0, coreI:0, coreD:0 };
+  ultSei.forEach(sed => {
+    (sed.blocchi || []).forEach(b => {
+      (b.esercizi || []).forEach(ex => {
+        if (!ex.nome) return;
+        const cat = _getCatForEx(ex.nome);
+        if (cat === 'Push Orizzontale')      countsSei.pushH++;
+        else if (cat === 'Pull Orizzontale') countsSei.pullH++;
+        else if (cat === 'Push Verticale')   countsSei.pushV++;
+        else if (cat === 'Pull Verticale')   countsSei.pullV++;
+        else if (cat === 'Hip Dominant / Glutei')    countsSei.hipD++;
+        else if (cat === 'Knee Dominant / Squat')    countsSei.kneeD++;
+        else if (cat === 'Core — Isometria') countsSei.coreI++;
+        else if (cat === 'Core — Dinamico')  countsSei.coreD++;
+      });
+    });
+  });
+
+  // Profilo cliente: sportivo/avanzato se F1 contiene esercizi di potenza
+  // (Rastapower, Potenza) → F1 esclusa dal bilanciamento
+  const hasPotenzaInF1 = recentSedute.slice(0, 6).some(sed => {
+    const f1 = (sed.blocchi || []).find(b => b.tipo === 'fase1');
+    if (!f1) return false;
+    return (f1.esercizi || []).some(ex => {
+      const cat = _getCatForEx(ex.nome);
+      return cat === 'Potenza' || cat === '🔴 Rastapower';
+    });
+  });
+  const profiloSportivo = hasPotenzaInF1;
+  // Blocchi inclusi nel bilanciamento pattern
+  // Benessere: F1 + F2 + F3; Sportivo: solo F2 + F3
+  // In ogni caso Mobilità sempre esclusa
+
+  // Calcola bilanciamento coppie Push/Pull: H separato da V
+  // Push H ↔ Pull H; Push V ↔ Pull V
+  // Override spalla: esclude Pull V e Push V se dolore spalla attivo
+  const hasSpalla = painAnalysis.painZones && painAnalysis.painZones.has && painAnalysis.painZones.has('spalla');
+
+  // Costruisce lista pattern ordinati dal più carente (solo push/pull separati + hip/knee)
+  // Core escluso perché gestito separatamente nella struttura blocchi
+  const patternBilanciabili = patternMap.filter(p => !['coreI','coreD'].includes(p.key));
+  // Escludi pattern bloccati da dolori
+  const patternAttivi = patternBilanciabili.filter(p => {
+    if (hasSpalla && (p.key === 'pushV' || p.key === 'pullV')) return false;
+    return true;
+  });
+
+  const sortedSei = [...patternAttivi].sort((a, b) => (countsSei[a.key] || 0) - (countsSei[b.key] || 0));
+
+  // I 2 pattern più mancanti nelle ultime 6 sedute
+  // Pull H prioritario su Pull V come default se ex-aequo
+  const patternMancante1 = sortedSei[0] || null; // va in F2
+  const patternMancante2 = sortedSei[1] || null; // va in F3
+
+  // Flag: bilanciamento attivo solo se abbiamo abbastanza storico e non siamo in semplifica
+  const hasSuffStoricoSei = ultSei.length >= 3;
+  const bilanciaPattern = hasSuffStoricoSei && modalita !== 'semplifica' && !hasSegnaliContrad;
+
+  // Mantieni anche il vecchio alertTrasc per compatibilità con il check finale
   const totalPat = patternMap.reduce((s, p) => s + (balance90[p.key] || 0), 0) || 1;
   const sortedPat = [...patternMap].sort((a, b) => (balance90[a.key] || 0) - (balance90[b.key] || 0));
-  const trascurato = sortedPat[0];
+  const trascurato = patternMancante1 || sortedPat[0];
   const pctTrasc = totalPat > 0 ? Math.round((balance90[trascurato.key] || 0) / totalPat * 100) : 0;
-  // Solo segnalare se c'è abbastanza storico e il pattern è veramente trascurato
-  const alertTrasc = pctTrasc < 8 && balance90._sedute >= 4
-    ? `Pattern "${trascurato.label}" poco usato (${pctTrasc}% su 90gg)`
+  const alertTrasc = bilanciaPattern && patternMancante1
+    ? `Pattern "${patternMancante1.label}" carente (${countsSei[patternMancante1.key] || 0}x nelle ultime 6 sedute)`
     : null;
-  // Non forzare il bilanciamento se il contesto suggerisce prudenza
-  const recuperaTrascurato = alertTrasc && modalita !== 'semplifica' && !hasSegnaliContrad;
+  const recuperaTrascurato = bilanciaPattern && patternMancante1 !== null;
 
   // ══════════════════════════════════════════════════════════════
   // FASE 6 — SCEGLI ESERCIZI COERENTI
@@ -12443,7 +12503,8 @@ function _aiGenerateProposta(clientId, client) {
   });
 
   // ── FASE 1: Potenza (esplosivo) + Core ──────────────────────────────
-  // Rastapower: all'INIZIO come stimolo di potenza (se coerente col profilo)
+  // Profilo sportivo: Potenza + Core (F1 esclusa dal bilanciamento pattern)
+  // Profilo benessere (!profiloSportivo): struttura mista, include pattern mancanti se non push/pull
   const potenzaPool = [];
   if (!isPRT && modalita !== 'semplifica') {
     potenzaPool.push(...(EXERCISES['Potenza']?.items || []));
@@ -12457,9 +12518,30 @@ function _aiGenerateProposta(clientId, client) {
     ...(painZones.has('colonna') ? [] : (EXERCISES['Core — Dinamico']?.items || []).slice(0, 4))
   ].filter(notBlocked);
 
-  const potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
-  const coreF1Ex  = pickEx(coreF1Pool, 1);
-  const fase1Exs  = [...potenzaEx, ...coreF1Ex].filter(Boolean);
+  let potenzaEx, coreF1Ex, fase1Exs;
+
+  if (!profiloSportivo && bilanciaPattern) {
+    // Cliente benessere: F1 mista — includi pattern mancanti non-push/pull se presenti
+    // I pattern push/pull vanno in F2/F3, qui recuperiamo hip/knee se carenti
+    const nonAltoPat1 = patternMancante1 && !altoPatternKeys.includes(patternMancante1.key) ? patternMancante1 : null;
+    const nonAltoPat2 = patternMancante2 && !altoPatternKeys.includes(patternMancante2.key) ? patternMancante2 : null;
+    const patF1 = nonAltoPat1 || nonAltoPat2;
+
+    if (patF1) {
+      // Includi esercizi del pattern carente in F1 (es. hip dominant o knee dominant)
+      const patF1Pool = poolPerPattern(patF1);
+      potenzaEx = patF1Pool.length > 0 ? pickEx(patF1Pool, 1) : (potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : []);
+    } else {
+      potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
+    }
+    coreF1Ex = pickEx(coreF1Pool, 1);
+  } else {
+    // Profilo sportivo o bilanciamento non attivo: Potenza + Core standard
+    potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
+    coreF1Ex  = pickEx(coreF1Pool, 1);
+  }
+
+  fase1Exs = [...potenzaEx, ...coreF1Ex].filter(Boolean);
 
   if (fase1Exs.length > 0) {
     blocchi.push({
@@ -12499,27 +12581,42 @@ function _aiGenerateProposta(clientId, client) {
   const pushHPool = (EXERCISES['Push Orizzontale']?.items|| []).filter(notBlocked);
   const pushVPool = (!painZones.has('spalla') ? (EXERCISES['Push Verticale']?.items || []) : []).filter(notBlocked);
 
-  // Pool alto F2 — default: pull > push (Mike Boyle: pull più sicuro del push come pattern base).
-  // Se c'è un pattern trascurato compatibile con questa fase (non in conflitto con l'alternanza),
-  // lo aggiungiamo in testa come soft-priority — pickEx sceglierà comunque il più fresco/tollerato.
-  // Non sovrascriviamo l'intero pool: è il coach a decidere se seguire il suggerimento.
-  let altoPool = [...pullHPool, ...pullVPool, ...pushHPool, ...pushVPool]; // default: pull > push
-  if (recuperaTrascurato) {
-    const tCatsF2 = trascurato.cats || [];
-    const tPoolF2 = tCatsF2.flatMap(cat => (EXERCISES[cat]?.items || [])).filter(notBlocked);
-    // Soft-priority: inserisci in testa al pool esistente, senza sostituirlo
-    if (tPoolF2.length > 0) altoPool = [...tPoolF2, ...altoPool.filter(e => !tPoolF2.includes(e))];
+  // ── Helper: costruisce pool per un pattern specifico ──────────────
+  function poolPerPattern(pat) {
+    if (!pat) return [];
+    return (pat.cats || []).flatMap(cat => (EXERCISES[cat]?.items || [])).filter(notBlocked);
+  }
+
+  // ── Pool alto F2 — priorità al pattern mancante #1 ──────────────────
+  // Se bilanciaPattern è attivo e il pattern mancante #1 riguarda la parte alta
+  // (push/pull), quel pool va in testa. Altrimenti default: pull > push.
+  const altoPatternKeys = ['pushH','pullH','pushV','pullV'];
+  let altoPool;
+  if (bilanciaPattern && patternMancante1 && altoPatternKeys.includes(patternMancante1.key)) {
+    // Pattern mancante #1 è un push/pull → priorità forte in F2
+    const p1Pool = poolPerPattern(patternMancante1);
+    const restoAlto = [...pullHPool, ...pullVPool, ...pushHPool, ...pushVPool]
+      .filter(e => !p1Pool.includes(e));
+    altoPool = [...p1Pool, ...restoAlto];
+  } else {
+    // Nessun pattern push/pull prioritario → default pull > push
+    altoPool = [...pullHPool, ...pullVPool, ...pushHPool, ...pushVPool];
   }
 
   const altoEx = pickEx(altoPool, 1);
 
   const fase2Exs = [...gambeEx, ...altoEx].filter(Boolean);
 
+  // Nota F2 con info pattern se bilanciamento attivo
+  const noteF2 = bilanciaPattern && patternMancante1 && altoPatternKeys.includes(patternMancante1.key)
+    ? `Schema motorio principale — priorità ${patternMancante1.label} (carente)`
+    : 'Schema motorio principale — controllo tecnico prima del carico';
+
   if (fase2Exs.length > 0) {
     blocchi.push({
       tipo: 'fase2', rounds: roundsF2, pausaMode: 'pausa_tra',
       intervalOn: '40', intervalOff: '20',
-      note: 'Schema motorio principale — controllo tecnico prima del carico',
+      note: noteF2,
       esercizi: fase2Exs.map(nome => {
         const { kg, noteEx } = suggestKgAndNote(nome);
         return { nome, categoria: _getCatForEx(nome), stimolo: '', serie: '', reps: repsF2, kg, pausa: "60''", noteEx, prog: [{},{},{},{}] };
@@ -12527,19 +12624,27 @@ function _aiGenerateProposta(clientId, client) {
     });
   }
 
-  // ── FASE 3: Circuito finale — alta + bassa + core (alterna pattern F2) ──
+  // ── FASE 3: Circuito finale — priorità al pattern mancante #2 ───────
+  // Se il pattern mancante #2 è push/pull, va in testa a altoF3Pool.
+  // Altrimenti logica di alternanza standard rispetto a F2.
   const wasHinge = gambeEx[0] && hingePool.some(e => e.toLowerCase() === gambeEx[0]?.toLowerCase());
   const gambeF3Pool = (wasHinge ? [...kneePool2, ...hingePool] : [...hingePool, ...kneePool2]).filter(notBlocked);
 
   const wasPull = altoEx[0] && [...pullHPool, ...pullVPool].some(e => e.toLowerCase() === altoEx[0]?.toLowerCase());
-  let altoF3Pool = wasPull ? [...pushHPool, ...pushVPool] : [...pullHPool, ...pullVPool];
+  // Base alternanza F3: opposto di F2
+  const altoF3Base = wasPull ? [...pushHPool, ...pushVPool] : [...pullHPool, ...pullVPool];
 
-  // Pattern trascurato in F3: soft-priority — aggiungi in testa senza sovrascrivere la logica
-  // di alternanza pull/push. Il coach vede l'alert nel check e decide se seguirlo.
-  if (recuperaTrascurato) {
-    const tCats = trascurato.cats || [];
-    const tPool = tCats.flatMap(cat => (EXERCISES[cat]?.items || [])).filter(notBlocked);
-    if (tPool.length > 0) altoF3Pool = [...tPool, ...altoF3Pool.filter(e => !tPool.includes(e))];
+  let altoF3Pool;
+  if (bilanciaPattern && patternMancante2 && altoPatternKeys.includes(patternMancante2.key)) {
+    // Pattern mancante #2 è push/pull → priorità forte in F3
+    const p2Pool = poolPerPattern(patternMancante2);
+    const restoF3 = altoF3Base.filter(e => !p2Pool.includes(e));
+    altoF3Pool = [...p2Pool, ...restoF3];
+  } else if (bilanciaPattern && patternMancante1 && altoPatternKeys.includes(patternMancante1.key)) {
+    // Solo pattern #1 push/pull, #2 è altro → alternanza standard
+    altoF3Pool = altoF3Base;
+  } else {
+    altoF3Pool = altoF3Base;
   }
 
   const coreF3Pool = [
@@ -12566,7 +12671,7 @@ function _aiGenerateProposta(clientId, client) {
     blocchi.push({
       tipo: 'fase3', rounds: roundsF3, pausaMode: 'no_pausa_fine',
       intervalOn: '40', intervalOff: '20',
-      note: 'Circuito finale — alterna pattern rispetto Fase 2' + (recuperaTrascurato ? ` — recupera ${trascurato.label}` : ''),
+      note: 'Circuito finale — alterna pattern rispetto Fase 2' + (bilanciaPattern && patternMancante2 ? ` — priorità ${patternMancante2.label}` : recuperaTrascurato ? ` — recupera ${trascurato.label}` : ''),
       esercizi: fase3Exs.map(nome => {
         const { kg, noteEx } = suggestKgAndNote(nome);
         return { nome, categoria: _getCatForEx(nome), stimolo: '', serie: '', reps: repsF3, kg, pausa: '', noteEx, prog: [{},{},{},{}] };
@@ -12612,7 +12717,9 @@ function _aiGenerateProposta(clientId, client) {
     check: { monitorare, adattare, candidatoProgressione,
       // alertTrasc sempre visibile: il coach deve sapere se il pattern è trascurato,
       // indipendentemente dal fatto che il sistema l'abbia già soft-prioritizzato nei pool.
-      alertTrasc: alertTrasc ? alertTrasc + (recuperaTrascurato ? ' — ho dato priorità a questo pattern nei pool, verifica tu' : ' — da recuperare nelle prossime sedute') : null,
+      alertTrasc: alertTrasc
+        ? alertTrasc + (patternMancante2 ? ` | #2: ${patternMancante2.label} (${countsSei[patternMancante2.key] || 0}x)` : '') + ' — distribuiti in F2 e F3'
+        : null,
       alertContrad: hasSegnaliContrad ? segnaliContrad[0] : null }
   };
 }
