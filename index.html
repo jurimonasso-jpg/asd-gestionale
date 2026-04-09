@@ -4268,6 +4268,51 @@ function _migraCategoriePregresse() {
 }
 _migraCategoriePregresse();
 
+// ── Migrazione PR: ricalcola tutti i record usando il kg MASSIMO ────────
+// Fix per carichi di avvicinamento (es. "24-32-32" → record 32, non 24)
+function _migraRepPRMaxKg() {
+  if (localStorage.getItem('asd_migration_pr_maxkg_done')) return;
+  const clients = JSON.parse(localStorage.getItem('asd_clients') || '[]');
+  const ws      = JSON.parse(localStorage.getItem('asd_workouts') || '[]');
+  clients.forEach(client => {
+    const cid = client.id;
+    // Azzera i PR esistenti e ricalcola da zero su tutte le sedute archiviate
+    const pr  = {};
+    const today = new Date().toISOString().split('T')[0];
+    const clientWs = ws
+      .filter(w => w.clientId == cid && w.categoria === 'seduta')
+      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+    clientWs.forEach(workout => {
+      (workout.blocchi || []).forEach(b => {
+        (b.esercizi || []).forEach(ex => {
+          if (!ex.nome || !ex.reps || !ex.kg) return;
+          const parsed = _parseKgField(ex.kg);
+          if (!parsed || parsed.tipo === 'elastico' || parsed.val === null) return;
+          const key = ex.nome.trim().toLowerCase();
+          if (!pr[key]) pr[key] = {};
+          const repsArr = _parseRepsValue(ex.reps);
+          if (parsed.tipo === 'kg' || parsed.tipo === 'trecce') {
+            pr[key].tipo = parsed.tipo;
+            repsArr.forEach(r => {
+              const rKey = String(r);
+              const wDate = (workout.createdAt || today).split('T')[0];
+              if (!pr[key][rKey] || parsed.val > pr[key][rKey].val) {
+                pr[key][rKey] = { val: parsed.val, date: wDate };
+              }
+            });
+          }
+        });
+      });
+    });
+    // Salva solo se ci sono dati
+    if (Object.keys(pr).length) {
+      localStorage.setItem('asd_rep_pr_' + cid, JSON.stringify(pr));
+    }
+  });
+  localStorage.setItem('asd_migration_pr_maxkg_done', '1');
+}
+_migraRepPRMaxKg();
+
 function _classifyExercise(nome) {
   if (!nome) return null;
   const low = nome.toLowerCase();
