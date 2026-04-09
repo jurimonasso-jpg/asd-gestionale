@@ -12594,6 +12594,7 @@ function _aiGenerateProposta(clientId, client) {
   const coreF1DinPool = (painZones.has('colonna') ? [] : (EXERCISES['Core — Dinamico']?.items || [])).filter(notBlocked);
 
   let fase1Exs = [];
+  let potenzaEx = [];
 
   if (!profiloSportivo) {
     // ── Numero target slot per F1 (dalla mediana storica, max 4) ──
@@ -12645,7 +12646,7 @@ function _aiGenerateProposta(clientId, client) {
     }
   } else {
     // Profilo sportivo: Potenza + Core standard
-    const potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
+    potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
     const coreF1Ex  = pickEx([...coreF1IsoPool, ...coreF1DinPool], 1);
     fase1Exs = [...potenzaEx, ...coreF1Ex].filter(Boolean);
   }
