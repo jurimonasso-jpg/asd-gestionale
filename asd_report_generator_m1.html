@@ -1416,19 +1416,35 @@ function computeFollowupStats(followups, periodDays) {
 function getClientsFollowupGap(clients, workoutsMap, followupMap, thresholdDays) {
   const result = [];
   clients.forEach(c => {
+    if (!c.followUpEnabled) return; // follow-up non abilitato, skip
     const fu = followupMap[c.id] || [];
     const ws = workoutsMap[c.id] || [];
     if (!ws.length) return; // nessuna seduta, skip
     const lastW = new Date(Math.max(...ws.map(w => new Date(w.createdAt))));
-    const lastFu = fu.length ? new Date(Math.max(...fu.map(f => new Date(f.date)))) : null;
     const daysSinceW = Math.round((Date.now() - lastW) / 86400000);
-    if (daysSinceW > thresholdDays) return; // cliente inattivo da troppo — non è un follow-up gap
-    const gapDays = lastFu ? Math.round((Date.now() - lastFu) / 86400000) : daysSinceW;
+
+    // If client has ZERO followups ever but has sessions → always flag
+    if (fu.length === 0) {
+      if (daysSinceW <= 21) { // still active-ish
+        result.push({ c, gapDays: daysSinceW, lastWorkout: lastW, lastFollowup: null, neverCompiled: true });
+      }
+      return;
+    }
+
+    // Client inactive too long (>21 days) — not a follow-up gap, it's an inactivity problem
+    if (daysSinceW > 21) return;
+
+    const lastFu = new Date(Math.max(...fu.map(f => new Date(f.date))));
+    const gapDays = Math.round((Date.now() - lastFu) / 86400000);
     if (gapDays >= thresholdDays) {
-      result.push({ c, gapDays, lastWorkout: lastW, lastFollowup: lastFu });
+      result.push({ c, gapDays, lastWorkout: lastW, lastFollowup: lastFu, neverCompiled: false });
     }
   });
-  return result.sort((a, b) => b.gapDays - a.gapDays);
+  return result.sort((a, b) => {
+    // "never compiled" first, then by gapDays desc
+    if (a.neverCompiled !== b.neverCompiled) return a.neverCompiled ? -1 : 1;
+    return b.gapDays - a.gapDays;
+  });
 }
 
 // ─── PARSING UTILITIES ──────────────────────────────────────────────
@@ -2609,20 +2625,44 @@ function getPeriodMonthLabel(period, dateFrom, dateTo) {
 }
 
 function computeFreq(workouts, periodDays) {
-  if (!workouts.length) return { count: 0, perWeek: 0, consecutive: 0, lastDate: null };
+  if (!workouts.length) return { count: 0, perWeek: 0, consecutive: 0, lastDate: null, effectiveDays: periodDays };
   const sorted = [...workouts].sort((a,b) => new Date(a.createdAt)-new Date(b.createdAt));
-  const weeks = Math.max(periodDays/7, 1);
-  const perWeek = Math.round(workouts.length / weeks * 10) / 10;
   const lastDate = sorted[sorted.length-1].createdAt;
-  // consecutive weeks present
+
+  // Effective period: from first workout in filtered set to today (or end of period)
+  // This prevents deflating frequency when data starts mid-period
+  const firstDate = new Date(sorted[0].createdAt);
+  const now = new Date();
+  const daysSinceFirst = Math.max(Math.ceil((now - firstDate) / 86400000), 1);
+  const effectiveDays = Math.min(daysSinceFirst, periodDays);
+  const weeks = Math.max(effectiveDays / 7, 1);
+  const perWeek = Math.round(workouts.length / weeks * 10) / 10;
+
+  // consecutive weeks present (ISO week numbers)
   const weekSet = new Set();
   sorted.forEach(w => {
     const d = new Date(w.createdAt);
-    const jan1 = new Date(d.getFullYear(),0,1);
-    const wn = Math.ceil(((d-jan1)/86400000 + jan1.getDay()+1)/7);
-    weekSet.add(d.getFullYear()+'-'+wn);
+    // ISO week number
+    const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    const wn = Math.ceil(((tmp - yearStart) / 86400000 + 1) / 7);
+    weekSet.add(d.getFullYear() + '-' + wn);
   });
-  return { count: workouts.length, perWeek, consecutive: weekSet.size, lastDate };
+
+  // Max consecutive streak
+  const sortedWeeks = [...weekSet].sort();
+  let maxStreak = 1, streak = 1;
+  for (let i = 1; i < sortedWeeks.length; i++) {
+    const [y1, w1] = sortedWeeks[i-1].split('-').map(Number);
+    const [y2, w2] = sortedWeeks[i].split('-').map(Number);
+    const isConsecutive = (y1 === y2 && w2 === w1 + 1) || (w1 >= 52 && w2 === 1 && y2 === y1 + 1);
+    if (isConsecutive) { streak++; maxStreak = Math.max(maxStreak, streak); }
+    else { streak = 1; }
+  }
+  if (sortedWeeks.length === 0) maxStreak = 0;
+
+  return { count: workouts.length, perWeek, consecutive: maxStreak, lastDate, effectiveDays };
 }
 
 function computeEnergy(notes) {
@@ -2998,17 +3038,12 @@ function scoreIC(freq, skips, periodDays, client, allWorkouts) {
   const riferimento = slotSett > 0 ? slotSett : freqStorica;
   if (!riferimento) return { score: 0, note: null };
 
-  // Periodo effettivo: usa i giorni reali coperti dai dati se < 50% del periodo selezionato
+  // Periodo effettivo: usa effectiveDays da computeFreq (già corretto per dati che iniziano a metà periodo)
   const sortedW = [...(freq._workouts||[])].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
-  let effectiveDays = periodDays;
+  let effectiveDays = freq.effectiveDays || periodDays;
   let dataWarning = null;
-  if (allWorkouts && allWorkouts.length > 0) {
-    const firstDataDate = new Date(allWorkouts.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt))[0].createdAt);
-    const daysSinceFirst = Math.ceil((Date.now()-firstDataDate)/86400000);
-    if (daysSinceFirst < periodDays * 0.5) {
-      effectiveDays = daysSinceFirst;
-      dataWarning = `Dati disponibili: ${daysSinceFirst} giorni su ${periodDays} selezionati`;
-    }
+  if (effectiveDays < periodDays * 0.5) {
+    dataWarning = `Dati disponibili: ${effectiveDays} giorni su ${periodDays} selezionati`;
   }
 
   const effectiveWeeks = Math.max(effectiveDays/7, 1);
@@ -4973,15 +5008,25 @@ function _renderDecisioniTab(clientData, periodDays) {
   }
   // Follow-up gap alert
   const hasFollowupData = Object.keys(STATE.followupMap).length > 0;
-  if (hasFollowupData) {
-    const fuGap = getClientsFollowupGap(clients, STATE.workoutsMap, STATE.followupMap, 7);
-    if (fuGap.length > 0) {
-      fuGap.slice(0, 4).forEach(({ c, gapDays }) => {
-        actions.push({ pri:'urgent', title: `${c.nome} ${c.cognome} — follow-up mancante`, body: `Nessuna risposta al form da ${gapDays} giorni. Segnale precoce di disengagement tra una seduta e l'altra.`, who: 'Invia il form follow-up manualmente o contattalo direttamente' });
-      });
+  const fuGap = getClientsFollowupGap(clients, STATE.workoutsMap, STATE.followupMap, 7);
+
+  if (fuGap.length > 0) {
+    // Separate "never compiled" from "gap since last"
+    const neverCompiled = fuGap.filter(f => f.neverCompiled);
+    const gapOnly = fuGap.filter(f => !f.neverCompiled);
+
+    if (neverCompiled.length > 0) {
+      const names = neverCompiled.map(f => f.c.nome + ' ' + f.c.cognome).join(', ');
+      actions.push({ pri:'high', title: `${neverCompiled.length} clienti non compilano mai il follow-up`, body: names + '. Follow-up abilitato ma zero risposte — il form potrebbe non arrivare o il cliente non sa come compilarlo.', who: 'Verifica la ricezione del form con ognuno di persona' });
     }
-  } else {
-    // Nessun dato followup: suggerisci di abilitarlo
+
+    gapOnly.slice(0, 4).forEach(({ c, gapDays }) => {
+      actions.push({ pri:'urgent', title: `${c.nome} ${c.cognome} — follow-up mancante`, body: `Nessuna risposta al form da ${gapDays} giorni. Segnale precoce di disengagement tra una seduta e l'altra.`, who: 'Invia il form follow-up manualmente o contattalo direttamente' });
+    });
+  }
+
+  if (!hasFollowupData) {
+    // Nessun dato followup per nessuno: suggerisci di abilitarlo
     const noFollowupEnabled = clients.filter(c => !c.followUpEnabled).length;
     if (noFollowupEnabled > 0) {
       actions.push({ pri:'low', title: `Follow-up non attivo su ${noFollowupEnabled} clienti`, body: 'Il follow-up post-seduta rileva disengagement 48-72h prima che si manifestino assenze. Attivalo dal gestionale per ciascun cliente.', who: 'Abilita "follow-up" nel profilo cliente' });
@@ -5070,9 +5115,9 @@ function _renderClientiTab(clientData, periodDays) {
       if (!d.c.followUpEnabled) {
         fuLabel = 'disabilitato'; fuCls = 'dt-muted';
       } else if (fuStats.count === 0) {
-        fuLabel = 'nessuno'; fuCls = 'dt-red';
+        fuLabel = 'mai compilato'; fuCls = 'dt-red';
       } else if (fuStats.missedDays !== null && fuStats.missedDays >= 7) {
-        fuLabel = fuStats.missedDays + 'gg fa'; fuCls = 'dt-yellow';
+        fuLabel = fuStats.count + ' · ultimo ' + fuStats.missedDays + 'gg fa'; fuCls = 'dt-yellow';
       } else {
         fuLabel = fuStats.count + ' (' + (fuStats.engagementPct || 0) + '%)'; fuCls = fuStats.engagementPct >= 70 ? 'dt-green' : 'dt-yellow';
       }
