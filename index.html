@@ -12502,52 +12502,90 @@ function _aiGenerateProposta(clientId, client) {
     }))
   });
 
-  // ── FASE 1: Potenza (esplosivo) + Core ──────────────────────────────
-  // Profilo sportivo: Potenza + Core (F1 esclusa dal bilanciamento pattern)
-  // Profilo benessere (!profiloSportivo): struttura mista, include pattern mancanti se non push/pull
+  // ── FASE 1 ───────────────────────────────────────────────────────────
+  // Profilo SPORTIVO: Potenza + Core (F1 esclusa dal bilanciamento pattern)
+  // Profilo BENESSERE: 4 slot bilanciati — Push + Pull + Lower + Core
+  //   • Push: il più carente tra Push H e Push V (override spalla: solo Push H)
+  //   • Pull: il più carente tra Pull H e Pull V (override spalla: solo Pull H)
+  //   • Lower: il più carente tra Hip dominant e Knee dominant
+  //   • Core: il più carente tra Core iso e Core din
+  //   Numero slot si adatta alla mediana storica del cliente (nExPerBlocco.fase1)
   const potenzaPool = [];
   if (!isPRT && modalita !== 'semplifica') {
     potenzaPool.push(...(EXERCISES['Potenza']?.items || []));
-    // Rastapower come stimolo potenza in apertura — solo se cliente adatto
     if (!painZones.has('colonna') && !painZones.has('knee')) {
       potenzaPool.push(...(EXERCISES['🔴 Rastapower']?.items || []).slice(0, 5));
     }
   }
-  const coreF1Pool = [
-    ...(EXERCISES['Core — Isometria']?.items || []),
-    ...(painZones.has('colonna') ? [] : (EXERCISES['Core — Dinamico']?.items || []).slice(0, 4))
-  ].filter(notBlocked);
+  const coreF1IsoPool = (EXERCISES['Core — Isometria']?.items || []).filter(notBlocked);
+  const coreF1DinPool = (painZones.has('colonna') ? [] : (EXERCISES['Core — Dinamico']?.items || [])).filter(notBlocked);
 
-  let potenzaEx, coreF1Ex, fase1Exs;
+  let fase1Exs = [];
 
-  if (!profiloSportivo && bilanciaPattern) {
-    // Cliente benessere: F1 mista — includi pattern mancanti non-push/pull se presenti
-    // I pattern push/pull vanno in F2/F3, qui recuperiamo hip/knee se carenti
-    const nonAltoPat1 = patternMancante1 && !altoPatternKeys.includes(patternMancante1.key) ? patternMancante1 : null;
-    const nonAltoPat2 = patternMancante2 && !altoPatternKeys.includes(patternMancante2.key) ? patternMancante2 : null;
-    const patF1 = nonAltoPat1 || nonAltoPat2;
+  if (!profiloSportivo) {
+    // ── Numero target slot per F1 (dalla mediana storica, max 4) ──
+    const struttura1 = clientId ? _aiAnalizzaStruttura(clientId) : { nExPerBlocco: {} };
+    const nSlotF1 = Math.min(Math.max(struttura1.nExPerBlocco?.['fase1'] || 4, 2), 4);
 
-    if (patF1) {
-      // Includi esercizi del pattern carente in F1 (es. hip dominant o knee dominant)
-      const patF1Pool = poolPerPattern(patF1);
-      potenzaEx = patF1Pool.length > 0 ? pickEx(patF1Pool, 1) : (potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : []);
+    // ── Slot PUSH: più carente tra Push H e Push V ──
+    const pushCarente = (!hasSpalla && countsSei.pushV <= countsSei.pushH)
+      ? poolPerPattern({ cats: ['Push Verticale'] })
+      : poolPerPattern({ cats: ['Push Orizzontale'] });
+    const pushF1Ex = pickEx(pushCarente.filter(notBlocked), 1);
+
+    // ── Slot PULL: più carente tra Pull H e Pull V ──
+    const pullCarente = (!hasSpalla && countsSei.pullV <= countsSei.pullH)
+      ? poolPerPattern({ cats: ['Pull Verticale'] })
+      : poolPerPattern({ cats: ['Pull Orizzontale'] });
+    const pullF1Ex = pickEx(pullCarente.filter(notBlocked), 1);
+
+    // ── Slot LOWER: più carente tra Hip dominant e Knee dominant ──
+    const hingeF1Pool = (EXERCISES['Hip Dominant / Glutei']?.items || []).filter(notBlocked);
+    const kneeF1Pool  = (EXERCISES['Knee Dominant / Squat']?.items  || []).filter(notBlocked);
+    const lowerCarente = countsSei.hipD <= countsSei.kneeD
+      ? [...hingeF1Pool, ...kneeF1Pool]
+      : [...kneeF1Pool, ...hingeF1Pool];
+    const lowerF1Ex = pickEx(lowerCarente, 1);
+
+    // ── Slot CORE: più carente tra iso e dinamico ──
+    const coreCarente = countsSei.coreI <= countsSei.coreD
+      ? [...coreF1IsoPool, ...coreF1DinPool]
+      : [...coreF1DinPool, ...coreF1IsoPool];
+    const coreF1Ex = pickEx(coreCarente, 1);
+
+    // ── Assembla in base al numero di slot storici ──
+    // Ordine fisso: Push → Pull → Lower → Core
+    // Con 2 slot: Lower + Core (pattern fondamentali)
+    // Con 3 slot: Push + Lower + Core (o Pull + Lower + Core se Push già fatto di recente)
+    // Con 4 slot: Push + Pull + Lower + Core
+    if (nSlotF1 >= 4) {
+      fase1Exs = [...pushF1Ex, ...pullF1Ex, ...lowerF1Ex, ...coreF1Ex].filter(Boolean);
+    } else if (nSlotF1 === 3) {
+      // Scegli il più carente tra Push e Pull per il terzo slot
+      const pushCount = countsSei.pushH + countsSei.pushV;
+      const pullCount  = countsSei.pullH + countsSei.pullV;
+      const altoF1 = pushCount <= pullCount ? pushF1Ex : pullF1Ex;
+      fase1Exs = [...altoF1, ...lowerF1Ex, ...coreF1Ex].filter(Boolean);
     } else {
-      potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
+      // 2 slot: Lower + Core
+      fase1Exs = [...lowerF1Ex, ...coreF1Ex].filter(Boolean);
     }
-    coreF1Ex = pickEx(coreF1Pool, 1);
   } else {
-    // Profilo sportivo o bilanciamento non attivo: Potenza + Core standard
-    potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
-    coreF1Ex  = pickEx(coreF1Pool, 1);
+    // Profilo sportivo: Potenza + Core standard
+    const potenzaEx = potenzaPool.length > 0 ? pickEx(potenzaPool, 1) : [];
+    const coreF1Ex  = pickEx([...coreF1IsoPool, ...coreF1DinPool], 1);
+    fase1Exs = [...potenzaEx, ...coreF1Ex].filter(Boolean);
   }
 
-  fase1Exs = [...potenzaEx, ...coreF1Ex].filter(Boolean);
+  const noteF1 = profiloSportivo
+    ? (isPRT ? 'Core isometrico — no esplosivo' : 'Potenza in apertura + stabilità core')
+    : 'Push · Pull · Lower · Core — bilanciato sullo storico';
 
   if (fase1Exs.length > 0) {
     blocchi.push({
       tipo: 'fase1', rounds: roundsF1, pausaMode: 'no_pausa_fine',
       intervalOn: '40', intervalOff: '20',
-      note: isPRT ? 'Core isometrico — no esplosivo' : (potenzaEx.length ? 'Potenza in apertura + stabilità core' : 'Core — stabilità'),
+      note: noteF1,
       esercizi: fase1Exs.map(nome => {
         const { kg, noteEx } = suggestKgAndNote(nome);
         return { nome, categoria: _getCatForEx(nome), stimolo: '', serie: '', reps: repsF1, kg, pausa: '', noteEx, prog: [{},{},{},{}] };
