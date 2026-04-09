@@ -7338,17 +7338,21 @@ function _sbTouchMove(event) {
 }
 function _sbTouchEnd(event) {
   if (_dnd.mode !== 'block') return;
+  const t = event.changedTouches[0];
   _dndRemoveGhost();
   _sbCleanDragStyles();
-  const targetIdx = _dnd.lastTarget;
   const srcIdx = _dnd.bi;
   _dnd.mode = null; _dnd.bi = null; _dnd.lastTarget = null;
-  if (targetIdx !== null && targetIdx !== srcIdx) {
-    const moved = schedaBlocchi.splice(srcIdx, 1)[0];
-    const adj = srcIdx < targetIdx ? targetIdx - 1 : targetIdx;
-    schedaBlocchi.splice(adj, 0, moved);
-    renderSchedaBlocchi();
-  }
+  // Rileva il target al momento del rilascio con elementFromPoint
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const row = el ? el.closest('.scheda-block') : null;
+  if (!row) return;
+  const tidx = parseInt(row.id.replace('blocco-', ''));
+  if (isNaN(tidx) || tidx === srcIdx) return;
+  const moved = schedaBlocchi.splice(srcIdx, 1)[0];
+  const adj = srcIdx < tidx ? tidx - 1 : tidx;
+  schedaBlocchi.splice(adj, 0, moved);
+  renderSchedaBlocchi();
 }
 
 // ══ ESERCIZI — mouse ═════════════════════════════════════════════
@@ -7438,17 +7442,23 @@ function _sbExTouchMove(event) {
 }
 function _sbExTouchEnd(event) {
   if (_dnd.mode !== 'ex') return;
+  const t = event.changedTouches[0];
   _dndRemoveGhost();
-  const srcBi = _dnd.bi, srcEi = _dnd.ei, targetEi = _dnd.lastTarget;
+  const srcBi = _dnd.bi, srcEi = _dnd.ei;
   _sbExCleanStyles(srcBi);
   _dnd.mode = null; _dnd.bi = null; _dnd.ei = null; _dnd.lastTarget = null;
-  if (targetEi !== null && targetEi !== srcEi) {
-    const arr = schedaBlocchi[srcBi].esercizi;
-    const moved = arr.splice(srcEi, 1)[0];
-    const adj = srcEi < targetEi ? targetEi - 1 : targetEi;
-    arr.splice(adj, 0, moved);
-    renderSchedaBlocchi();
-  }
+  // Rileva il target al momento del rilascio con elementFromPoint
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const row = el ? el.closest('.fase-ex-row') : null;
+  if (!row) return;
+  const parts = row.id.replace('ex-', '').split('-');
+  const tbi = parseInt(parts[0]), tei = parseInt(parts[1]);
+  if (isNaN(tbi) || isNaN(tei) || tbi !== srcBi || tei === srcEi) return;
+  const arr = schedaBlocchi[srcBi].esercizi;
+  const moved = arr.splice(srcEi, 1)[0];
+  const adj = srcEi < tei ? tei - 1 : tei;
+  arr.splice(adj, 0, moved);
+  renderSchedaBlocchi();
 }
 
 // ── listener touch globali (delegati su document) ─────────────────
@@ -11311,16 +11321,7 @@ function renderSedutaSetup() {
           <div class="section-title">Cliente</div>
           <div style="font-size:15px;font-weight:700;">${client.nome} ${client.cognome}</div>
         </div>
-        <div>
-          <div class="section-title">Step Attuale</div>
-          <div style="font-size:15px;font-weight:700;">${currentStep ? currentStep.icon + ' ' + currentStep.title : '🏆 Percorso Completato'}</div>
-        </div>
-        ${currentStep ? `
-          <div>
-            <div class="section-title">Seduta</div>
-            <div style="font-size:15px;font-weight:700;color:var(--accent);">${(p?.currentSession || 0) + 1} / ${currentStep.sessions}</div>
-          </div>
-        ` : ''}
+
         <div style="margin-left:auto;">
           <div class="section-title">Obiettivo</div>
           <div style="font-size:13px;">${client.goal || '—'}</div>
