@@ -2130,11 +2130,12 @@ textarea.form-input {
 }
 .rep-pr-pill {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   font-family: 'DM Mono', monospace;
   font-size: 10px;
-  padding: 2px 7px;
+  padding: 3px 7px;
   border-radius: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -10115,7 +10116,27 @@ function renderStats() {
     return true;
   };
 
-  const allSedute = workouts.filter(filterW);
+  // Sessioni manuali archiviate come "done" (clienti senza slot fisso: Lara, Loris, Flavio…)
+  const archivedManual = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]')
+    .filter(s => s.outcome === 'done' && s.id && String(s.id).startsWith('ms_'))
+    .map(s => {
+      const wClient = clients.find(c => c.id === s.clientId);
+      if (wClient?.sonoIo) return null;
+      if (clientId && s.clientId != clientId) return null;
+      return {
+        _isManual: true,
+        clientId: s.clientId,
+        createdAt: s.archivedAt || (s.date + 'T12:00:00'),
+        date: s.date,
+        name: 'Lezione manuale',
+        categoria: 'seduta',
+        tipoSeduta: null,
+        painStart: [],
+        blocchi: []
+      };
+    }).filter(Boolean);
+
+  const allSedute = [...workouts.filter(filterW), ...archivedManual];
   const curSedute = allSedute.filter(w => {
     const d = new Date(w.createdAt);
     return d >= bounds.start && d <= bounds.end;
@@ -13489,8 +13510,8 @@ function buildRepPRBadgeHTML(clientId, exName, currentReps, currentKg) {
     }
     return `<div class="rep-pr-row">
       <span class="rep-pr-pill${isNew ? ' rep-pr-beat' : ' rep-pr-active'}">
-        <span class="rep-pr-reps">⏱ rec.</span>
-        <span class="rep-pr-kg">${_fmtSecs(best.val)}</span>
+        <span style="display:flex;align-items:center;gap:2px;"><span class="rep-pr-reps">⏱ rec.</span><span class="rep-pr-kg">${_fmtSecs(best.val)}</span></span>
+        ${best.date ? `<span style="font-size:8px;color:var(--text3);line-height:1;">${best.date}</span>` : ''}
       </span>
       ${isNew ? '<span class="rep-pr-new">🏆 Nuovo PR!</span>' : ''}
     </div>`;
@@ -13508,8 +13529,8 @@ function buildRepPRBadgeHTML(clientId, exName, currentReps, currentKg) {
     }
     return `<div class="rep-pr-row">
       <span class="rep-pr-pill${isNew ? ' rep-pr-beat' : ' rep-pr-active'}">
-        <span class="rep-pr-reps">CL rec.</span>
-        <span class="rep-pr-kg">${best.val} reps</span>
+        <span style="display:flex;align-items:center;gap:2px;"><span class="rep-pr-reps">CL rec.</span><span class="rep-pr-kg">${best.val} reps</span></span>
+        ${best.date ? `<span style="font-size:8px;color:var(--text3);line-height:1;">${best.date}</span>` : ''}
       </span>
       ${isNew ? '<span class="rep-pr-new">🏆 Nuovo PR!</span>' : ''}
     </div>`;
@@ -13547,8 +13568,8 @@ function buildRepPRBadgeHTML(clientId, exName, currentReps, currentKg) {
     const isActive = parsedReps.includes(p.reps);
     const isBeat   = isActive && parsed.val !== null && parsed.val > p.val;
     return `<span class="rep-pr-pill${isBeat ? ' rep-pr-beat' : isActive ? ' rep-pr-active' : ''}">
-      <span class="rep-pr-reps">${p.reps}×</span>
-      <span class="rep-pr-kg">${p.val}${unit}</span>
+      <span style="display:flex;align-items:center;gap:2px;"><span class="rep-pr-reps">${p.reps}×</span><span class="rep-pr-kg">${p.val}${unit}</span></span>
+      ${p.date ? `<span style="font-size:8px;color:var(--text3);line-height:1;">${p.date}</span>` : ''}
     </span>`;
   }).join('');
 
