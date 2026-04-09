@@ -12410,6 +12410,7 @@ function _aiGenerateProposta(clientId, client) {
 
   // ── Suggerimento carico — segue ordine progressione ────────────────
   // Tecnica → Volume → Carico. Non aumentare carico se tecnica non confermata.
+  // Usa i record PR come riferimento — propone progressione ogni 3-4 sedute su esercizi chiave.
   function suggestKgAndNote(exName) {
     const h   = exHistory[exName.trim().toLowerCase()];
     const pr  = repPR[exName.trim().toLowerCase()];
@@ -12419,6 +12420,26 @@ function _aiGenerateProposta(clientId, client) {
 
     const kgNum = parseFloat(h.kg);
     const kgDisplay = h.kg || '';
+
+    // ── Helper: formato PR leggibile ────────────────────────────────
+    function _prSummary() {
+      if (!pr) return '';
+      const entries = Object.entries(pr).filter(([k]) => k !== 'tipo');
+      if (!entries.length) return '';
+      const best = entries.reduce((acc, [reps, data]) => {
+        return (!acc || data.val > acc.val) ? { reps, val: data.val, date: data.date } : acc;
+      }, null);
+      if (!best) return '';
+      return ` [PR: ${best.val}kg×${best.reps}reps]`;
+    }
+
+    // ── Helper: quante sedute fa è stato fatto questo esercizio ─────
+    function _seduteFaEx() {
+      if (!h.date) return null;
+      const seduteDates = recentSedute.map(w => (w.createdAt || '').split('T')[0]).filter(Boolean);
+      const idx = seduteDates.findIndex(d => d <= h.date);
+      return idx >= 0 ? idx : seduteDates.length;
+    }
 
     if (modalita === 'semplifica') {
       // Riduci il carico solo se c'è un dolore significativo (>= 6) o compensazione confermata.
@@ -12448,7 +12469,7 @@ function _aiGenerateProposta(clientId, client) {
         const repsNum = parseInt(h.reps);
         // Se reps < 10 e tecnica ok/null → prima aumenta reps (volume), non carico
         if (!isNaN(repsNum) && repsNum < 10 && tec !== false) {
-          return { kg: kgDisplay, noteEx: `Volume: porta a 10-12 reps (attuale: ${h.reps}) prima di aumentare il carico` };
+          return { kg: kgDisplay, noteEx: `Volume: porta a 10-12 reps (attuale: ${h.reps}) prima di aumentare il carico${_prSummary()}` };
         }
       }
 
@@ -12456,15 +12477,21 @@ function _aiGenerateProposta(clientId, client) {
       if (!isNaN(kgNum) && kgNum > 0) {
         const step = kgNum < 10 ? 1 : kgNum < 30 ? 2.5 : 5;
         const newKg = String(kgNum + step);
-        const prNote = pr ? ` (PR ${Object.values(pr).map(r => r.kg + 'kg×' + Object.keys(pr).find(k => pr[k] === r) + 'reps').join(', ')})` : '';
-        return { kg: newKg, noteEx: `Progressione carico: ${kgDisplay}→${newKg}kg${prNote}` };
+        return { kg: newKg, noteEx: `Progressione carico: ${kgDisplay}→${newKg}kg${_prSummary()}` };
       }
 
-      return { kg: kgDisplay, noteEx: `Progressione volume — aumenta reps se tecnica ok` };
+      return { kg: kgDisplay, noteEx: `Progressione volume — aumenta reps se tecnica ok${_prSummary()}` };
     }
 
-    // consolidamento / inizio → mantieni carichi storici, i PR sono contesto non obbligo
-    return { kg: kgDisplay, noteEx: h.reps ? `Mantieni ${kgDisplay}kg × ${h.reps}reps` : '' };
+    // consolidamento / inizio → mantieni carichi storici
+    // Se l'esercizio è stato fatto 3-4+ sedute fa e il cliente è pronto, segnala riproposta
+    const seduteFa = _seduteFaEx();
+    const prSummary = _prSummary();
+    if (seduteFa !== null && seduteFa >= 3 && modalita === 'consolidamento' && tec !== false) {
+      return { kg: kgDisplay, noteEx: `Riproposto dopo ${seduteFa} sedute — verifica se pronto per progressione${prSummary}` };
+    }
+
+    return { kg: kgDisplay, noteEx: (h.reps ? `Mantieni ${kgDisplay}kg × ${h.reps}reps` : '') + prSummary };
   }
 
   // ── Volume e rounds per modalità ─────────────────────────────────────
@@ -13186,11 +13213,20 @@ function getLastExData(clientId, exName) {
 function saveExData(clientId, exName, sets, reps, kg, note) {
   const h = getExHistory(clientId);
   const key = exName.trim().toLowerCase();
+  // Se il campo kg contiene carichi di avvicinamento (es. "20-24-32"),
+  // salva il valore MASSIMO come kg di riferimento per la progressione
+  let kgToSave = kg || '';
+  if (kgToSave) {
+    const parsed = _parseKgField(kgToSave);
+    if (parsed.tipo === 'kg' && parsed.isRamping && parsed.val > 0) {
+      kgToSave = String(parsed.val);
+    }
+  }
   h[key] = {
     date: new Date().toISOString().split('T')[0],
     sets: sets || '',
     reps: reps || '',
-    kg:   kg   || '',
+    kg:   kgToSave,
     note: note || ''
   };
   saveExHistory(clientId, h);
@@ -13250,6 +13286,16 @@ function _parseKgField(kgStr) {
       secs = parseInt(timeMatch[1]);
     }
     if (!isNaN(secs) && secs > 0) return { tipo: 'tempo', val: secs };
+  }
+
+  // Carichi di avvicinamento / ramping: "20-24-32", "24-32-32" ecc.
+  // Prende il valore MASSIMO tra tutti i segmenti numerici separati da trattino
+  if (/^[\d.,]+(-[\d.,]+)+$/.test(s)) {
+    const vals = s.split('-').map(v => parseFloat(v.replace(',', '.'))).filter(v => !isNaN(v) && v > 0);
+    if (vals.length >= 2) {
+      const maxVal = Math.max(...vals);
+      return { tipo: 'kg', val: maxVal, isRamping: true, allVals: vals };
+    }
   }
 
   // Kg numerici
