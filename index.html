@@ -13828,49 +13828,74 @@ function fuMarkAlertRead(clientId, docId) {
 function _analyzeFollowup(doc, lastWorkout) {
   const signals = [];
 
-  const dolore  = doc.intensitaDolore ?? null;
-  const stress  = doc.stress          ?? null;
-  const energia = doc.energia         ?? null;
-  const tipo    = doc.tipo || '';
-  const isPost  = tipo === 'post_seduta';
+  // ── Normalizza il documento (retrocompatibile old + new) ─────────────
+  const norm    = normalizeFollowup(doc);
+  const dolore  = norm.intensitaDolore ?? null;   // 0 = assente, >0 = presente
+  const dolGrad = norm.doloreGrado || null;        // 'assente'|'gestibile'|'fastidioso'|'spesso'|'forte'
+  const stress  = norm.stress   ?? null;
+  const energia = norm.energia  ?? null;
+  const recupero    = norm.recupero    || null;   // solo post_seduta nuovo
+  const percez      = norm.percezioneSeduta || null;
+  const reazioneCorpo = norm.reazioneCorpo || null; // solo settimanale nuovo
+  const isPost  = norm.tipo === 'post_seduta';
 
-  // ── Segnale 1: peggioramento dolore rispetto alla seduta ─────────────
-  // Confronta dolore post-seduta con painEnd medio della seduta precedente
-  if (isPost && dolore !== null && lastWorkout) {
+  // ── Segnale 1: recupero peggiorato (nuovo campo post-seduta) ─────────
+  if (isPost && recupero === 'piu_dolorante') {
+    signals.push({ label: 'Oggi più dolorante del solito — recupero negativo', pill: 'pill-red', priority: 'red' });
+  } else if (isPost && recupero === 'troppo_affaticato') {
+    signals.push({ label: 'Recupero incompleto — troppo affaticato', pill: 'pill-orange', priority: 'orange' });
+  }
+
+  // ── Segnale 2: seduta percepita troppo dura (nuovo + legacy) ─────────
+  if (isPost && percez === 'troppo_dura') {
+    signals.push({ label: 'Seduta percepita troppo dura', pill: 'pill-orange', priority: 'orange' });
+  }
+
+  // ── Segnale 3: dolore — legge sia nuovo doloreGrado che vecchio intensitaDolore ──
+  const DOLORE_GRADE_PRIORITY = { forte: 'red', spesso: 'red', fastidioso: 'orange', gestibile: 'yellow' };
+  if (dolGrad && dolGrad !== 'assente') {
+    const p = DOLORE_GRADE_PRIORITY[dolGrad] || 'yellow';
+    const gradLabel = { forte: 'forte', spesso: 'ricorrente', fastidioso: 'fastidioso', gestibile: 'lieve' };
+    signals.push({ label: `Dolore ${gradLabel[dolGrad] || dolGrad}${dolore > 0 ? ' (' + dolore + '/10)' : ''}`, pill: 'pill-' + p, priority: p });
+  } else if (dolore !== null && dolore > 0 && (!dolGrad || dolGrad === 'assente')) {
+    // fallback vecchio record senza doloreGrado
+    if (dolore >= 7) signals.push({ label: `Dolore ${dolore}/10 — alto`, pill: 'pill-red', priority: 'red' });
+    else if (dolore >= 5) signals.push({ label: `Dolore ${dolore}/10 — da monitorare`, pill: 'pill-orange', priority: 'orange' });
+  }
+
+  // ── Segnale 4: peggioramento dolore rispetto alla seduta (legacy) ────
+  if (isPost && dolore !== null && dolore > 0 && lastWorkout) {
     const painEndArr = lastWorkout.painEnd || lastWorkout.painStart || [];
     if (painEndArr.length > 0) {
       const avgPainEnd = painEndArr.reduce((s, p) => s + (p.intensity || 0), 0) / painEndArr.length;
       const delta = dolore - avgPainEnd;
-      if (delta >= 3) {
+      if (delta >= 3 && !signals.some(s => s.priority === 'red')) {
         signals.push({ label: `Dolore peggiorato di +${Math.round(delta)} dopo la seduta`, pill: 'pill-red', priority: 'red' });
-      } else if (delta >= 1.5) {
+      } else if (delta >= 1.5 && !signals.some(s => s.label.includes('peggiorato'))) {
         signals.push({ label: `Dolore lievemente peggiorato (+${Math.round(delta*10)/10})`, pill: 'pill-orange', priority: 'orange' });
       }
     }
   }
 
-  // ── Segnale 2: dolore alto in assoluto ───────────────────────────────
-  if (dolore !== null) {
-    if (dolore >= 7 && !signals.some(s => s.priority === 'red')) {
-      signals.push({ label: `Dolore ${dolore}/10 — alto`, pill: 'pill-red', priority: 'red' });
-    } else if (dolore >= 5 && !signals.length) {
-      signals.push({ label: `Dolore ${dolore}/10 — da monitorare`, pill: 'pill-orange', priority: 'orange' });
-    }
-  }
-
-  // ── Segnale 3: seduta era "con dolori" + dolore ancora presente post ─
+  // ── Segnale 5: seduta con dolori + dolore ancora presente ────────────
   if (isPost && lastWorkout && lastWorkout.tipoSeduta === 'dolori' && dolore !== null && dolore >= 4) {
     if (!signals.some(s => s.label.includes('Dolore'))) {
       signals.push({ label: `Seduta con dolori → dolore ancora ${dolore}/10`, pill: 'pill-orange', priority: 'orange' });
     }
   }
 
-  // ── Segnale 4: combo stress alto + energia bassa ─────────────────────
+  // ── Segnale 6: reazione corpo negativa (settimanale nuovo) ───────────
+  if (reazioneCorpo === 'male') {
+    signals.push({ label: 'Settimana con reazione negativa al corpo', pill: 'pill-red', priority: 'red' });
+  } else if (reazioneCorpo === 'con_fatica') {
+    signals.push({ label: 'Settimana con fatica', pill: 'pill-orange', priority: 'orange' });
+  }
+
+  // ── Segnale 7: combo stress alto + energia bassa ─────────────────────
   if (stress !== null && energia !== null && stress >= 6 && energia <= 4) {
     const p = (stress >= 8 && energia <= 3) ? 'red' : 'orange';
     signals.push({ label: `Stress ${stress}/10 + Energia ${energia}/10 — carico esterno alto`, pill: 'pill-' + p, priority: p });
   } else {
-    // Segnali singoli meno gravi
     if (stress !== null && stress >= 8) {
       signals.push({ label: `Stress ${stress}/10 — molto alto`, pill: 'pill-yellow', priority: 'yellow' });
     }
@@ -14231,51 +14256,57 @@ async function loadFollowupCharts(clientId) {
     };
 
     function fuBuildSvgChart(filteredDocs) {
-      const W = 340, H = 140;
-      const PAD = { top: 10, right: 12, bottom: 28, left: 24 };
+      const W = 340, H = 170;
+      const PAD = { top: 28, right: 14, bottom: 32, left: 28 };
       const cW = W - PAD.left - PAD.right;
       const cH = H - PAD.top - PAD.bottom;
       const n  = filteredDocs.length;
-      if (n === 0) return '<div style="color:var(--text3);font-size:11px;font-family:\'DM Mono\',monospace;padding:16px 0;text-align:center;">Nessun dato per questo filtro.</div>';
+      if (n === 0) return '<div style="color:var(--text3);font-size:11px;font-family:DM Mono,monospace;padding:12px 0;text-align:center;">Nessun dato per questo filtro.</div>';
       const xPos = i => PAD.left + (n > 1 ? (i / (n-1)) * cW : cW / 2);
       const yPos = v => PAD.top + cH - (v / 10) * cH;
 
+      // Format date: accept dd/mm, yyyy-mm-dd, or timestamp
       function fmtDate(d) {
         const raw = d.date || '';
-        if (!raw) return '';
+        if (!raw) return '—';
+        // already dd/mm or dd/mm/yy
         if (/^\d{2}\/\d{2}/.test(raw)) return raw.slice(0,5);
+        // yyyy-mm-dd
         if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(8,10) + '/' + raw.slice(5,7);
         return raw.slice(0,5);
       }
 
       let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;overflow:visible;">`;
 
-      // grid lines — only 3 reference lines: 0, 5, 10
-      [0, 5, 10].forEach(v => {
+      // grid lines (subtle)
+      [0,2,4,6,8,10].forEach(v => {
         const y = yPos(v);
-        svg += `<line x1="${PAD.left}" x2="${W-PAD.right}" y1="${y}" y2="${y}" stroke="${v===5?'#ddd':'#eee'}" stroke-width="${v===5?'1.5':'1'}" stroke-dasharray="${v===5?'3,3':'none'}"/>`;
-        svg += `<text x="${PAD.left-4}" y="${y+3}" text-anchor="end" font-size="8" fill="#ccc" font-family="DM Mono,monospace">${v}</text>`;
+        svg += `<line x1="${PAD.left}" x2="${W-PAD.right}" y1="${y}" y2="${y}" stroke="#e8eaed" stroke-width="1"/>`;
+        if (v % 2 === 0) svg += `<text x="${PAD.left-5}" y="${y+3.5}" text-anchor="end" font-size="8" fill="#bbb" font-family="DM Mono,monospace">${v}</text>`;
       });
 
-      // x date labels — show only first, middle, last to avoid clutter
-      const labelIdxs = n <= 3 ? [...Array(n).keys()] : [0, Math.floor((n-1)/2), n-1];
+      // x labels + type dots (below axis)
       filteredDocs.forEach((d, i) => {
-        if (!labelIdxs.includes(i)) return;
-        svg += `<text x="${xPos(i)}" y="${H-PAD.bottom+12}" text-anchor="middle" font-size="8" fill="#bbb" font-family="DM Mono,monospace">${fmtDate(d)}</text>`;
+        const x = xPos(i);
+        svg += `<text x="${x}" y="${H-PAD.bottom+13}" text-anchor="middle" font-size="8" fill="#bbb" font-family="DM Mono,monospace">${fmtDate(d)}</text>`;
+        if (d.tipo === 'post_seduta') {
+          svg += `<circle cx="${x}" cy="${H-PAD.bottom+4}" r="2.5" fill="#1565c0"/>`;
+        } else {
+          svg += `<rect x="${x-3}" y="${H-PAD.bottom+1}" width="6" height="6" transform="rotate(45,${x},${H-PAD.bottom+4})" fill="#6a1b9a"/>`;
+        }
       });
 
-      // series: render sonno + stress as thin/dim, energia + dolore as primary
+      // series lines + dots
       const series = [
-        { key:'sonno',           color:'#9c6fbf', width:1.5, opacity:0.5, r:3, vals: filteredDocs.map(d=>d.sonno??null) },
-        { key:'stress',          color:'#e65100', width:1.5, opacity:0.5, r:3, vals: filteredDocs.map(d=>d.stress??null) },
-        { key:'energia',         color:'#1565c0', width:2.5, opacity:1,   r:4, vals: filteredDocs.map(d=>d.energia??null) },
-        { key:'intensitaDolore', color:'#e53935', width:2.5, opacity:1,   r:4, vals: filteredDocs.map(d=>d.intensitaDolore??null) },
+        { key:'energia',         color:'#1565c0', vals: filteredDocs.map(d=>d.energia??null) },
+        { key:'sonno',           color:'#6a1b9a', vals: filteredDocs.map(d=>d.sonno??null) },
+        { key:'intensitaDolore', color:'#e53935', vals: filteredDocs.map(d=>d.intensitaDolore??null) },
+        { key:'stress',          color:'#e65100', vals: filteredDocs.map(d=>d.stress??null) },
       ];
-      series.forEach(({ vals, color, width, opacity, r }) => {
+      series.forEach(({ vals, color }) => {
         const pts = vals.map((v,i) => v != null ? { x: xPos(i), y: yPos(v) } : null).filter(Boolean);
-        if (pts.length === 0) return;
-        if (pts.length === 1) {
-          svg += `<circle cx="${pts[0].x}" cy="${pts[0].y}" r="${r}" fill="${color}" opacity="${opacity}" stroke="white" stroke-width="1.5"/>`;
+        if (pts.length < 2) {
+          pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/>`; });
           return;
         }
         let path = `M ${pts[0].x} ${pts[0].y}`;
@@ -14283,9 +14314,26 @@ async function loadFollowupCharts(clientId) {
           const cpx = (pts[i].x - pts[i-1].x) / 3;
           path += ` C ${pts[i-1].x+cpx} ${pts[i-1].y} ${pts[i].x-cpx} ${pts[i].y} ${pts[i].x} ${pts[i].y}`;
         }
-        svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" opacity="${opacity}"/>`;
-        // dots only on primary series
-        if (opacity === 1) pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${color}" stroke="white" stroke-width="1.5"/>`; });
+        svg += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+        pts.forEach(p => { svg += `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/>`; });
+      });
+
+      // difficulty markers — bigger triangles at top, with white ring
+      filteredDocs.forEach((d, i) => {
+        if (!d.seduta) return;
+        const info = DIFF_MAP[d.seduta];
+        if (!info) return;
+        const x = xPos(i);
+        const y = PAD.top - 10; // above chart area
+        const s = 7;
+        // white halo
+        svg += `<polygon points="${x},${y-s-1} ${x-s-1},${y+s+1} ${x+s+1},${y+s+1}" fill="white"/>`;
+        // colored triangle
+        svg += `<polygon points="${x},${y-s} ${x-s},${y+s} ${x+s},${y+s}" fill="${info.color}">
+          <title>${info.label} · ${fmtDate(d)}</title>
+        </polygon>`;
+        // connector line from triangle to chart
+        svg += `<line x1="${x}" y1="${y+s+2}" x2="${x}" y2="${PAD.top}" stroke="${info.color}" stroke-width="1" stroke-dasharray="2,2" opacity="0.4"/>`;
       });
 
       svg += '</svg>';
@@ -14295,10 +14343,10 @@ async function loadFollowupCharts(clientId) {
     function fuBuildHeatmap(docs) {
       const days    = ['L','M','M','G','V','S','D'];
       const metrics = [
-        { key:'energia',         label:'En.',   isDolore:false, isStress:false },
-        { key:'sonno',           label:'Son.',  isDolore:false, isStress:false },
-        { key:'intensitaDolore', label:'Dol.',  isDolore:true,  isStress:false },
-        { key:'stress',          label:'Str.',  isDolore:false, isStress:true  },
+        { key:'energia',         label:'⚡ En.',   isDolore:false, isStress:false },
+        { key:'sonno',           label:'😴 Son.',  isDolore:false, isStress:false },
+        { key:'intensitaDolore', label:'🦴 Dol.',  isDolore:true,  isStress:false },
+        { key:'stress',          label:'😤 Str.',  isDolore:false, isStress:true  },
       ];
       // Map docs to day-of-week (0=Mon)
       const byDay = Array.from({length:7}, () => []);
@@ -14310,37 +14358,35 @@ async function loadFollowupCharts(clientId) {
       });
 
       function cellStyle(vals, isDolore, isStress) {
-        if (!vals.length) return 'background:#f0f0f0;color:#ccc;';
+        if (!vals.length) return 'background:var(--surface2);color:var(--text3);';
         const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
         if (isDolore) {
-          if (avg === 0) return 'background:#e8f5e9;color:#2e7d32;';
-          if (avg < 4)  return 'background:#fff3e0;color:#e65100;';
-          return 'background:#ffebee;color:#c62828;';
+          if (avg === 0) return 'background:var(--green-bg);color:var(--green);';
+          if (avg < 4)  return 'background:#fff3e0;color:var(--yellow);';
+          return 'background:var(--red-bg);color:var(--red);';
         }
         if (isStress) {
-          if (avg <= 3) return 'background:#e8f5e9;color:#2e7d32;';
-          if (avg <= 6) return 'background:#fff3e0;color:#e65100;';
-          return 'background:#ffebee;color:#c62828;';
+          // stress: high = bad
+          if (avg <= 3) return 'background:var(--green-bg);color:var(--green);';
+          if (avg <= 6) return 'background:#fff3e0;color:var(--yellow);';
+          return 'background:var(--red-bg);color:var(--red);';
         }
-        if (avg >= 7) return 'background:#e8f5e9;color:#1b5e20;';
-        if (avg >= 5) return 'background:#fff8e1;color:#e65100;';
-        return 'background:#ffebee;color:#c62828;';
+        if (avg >= 7) return 'background:var(--green-bg);color:var(--green);';
+        if (avg >= 5) return 'background:#fff3e0;color:var(--yellow);';
+        return 'background:var(--red-bg);color:var(--red);';
       }
 
-      let html = `<div style="display:grid;grid-template-columns:34px repeat(7,1fr);gap:3px;">`;
+      let html = `<div style="display:grid;grid-template-columns:46px repeat(7,1fr);gap:2px;font-size:10px;">`;
       html += `<div></div>`;
-      days.forEach(d => { html += `<div style="text-align:center;font-weight:800;color:var(--text2);font-family:'DM Mono',monospace;padding-bottom:3px;font-size:10px;">${d}</div>`; });
+      days.forEach(d => { html += `<div style="text-align:center;font-weight:700;color:var(--text3);font-family:DM Mono,monospace;padding-bottom:3px;">${d}</div>`; });
       metrics.forEach(m => {
-        html += `<div style="display:flex;align-items:center;font-size:9px;font-weight:700;color:var(--text2);letter-spacing:.3px;">${m.label}</div>`;
+        html += `<div style="display:flex;align-items:center;font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;padding-right:3px;">${m.label}</div>`;
         byDay.forEach((dayDocs) => {
           const vals = dayDocs.map(d => d[m.key]).filter(v => v != null && v !== undefined);
           const avg  = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
           const style = cellStyle(vals, m.isDolore, m.isStress);
-          const display = avg === null
-            ? `<span style="color:#d0d0d0;font-size:12px;font-weight:400;">·</span>`
-            : m.isDolore ? (avg === 0 ? `<span style="font-size:11px;">✓</span>` : avg)
-            : avg;
-          html += `<div style="${style}border-radius:5px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-family:'DM Mono',monospace;font-size:11px;">${display}</div>`;
+          const display = avg === null ? '·' : m.isDolore ? (avg === 0 ? '✓' : avg) : avg;
+          html += `<div style="${style}border-radius:4px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:DM Mono,monospace;">${display}</div>`;
         });
       });
       html += `</div>`;
@@ -14348,52 +14394,27 @@ async function loadFollowupCharts(clientId) {
     }
 
     function fuBuildHistory(docs) {
-      const reversed = [...docs].reverse().slice(0, 12);
-      if (reversed.length === 0) return '<div style="font-size:11px;color:var(--text3);font-family:\'DM Mono\',monospace;padding:8px 0;">Nessuna risposta.</div>';
+      const reversed = [...docs].reverse().slice(0, 10);
       return reversed.map(d => {
-        const diff    = legacyPercezionePill(d);
-        const isPost  = d.tipo === 'post_seduta';
-        const hasPain = (d.intensitaDolore || 0) > 0;
-        const rawDate = d.date || '';
-        let fmtDate   = rawDate;
-        if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) fmtDate = rawDate.slice(8,10) + '/' + rawDate.slice(5,7);
-        else if (/^\d{2}\/\d{2}/.test(rawDate)) fmtDate = rawDate.slice(0,5);
-
-        const enColor = !d.energia  ? 'var(--text3)' : d.energia<=4  ? 'var(--red)' : d.energia<=6  ? 'var(--yellow)' : 'var(--green)';
-        const snColor = !d.sonno    ? 'var(--text3)' : d.sonno<=4    ? 'var(--red)' : d.sonno<=6    ? 'var(--yellow)' : 'var(--green)';
-
-        // tipo badge
-        const tipoBg    = isPost ? '#e8eef7' : '#f0edf7';
-        const tipoColor = isPost ? '#1565c0'  : '#6a1b9a';
-        const tipoLabel = isPost ? 'Post'     : 'Sett.';
-
-        // stato centro: dolore > seduta > niente
-        let statoEl = '';
-        if (hasPain) {
-          statoEl = `<span style="font-size:10px;font-weight:700;color:var(--red);">⚠️ ${d.intensitaDolore}/10</span>`;
-        } else if (diff) {
-          statoEl = `<span style="font-size:10px;font-weight:600;color:${diff.color};">${diff.label}</span>`;
-        } else {
-          statoEl = `<span style="font-size:10px;color:var(--text3);">—</span>`;
-        }
-
-        // zona dolore
-        const zonaEl = hasPain && d.zoneDolorose?.length
-          ? `<div style="font-size:9px;color:#c62828;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px;">${d.zoneDolorose.slice(0,2).map(z=>z.label).join(', ')}</div>`
-          : '';
-
-        return `<div style="display:grid;grid-template-columns:28px 34px 1fr auto;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;margin-bottom:2px;background:var(--surface);${hasPain?'border-left:2px solid var(--red);':'border-left:2px solid transparent;'}">
-          <!-- data -->
-          <div style="font-size:9px;font-family:'DM Mono',monospace;color:var(--text3);line-height:1.2;">${fmtDate}</div>
-          <!-- tipo -->
-          <div style="background:${tipoBg};color:${tipoColor};font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;text-align:center;white-space:nowrap;">${tipoLabel}</div>
-          <!-- stato + zona -->
-          <div style="min-width:0;">${statoEl}${zonaEl}</div>
-          <!-- valori -->
-          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
-            ${d.energia != null ? `<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;color:${enColor};">${d.energia}</span>` : ''}
-            ${d.sonno   != null ? `<span style="font-size:10px;font-family:'DM Mono',monospace;color:${snColor};opacity:.8;">${d.sonno}</span>` : ''}
+        const diff   = legacyPercezionePill(d);
+        const isPost = d.tipo === 'post_seduta';
+        const isSett = d.tipo === 'check_settimanale';
+        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+          <div style="width:9px;height:9px;border-radius:50%;background:${isPost?'#1565c0':'#6a1b9a'};flex-shrink:0;"></div>
+          <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;min-width:38px;flex-shrink:0;">${(d.date||'—').slice(0,5).replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2')}</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;">${isPost ? '⚡ Post-allenamento' : isSett ? '📅 Check settimanale' : '📋 Follow-up'}</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
+              ${diff ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${diff.color}22;color:${diff.color};">${diff.label}</span>` : ''}
+              ${d.intensitaDolore > 0 ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ffebee;color:#c62828;">⚠️ Dolore</span>` : ''}
+              ${d.intensitaDolore > 0 && d.zoneDolorose?.length ? d.zoneDolorose.map(z=>`<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label}</span>`).join('') : ''}
+              ${d.esercizi && d.esercizi !== 'null' ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);">🏠 ${d.esercizi}</span>` : ''}
+            </div>
           </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
+            ${d.energia  != null ? `<div style="font-size:11px;color:var(--text3);">⚡ <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.energia}</b></div>` : ''}
+            ${d.sonno    != null ? `<div style="font-size:11px;color:var(--text3);">😴 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.sonno}</b></div>` : ''}
+            ${d.stress   != null ? `<div style="font-size:11px;color:var(--text3);">😤 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.stress}</b></div>` : ''}          </div>
         </div>`;
       }).join('');
     }
@@ -14443,149 +14464,85 @@ async function loadFollowupCharts(clientId) {
       return s;
     }
 
-    // ── semaforo border/accent color per il hero block ──
-    const semBorderMap = { 'fu-green':'#a5d6a7','fu-yellow':'#ffe082','fu-red':'#ef9a9a','fu-gray':'var(--border)' };
-    const semAccentMap = { 'fu-green':'var(--green)','fu-yellow':'#f9a825','fu-red':'var(--accent)','fu-gray':'var(--text3)' };
-    const semBorder    = semBorderMap[_semState.colore] || 'var(--border)';
-    const semAccent    = semAccentMap[_semState.colore] || 'var(--text3)';
-
-    // ── helper: trend arrow for a metric ──
-    function _trendArrow(docs, key) {
-      const vals = docs.slice(-6).map(d => d[key]).filter(v => v != null);
-      if (vals.length < 2) return '';
-      const diff = vals[vals.length-1] - vals[vals.length-2];
-      if (Math.abs(diff) < 0.5) return '<span style="color:var(--text3);">→</span>';
-      const isNeg = key === 'intensitaDolore';
-      const up = diff > 0;
-      const good = isNeg ? !up : up;
-      return `<span style="color:${good?'var(--green)':'var(--red)'};font-size:12px;">${up?'↑':'↓'}</span>`;
-    }
-
-    // ── insight frase automatica ──
-    function _buildInsight(lastEn, lastSn, lastDol, lpDiffInfo, recentVals) {
-      const parts = [];
-      // Dolore
-      if (lastDol === 0) parts.push('nessun dolore');
-      else if (lastDol <= 3) parts.push('dolore lieve');
-      else if (lastDol <= 6) parts.push('dolore moderato');
-      else parts.push('dolore elevato — attenzione');
-      // Energia
-      if (lastEn >= 8) parts.push('energia ottima');
-      else if (lastEn >= 6) parts.push('energia buona');
-      else if (lastEn >= 4) parts.push('energia nella norma');
-      else parts.push('energia bassa');
-      // Sonno
-      if (lastSn >= 8) parts.push('sonno ottimo');
-      else if (lastSn >= 6) parts.push('sonno ok');
-      else if (lastSn >= 4) parts.push('sonno nella norma');
-      else parts.push('sonno scarso');
-      // Seduta
-      if (lpDiffInfo) {
-        const label = lpDiffInfo.label.toLowerCase();
-        if (label.includes('facile')) parts.push('carico troppo leggero');
-        else if (label.includes('dur')) parts.push('carico eccessivo');
-      }
-      return parts.join(' · ');
-    }
-    const _insightText = _buildInsight(lastEn, lastSn, lastDol, lpDiffInfo, recentVals);
-
     container.innerHTML = `
-
-      <!-- ZONA OPERATIVA -->
-
-      <div style="background:${semColor};border:2px solid ${semBorder};border-radius:14px;padding:18px 16px 14px;margin-bottom:4px;">
-
-        <!-- eyebrow -->
-        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:${semAccent};margin-bottom:8px;">Stato oggi · ${lpDate}</div>
-
-        <!-- stato principale -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-          <div style="font-size:36px;line-height:1;flex-shrink:0;">${semEmoji}</div>
-          <div>
-            <div style="font-size:19px;font-weight:800;line-height:1.1;color:var(--text);">${semTitle}</div>
-          </div>
-        </div>
-
-        <!-- metriche inline — non più box separati, ma una strip leggera -->
-        <div style="display:flex;gap:0;border-radius:9px;overflow:hidden;border:1px solid rgba(0,0,0,0.07);">
-
-          <div style="flex:1;padding:7px 4px 6px;text-align:center;background:rgba(255,255,255,0.55);border-right:1px solid rgba(0,0,0,0.07);">
-            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">⚡ En.</div>
-            <div style="font-size:17px;font-weight:800;line-height:1;color:${lpEn<=4?'var(--red)':lpEn<=6?'var(--yellow)':'var(--green)'};">${lpEn}</div>
-            <div style="font-size:9px;line-height:1;margin-top:2px;">${_trendArrow(allDocs,'energia')}</div>
-          </div>
-
-          <div style="flex:1;padding:7px 4px 6px;text-align:center;background:rgba(255,255,255,0.55);border-right:1px solid rgba(0,0,0,0.07);">
-            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">😴 Son.</div>
-            <div style="font-size:17px;font-weight:800;line-height:1;color:${lpSn<=4?'var(--red)':lpSn<=6?'var(--yellow)':'var(--green)'};">${lpSn}</div>
-            <div style="font-size:9px;line-height:1;margin-top:2px;">${_trendArrow(allDocs,'sonno')}</div>
-          </div>
-
-          <div style="flex:1;padding:7px 4px 6px;text-align:center;background:rgba(255,255,255,0.55);border-right:1px solid rgba(0,0,0,0.07);">
-            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">🔥 Sed.</div>
-            <div style="font-size:${lpDiffInfo?'10px':'17px'};font-weight:800;line-height:1;padding-top:${lpDiffInfo?'3px':'0'};color:${lpDiffInfo?lpDiffInfo.color:'var(--text3)'};">${lpDiffInfo ? lpDiffInfo.label : '—'}</div>
-          </div>
-
-          <div style="flex:1;padding:7px 4px 6px;text-align:center;background:${lpDol>0?'rgba(229,57,53,0.12)':'rgba(255,255,255,0.55)'};">
-            <div style="font-size:8px;font-weight:700;color:${lpDol>0?'#c62828':'var(--text3)'};text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">🦴 Dol.</div>
-            <div style="font-size:17px;font-weight:800;line-height:1;color:${lpDol>0?'var(--red)':'var(--green)'};">${lpDol>0?'⚠️':'✓'}</div>
-            ${lpDol>0 ? `<div style="font-size:9px;font-weight:700;color:var(--red);margin-top:2px;">${lpDol}/10</div>` : `<div style="font-size:9px;color:var(--text3);margin-top:2px;">ok</div>`}
-          </div>
-
-        </div>
-
-        <!-- zone dolorose: solo se presenti -->
-        ${lpDol>0 && lastPost?.zoneDolorose?.length
-          ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:3px;align-items:center;">
-              <span style="font-size:9px;color:#c62828;font-weight:700;flex-shrink:0;">📍</span>
-              ${lastPost.zoneDolorose.map(z=>`<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:#ffebee;color:#c62828;font-weight:600;">${z.label}</span>`).join('')}
-             </div>`
-          : ''}
-
+      <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:12px;">
+        ${docs.length} risposte totali · ultima: ${lastLbl}
       </div>
 
-      <!-- insight automatico -->
-      <div style="padding:8px 14px 0;margin-bottom:18px;">
-        <div style="font-size:11px;color:var(--text2);line-height:1.5;font-family:'DM Mono',monospace;letter-spacing:.01em;">${_insightText}</div>
-        <div style="font-size:9px;color:var(--text3);margin-top:1px;">${docs.length} risposte · ultima: ${lastLbl}</div>
+      <!-- SEMAFORO -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">⚡ Stato oggi</div>
+      <div style="background:${semColor};border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">
+        <div style="font-size:22px;flex-shrink:0;">${semEmoji}</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;">${semTitle}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px;">${semSub}</div>
+        </div>
       </div>
 
-      <!-- ZONA ANALITICA -->
-
-      <!-- Andamento -->
-      <div style="margin-bottom:14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);">Andamento</div>
-          <div style="display:flex;gap:2px;">
-            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;border:1px solid var(--accent);background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;line-height:1.4;">Tutte</button>
-            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:10px;font-weight:600;padding:3px 9px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;line-height:1.4;">Post-sed.</button>
-            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:10px;font-weight:600;padding:3px 9px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;line-height:1.4;">Settim.</button>
-          </div>
+      <!-- ULTIMA RISPOSTA SNAPSHOT -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📌 Ultima risposta — ${lpDate}</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;">
+          ${lastPost?.seduta ? 'Post-allenamento' : 'Check settimanale'} · ${lpDate}
         </div>
-        <div style="background:var(--surface);border-radius:10px;padding:10px 10px 7px;">
-          <div id="fu-svg-${clientId}"></div>
-          <div style="display:flex;gap:8px;margin-top:5px;">
-            <span style="font-size:9px;font-family:'DM Mono',monospace;color:#1565c0;">● En</span>
-            <span style="font-size:9px;font-family:'DM Mono',monospace;color:#9c6fbf;">● Son</span>
-            <span style="font-size:9px;font-family:'DM Mono',monospace;color:#e53935;">● Dol</span>
-            <span style="font-size:9px;font-family:'DM Mono',monospace;color:#e65100;opacity:.7;">● Str</span>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">⚡ Energia</div>
+            <div style="font-size:22px;font-weight:800;color:${lpEn<=4?'var(--red)':lpEn<=6?'var(--yellow)':'var(--green)'};">${lpEn}</div>
+            <div style="font-size:11px;color:var(--text3);">su 10</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🔥 Seduta</div>
+            ${lpDiffInfo
+              ? `<div style="margin-top:6px;"><span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:${lpDiffInfo.color}22;color:${lpDiffInfo.color};">${lpDiffInfo.label}</span></div>`
+              : `<div style="font-size:13px;color:var(--text3);margin-top:4px;">—</div>`}
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;">percepita</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">😴 Sonno post</div>
+            <div style="font-size:22px;font-weight:800;color:${lpSn<=4?'var(--red)':lpSn<=6?'var(--yellow)':'var(--green)'};">${lpSn}</div>
+            <div style="font-size:11px;color:var(--text3);">su 10</div>
+          </div>
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+            <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">🦴 Dolore</div>
+            <div style="font-size:14px;font-weight:700;margin-top:4px;color:${lpDol>0?'var(--red)':'var(--green)'};">${lpDol>0?'⚠️ Sì':'✅ No'}</div>
+            ${lpDol>0 && lastPost?.zoneDolorose?.length ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px;">${lastPost.zoneDolorose.map(z=>`<span style="font-size:9px;padding:1px 6px;border-radius:10px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label}</span>`).join('')}</div>` : ''}
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">a riposo</div>
           </div>
         </div>
       </div>
 
-      <!-- Pattern settimanale -->
-      <div style="margin-bottom:14px;">
-        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);margin-bottom:6px;">Pattern settimanale</div>
-        <div style="background:var(--surface);border-radius:10px;padding:10px 10px;">
-          ${fuBuildHeatmap(allDocs)}
+      <!-- TREND GRAFICO -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📈 Trend</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;font-weight:700;">Andamento nel tempo</div>
+          <div style="display:flex;gap:4px;background:var(--surface2);border-radius:8px;padding:3px;">
+            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:none;background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
+            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
+            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Settimanale</button>
+          </div>
+        </div>
+        <div id="fu-svg-${clientId}" style="padding-top:2px;"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;">
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#1565c0;">● Energia</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#6a1b9a;">● Sonno</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e53935;">● Dolore</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e65100;">● Stress</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);">▲ Difficoltà seduta</span>
         </div>
       </div>
 
-      <!-- Storico -->
-      <div>
-        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);margin-bottom:6px;">Storico</div>
-        <div id="fu-history-${clientId}">${fuBuildHistory(allDocs)}</div>
+      <!-- HEATMAP -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">🌡️ Heatmap settimane</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Ultimi 4 settimane</div>
+        ${fuBuildHeatmap(allDocs)}
       </div>
+
+      <!-- STORICO -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📅 Storico risposte</div>
+      <div id="fu-history-${clientId}">${fuBuildHistory(allDocs)}</div>
     `;
 
     // Store docs for tab switching
