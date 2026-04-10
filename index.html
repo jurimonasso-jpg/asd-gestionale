@@ -3807,31 +3807,15 @@ window.fbLoadFromCloud = async function() {
           <div class="fu-banner-hdr-row">
             <div class="fu-sem-dot"></div>
             <div class="fu-banner-title" id="wu-fu-title">—</div>
+            <div id="wu-fu-trend-badge" style="margin-left:6px;"></div>
           </div>
           <div class="fu-banner-sub" id="wu-fu-sub"></div>
         </div>
         <div class="fu-toggle-icon open" id="wu-fu-toggle">▼</div>
       </div>
       <div class="fu-banner-body open" id="wu-fu-body">
-        <div class="fu-trend-label">Trend ultime risposte</div>
-        <div class="fu-trend-row">
-          <div class="fu-trend-name">⚡ Energia</div>
-          <div class="fu-trend-bars" id="wu-bars-energia"></div>
-          <div class="fu-trend-val" id="wu-val-energia" style="color:var(--accent2)"></div>
-          <div class="fu-trend-arrow" id="wu-arr-energia"></div>
-        </div>
-        <div class="fu-trend-row">
-          <div class="fu-trend-name">😴 Sonno</div>
-          <div class="fu-trend-bars" id="wu-bars-sonno"></div>
-          <div class="fu-trend-val" id="wu-val-sonno" style="color:#6a1b9a"></div>
-          <div class="fu-trend-arrow" id="wu-arr-sonno"></div>
-        </div>
-        <div class="fu-trend-row">
-          <div class="fu-trend-name">🦴 Dolore</div>
-          <div class="fu-trend-bars" id="wu-bars-dolore"></div>
-          <div class="fu-trend-val" id="wu-val-dolore" style="color:var(--accent)"></div>
-          <div class="fu-trend-arrow" id="wu-arr-dolore"></div>
-        </div>
+        <!-- Delta metriche con sparkline (14 gg) -->
+        <div id="wu-fu-delta-rows" style="margin-bottom:10px;"></div>
         <div class="fu-last-row" id="wu-fu-last-row" style="display:none;">
           <div class="fu-last-label">Ultima seduta:</div>
           <div class="fu-diff-pill" id="wu-fu-last-diff"></div>
@@ -14394,27 +14378,52 @@ async function loadFollowupCharts(clientId) {
     }
 
     function fuBuildHistory(docs) {
-      const reversed = [...docs].reverse().slice(0, 10);
-      return reversed.map(d => {
+      const reversed = [...docs].reverse().slice(0, 12);
+      return reversed.map((d, idx) => {
         const diff   = legacyPercezionePill(d);
         const isPost = d.tipo === 'post_seduta';
         const isSett = d.tipo === 'check_settimanale';
-        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
-          <div style="width:9px;height:9px;border-radius:50%;background:${isPost?'#1565c0':'#6a1b9a'};flex-shrink:0;"></div>
-          <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;min-width:38px;flex-shrink:0;">${(d.date||'—').slice(0,5).replace(/^(\d{4})-(\d{2})-(\d{2}).*/, '$3/$2')}</div>
-          <div style="flex:1;">
-            <div style="font-size:13px;font-weight:700;">${isPost ? '⚡ Post-allenamento' : isSett ? '📅 Check settimanale' : '📋 Follow-up'}</div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">
-              ${diff ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${diff.color}22;color:${diff.color};">${diff.label}</span>` : ''}
-              ${d.intensitaDolore > 0 ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ffebee;color:#c62828;">⚠️ Dolore</span>` : ''}
-              ${d.intensitaDolore > 0 && d.zoneDolorose?.length ? d.zoneDolorose.map(z=>`<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label}</span>`).join('') : ''}
-              ${d.esercizi && d.esercizi !== 'null' ? `<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface2);color:var(--text3);">🏠 ${d.esercizi}</span>` : ''}
+        const dolVal = d.intensitaDolore != null ? Number(d.intensitaDolore) : (d.pain != null ? Number(d.pain) : 0);
+        const isFlare = dolVal >= 6;
+
+        // Tag tipo con stile distinto
+        const tipoTag = isPost
+          ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;letter-spacing:.3px;">POST-SED.</span>`
+          : isSett
+          ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:#f3e5f5;color:#6a1b9a;border:1px solid #e1bee7;letter-spacing:.3px;">SETTIM.</span>`
+          : `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--surface2);color:var(--text3);border:1px solid var(--border);letter-spacing:.3px;">FOLLOW-UP</span>`;
+
+        // Formatta data
+        let dateStr = d.date || '';
+        if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+          const parts = dateStr.split('-'); dateStr = parts[2]+'/'+parts[1];
+        } else if (/^\d{2}\/\d{2}\/\d{2,4}/.test(dateStr)) {
+          dateStr = dateStr.slice(0,5);
+        }
+
+        // Border left color: rosso se flare-up, blu se post, viola se sett
+        const borderCol = isFlare ? '#e53935' : isPost ? '#1565c0' : '#6a1b9a';
+
+        return `<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${borderCol};border-radius:var(--radius);padding:10px 12px;margin-bottom:7px;">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;">
+            <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;min-width:34px;">${dateStr||'—'}</span>
+            ${tipoTag}
+            ${isFlare ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:#ffebee;color:#c62828;border:1px solid #ffcdd2;">⚠️ FLARE-UP</span>` : ''}
+            ${diff ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:${diff.color}18;color:${diff.color};">${diff.label}</span>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <div style="display:flex;gap:5px;flex-wrap:wrap;">
+              ${dolVal > 0 && d.zoneDolorose?.length ? d.zoneDolorose.slice(0,2).map(z=>`<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label||z}</span>`).join('') : ''}
+              ${d.esercizi && d.esercizi !== 'null' ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--surface2);color:var(--text3);">🏠 ${d.esercizi}</span>` : ''}
+              ${d.recupero ? `<span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--surface2);color:var(--text3);">${d.recupero}</span>` : ''}
+            </div>
+            <div style="display:flex;gap:8px;flex-shrink:0;">
+              ${d.energia  != null ? `<div style="font-size:10px;color:var(--text3);">⚡<b style="font-family:'DM Mono',monospace;color:${d.energia>=7?'#2e7d32':d.energia>=5?'#e65100':'#e53935'};margin-left:2px;">${d.energia}</b></div>` : ''}
+              ${d.sonno    != null ? `<div style="font-size:10px;color:var(--text3);">😴<b style="font-family:'DM Mono',monospace;color:${d.sonno>=7?'#2e7d32':d.sonno>=5?'#e65100':'#e53935'};margin-left:2px;">${d.sonno}</b></div>` : ''}
+              ${d.stress   != null ? `<div style="font-size:10px;color:var(--text3);">😤<b style="font-family:'DM Mono',monospace;color:${d.stress<=3?'#2e7d32':d.stress<=6?'#e65100':'#e53935'};margin-left:2px;">${d.stress}</b></div>` : ''}
+              ${dolVal > 0 ? `<div style="font-size:10px;color:var(--text3);">🦴<b style="font-family:'DM Mono',monospace;color:${dolVal<4?'#e65100':'#e53935'};margin-left:2px;">${dolVal}</b></div>` : ''}
             </div>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
-            ${d.energia  != null ? `<div style="font-size:11px;color:var(--text3);">⚡ <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.energia}</b></div>` : ''}
-            ${d.sonno    != null ? `<div style="font-size:11px;color:var(--text3);">😴 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.sonno}</b></div>` : ''}
-            ${d.stress   != null ? `<div style="font-size:11px;color:var(--text3);">😤 <b style="font-family:'DM Mono',monospace;color:var(--text);">${d.stress}</b></div>` : ''}          </div>
         </div>`;
       }).join('');
     }
@@ -14464,18 +14473,27 @@ async function loadFollowupCharts(clientId) {
       return s;
     }
 
+    // Calcola trend 14 gg per badge nel semaforo
+    const { windowDocs: _wd14, prevDocs: _pd14, limited: _lim14 } = fuFilterByWindow(allDocs, 14);
+    const _deltas14  = fuComputeDeltas(_wd14, _pd14);
+    const _conf14    = fuConfidenceLevel(_wd14, allDocs, 14);
+    const _interp14  = fuGenerateInterpretation(_deltas14, 14, _conf14, _lim14);
+
     container.innerHTML = `
       <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:12px;">
         ${docs.length} risposte totali · ultima: ${lastLbl}
       </div>
 
-      <!-- SEMAFORO -->
+      <!-- SEMAFORO + BADGE TREND -->
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">⚡ Stato oggi</div>
       <div style="background:${semColor};border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">
         <div style="font-size:22px;flex-shrink:0;">${semEmoji}</div>
-        <div>
-          <div style="font-size:14px;font-weight:700;">${semTitle}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:1px;">${semSub}</div>
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:14px;font-weight:700;">${semTitle}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${_interp14.globalColor}18;color:${_interp14.globalColor};border:1px solid ${_interp14.globalColor}33;">${_interp14.globalIcon} ${_interp14.globalLabel}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">${semSub}</div>
         </div>
       </div>
 
@@ -14513,30 +14531,73 @@ async function loadFollowupCharts(clientId) {
       </div>
 
       <!-- TREND GRAFICO -->
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📈 Trend</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📈 Grafico</div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-          <div style="font-size:13px;font-weight:700;">Andamento nel tempo</div>
-          <div style="display:flex;gap:4px;background:var(--surface2);border-radius:8px;padding:3px;">
-            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:none;background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
-            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
-            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Settimanale</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text2);">Risorse vs Carico</div>
+          <div style="display:flex;gap:3px;background:var(--surface2);border-radius:8px;padding:3px;">
+            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:6px;border:none;background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
+            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
+            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Settim.</button>
           </div>
         </div>
-        <div id="fu-svg-${clientId}" style="padding-top:2px;"></div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:6px 8px;background:var(--surface2);border-radius:6px;">
+          <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;">↑ Alto = bene</span>
           <span style="font-size:10px;font-family:'DM Mono',monospace;color:#1565c0;">● Energia</span>
           <span style="font-size:10px;font-family:'DM Mono',monospace;color:#6a1b9a;">● Sonno</span>
+          <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;margin-top:4px;">↓ Basso = bene</span>
           <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e53935;">● Dolore</span>
           <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e65100;">● Stress</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);">▲ Difficoltà seduta</span>
         </div>
+        <div id="fu-svg-${clientId}" style="padding-top:2px;"></div>
       </div>
 
       <!-- HEATMAP -->
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">🌡️ Heatmap settimane</div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
-        <div style="font-size:13px;font-weight:700;margin-bottom:10px;">Ultimi 4 settimane</div>
+        ${fuBuildHeatmap(allDocs)}
+      </div>
+
+      <!-- TREND NEL TEMPO -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📊 Trend nel tempo</div>
+      <div id="fu-trend-block-${clientId}" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+        <!-- Selettore finestra temporale -->
+        <div style="display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;-webkit-overflow-scrolling:touch;">
+          ${[{v:14,l:'14 gg'},{v:30,l:'30 gg'},{v:90,l:'3 mesi'},{v:180,l:'6 mesi'},{v:365,l:'1 anno'}].map((w,i) =>
+            `<button id="fu-tw-${clientId}-${w.v}" onclick="fuSwitchTimeWindow(${clientId},${w.v})"
+              style="flex-shrink:0;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;border:1.5px solid ${i===0?'var(--accent)':'var(--border)'};background:${i===0?'var(--accent)':'transparent'};color:${i===0?'white':'var(--text3)'};cursor:pointer;font-family:'Outfit',sans-serif;white-space:nowrap;transition:all .15s;">${w.l}</button>`
+          ).join('')}
+        </div>
+        <!-- Contenuto dinamico trend -->
+        <div id="fu-tw-content-${clientId}"></div>
+      </div>
+
+      <!-- TREND GRAFICO -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📈 Grafico</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text2);">Risorse vs Carico</div>
+          <div style="display:flex;gap:3px;background:var(--surface2);border-radius:8px;padding:3px;">
+            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:6px;border:none;background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
+            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
+            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Settim.</button>
+          </div>
+        </div>
+        <!-- Legenda semantica -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:6px 8px;background:var(--surface2);border-radius:6px;">
+          <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;">↑ Alto = bene</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#1565c0;">● Energia</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#6a1b9a;">● Sonno</span>
+          <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;margin-top:4px;">↓ Basso = bene</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e53935;">● Dolore</span>
+          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e65100;">● Stress</span>
+        </div>
+        <div id="fu-svg-${clientId}" style="padding-top:2px;"></div>
+      </div>
+
+      <!-- HEATMAP -->
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">🌡️ Heatmap settimane</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
         ${fuBuildHeatmap(allDocs)}
       </div>
 
@@ -14555,6 +14616,9 @@ async function loadFollowupCharts(clientId) {
     window._fuBuildSvgChart = window._fuBuildSvgChart || {};
     window._fuBuildSvgChart[clientId] = fuBuildSvgChart;
 
+    // Render trend block (default 14 gg)
+    fuRenderTrendBlock(clientId, allDocs, 14);
+
   } catch (err) {
     container.innerHTML = `<div style="color:var(--red);font-size:12px;font-family:'DM Mono',monospace;">Errore caricamento: ${err.message}</div>`;
   }
@@ -14565,14 +14629,132 @@ function fuSwitchTab(clientId, tab) {
     const btn = document.getElementById(`fu-tab-${t}-${clientId}`);
     if (!btn) return;
     const active = t === tab;
-    btn.style.background  = active ? 'var(--accent)'   : 'var(--surface2)';
-    btn.style.color       = active ? 'var(--bg)'        : 'var(--text2)';
-    btn.style.border      = active ? '1px solid var(--accent)' : '1px solid var(--border)';
+    btn.style.background = active ? 'var(--accent)'   : 'transparent';
+    btn.style.color      = active ? 'white'            : 'var(--text3)';
   });
   const docs    = window._fuDocs?.[clientId]?.[tab] || [];
   const builder = window._fuBuildSvgChart?.[clientId];
   const svgEl   = document.getElementById('fu-svg-' + clientId);
   if (builder && svgEl) svgEl.innerHTML = builder(docs);
+}
+
+/** Switcha finestra temporale nel blocco trend Follow-Up */
+function fuSwitchTimeWindow(clientId, days) {
+  const allDocs = window._fuDocs?.[clientId]?.all || [];
+  // Aggiorna stile pulsanti
+  [14,30,90,180,365].forEach(d => {
+    const btn = document.getElementById(`fu-tw-${clientId}-${d}`);
+    if (!btn) return;
+    const active = d === days;
+    btn.style.background   = active ? 'var(--accent)' : 'transparent';
+    btn.style.color        = active ? 'white'          : 'var(--text3)';
+    btn.style.borderColor  = active ? 'var(--accent)'  : 'var(--border)';
+  });
+  fuRenderTrendBlock(clientId, allDocs, days);
+}
+
+/** Renderizza il blocco trend per la finestra selezionata */
+function fuRenderTrendBlock(clientId, allDocs, windowDays) {
+  const cont = document.getElementById(`fu-tw-content-${clientId}`);
+  if (!cont) return;
+
+  const { windowDocs, prevDocs, limited } = fuFilterByWindow(allDocs, windowDays);
+  const deltas  = fuComputeDeltas(windowDocs, prevDocs);
+  const conf    = fuConfidenceLevel(windowDocs, allDocs, windowDays);
+  const interp  = fuGenerateInterpretation(deltas, windowDays, conf, limited);
+  const baseline = fuGetBaseline(allDocs);
+  const flareUp = fuCountFlareUps(allDocs, 30);
+  const hasBaseline = baseline && windowDays >= 90 && allDocs.length >= 5;
+
+  // Badge globale
+  const badgeHtml = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+      <div style="display:flex;align-items:center;gap:7px;">
+        <span style="font-size:15px;font-weight:800;color:${interp.globalColor};">${interp.globalIcon}</span>
+        <span style="font-size:13px;font-weight:800;color:${interp.globalColor};">${interp.globalLabel}</span>
+      </div>
+      <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:${conf.color}18;color:${conf.color};border:1px solid ${conf.color}44;">${conf.icon} Fiducia: ${conf.label}${conf.note?' · '+conf.note:''}</span>
+    </div>`;
+
+  // Frase interpretativa
+  const fraseHtml = `
+    <div style="font-size:12px;line-height:1.55;color:var(--text2);background:var(--surface2);border-radius:8px;padding:9px 11px;margin-bottom:10px;border-left:3px solid ${interp.globalColor};">
+      ${interp.frase}
+    </div>`;
+
+  // Delta metriche
+  const deltaRows = deltas.map(d => {
+    const ic = fuTrendIcon(d.trend);
+    const curStr = d.curAvg != null ? d.curAvg.toFixed(1) : '—';
+    const deltaStr = d.delta != null
+      ? (d.delta > 0 ? '+' : '') + d.delta.toFixed(1)
+      : '—';
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:12px;min-width:70px;font-weight:600;color:var(--text2);">${d.emoji} ${d.label}</span>
+        <div style="flex:1;">${fuSparklineSvg(d.sparkVals, d.invertedSemantic)}</div>
+        <span style="font-size:13px;font-weight:800;font-family:'DM Mono',monospace;color:var(--text);min-width:28px;text-align:right;">${curStr}</span>
+        <span style="font-size:11px;font-weight:700;min-width:36px;text-align:right;color:${ic.color};">${d.delta!=null?deltaStr:'—'}</span>
+        <span style="font-size:13px;color:${ic.color};">${ic.icon}</span>
+      </div>`;
+  }).join('');
+
+  const deltasHtml = `
+    <div style="margin-bottom:10px;">
+      <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);display:flex;gap:8px;padding-bottom:4px;">
+        <span style="min-width:70px;">Metrica</span>
+        <span style="flex:1;">Trend</span>
+        <span style="min-width:28px;text-align:right;">Ora</span>
+        <span style="min-width:36px;text-align:right;">Δ</span>
+        <span style="min-width:13px;"></span>
+      </div>
+      ${deltaRows}
+    </div>`;
+
+  // Baseline (solo per finestre >= 3 mesi)
+  let baselineHtml = '';
+  if (hasBaseline) {
+    const bItems = [];
+    const metrics = [
+      { key:'energia',         label:'En.',  inv:false },
+      { key:'sonno',           label:'Son.', inv:false },
+      { key:'intensitaDolore', label:'Dol.', inv:true  },
+      { key:'stress',          label:'Str.', inv:true  },
+    ];
+    metrics.forEach(m => {
+      const bv = baseline[m.key];
+      const cv = fuAvg(windowDocs, m.key);
+      if (bv != null && cv != null) {
+        const d = cv - bv;
+        const isPos = m.inv ? d < 0 : d > 0;
+        const col = Math.abs(d) < 0.3 ? '#9e9e9e' : isPos ? '#2e7d32' : '#e53935';
+        bItems.push(`<span style="font-size:10px;font-family:'DM Mono',monospace;color:${col};">${m.label} ${d>0?'+':''}${d.toFixed(1)}</span>`);
+      }
+    });
+    if (bItems.length) {
+      baselineHtml = `
+        <div style="padding:7px 10px;background:var(--surface2);border-radius:7px;margin-bottom:10px;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:5px;">Dal baseline iniziale</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">${bItems.join('')}</div>
+        </div>`;
+    }
+  }
+
+  // Flare-up (solo se ci sono)
+  let flareHtml = '';
+  if (flareUp.count > 0) {
+    flareHtml = `
+      <div style="padding:7px 10px;background:#fff5f5;border-radius:7px;border:1px solid #ffcdd2;margin-bottom:10px;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#c62828;margin-bottom:4px;">⚠️ Flare-up ultimi 30 gg</div>
+        <div style="font-size:11px;color:#c62828;">
+          Dolore ≥ 6/10: <b>${flareUp.count} volte</b>
+          ${flareUp.areeFrequenti.length ? ` · Area più segnalata: <b>${flareUp.areeFrequenti.join(', ')}</b>` : ''}
+          ${flareUp.altalenanti > 1 ? ` · Settimane altalenanti: <b>${flareUp.altalenanti}</b>` : ''}
+        </div>
+      </div>`;
+  }
+
+  cont.innerHTML = badgeHtml + fraseHtml + deltasHtml + baselineHtml + flareHtml;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -14818,6 +15000,338 @@ function applyFollowupOverrides(scoreResult, norms) {
   }
 
   return { score, contributi, overrides, lastPost, lastSett };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TREND ANALYSIS ENGINE — calcolo delta, baseline, fiducia, sintesi
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Filtra docs per finestra temporale (in giorni) a ritroso dalla data più recente.
+ * Ritorna { windowDocs, prevDocs } per confronto periodo attuale vs precedente.
+ */
+function fuFilterByWindow(docs, windowDays) {
+  if (!docs || !docs.length) return { windowDocs: [], prevDocs: [] };
+
+  function docTs(d) {
+    if (d.timestamp && d.timestamp.toDate) return d.timestamp.toDate().getTime();
+    if (d.timestamp && typeof d.timestamp.seconds === 'number') return d.timestamp.seconds * 1000;
+    if (d.date) {
+      if (/^\d{4}-\d{2}-\d{2}/.test(d.date)) return new Date(d.date).getTime();
+      if (/^\d{2}\/\d{2}\/\d{4}/.test(d.date)) {
+        const p = d.date.split('/'); return new Date(`${p[2]}-${p[1]}-${p[0]}`).getTime();
+      }
+      if (/^\d{2}\/\d{2}/.test(d.date)) {
+        const p = d.date.split('/');
+        const y = new Date().getFullYear();
+        return new Date(`${y}-${p[1]}-${p[0]}`).getTime();
+      }
+    }
+    return 0;
+  }
+
+  const sorted = [...docs].sort((a, b) => docTs(a) - docTs(b));
+  const nowMs  = Date.now();
+  const wMs    = windowDays * 24 * 60 * 60 * 1000;
+  const cutCur = nowMs - wMs;
+  const cutPrv = nowMs - wMs * 2;
+
+  const windowDocs = sorted.filter(d => docTs(d) >= cutCur);
+  const prevDocs   = sorted.filter(d => docTs(d) >= cutPrv && docTs(d) < cutCur);
+
+  // Se nessun dato nella finestra, usa gli ultimi disponibili (max 10)
+  if (!windowDocs.length) {
+    return { windowDocs: sorted.slice(-5), prevDocs: sorted.slice(-10, -5), limited: true };
+  }
+  return { windowDocs, prevDocs };
+}
+
+/** Media di una metrica su un set di docs */
+function fuAvg(docs, key) {
+  const vals = docs.map(d => {
+    if (key === 'intensitaDolore') {
+      return d.intensitaDolore != null ? Number(d.intensitaDolore) : (d.pain != null ? Number(d.pain) : null);
+    }
+    return d[key] != null ? Number(d[key]) : null;
+  }).filter(v => v !== null && !isNaN(v));
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+/**
+ * Calcola delta metriche tra periodo corrente e precedente.
+ * Per energia/sonno: aumento = positivo. Per dolore/stress: calo = positivo.
+ */
+function fuComputeDeltas(windowDocs, prevDocs) {
+  const metrics = [
+    { key: 'energia',         label: 'Energia',  emoji: '⚡', invertedSemantic: false },
+    { key: 'sonno',           label: 'Sonno',    emoji: '😴', invertedSemantic: false },
+    { key: 'intensitaDolore', label: 'Dolore',   emoji: '🦴', invertedSemantic: true  },
+    { key: 'stress',          label: 'Stress',   emoji: '😤', invertedSemantic: true  },
+  ];
+
+  return metrics.map(m => {
+    const curAvg  = fuAvg(windowDocs, m.key);
+    const prvAvg  = fuAvg(prevDocs,   m.key);
+    const delta   = (curAvg != null && prvAvg != null) ? (curAvg - prvAvg) : null;
+
+    // semantica: per metriche invertite (dolore/stress), delta negativo = miglioramento
+    let trend = 'stabile'; // 'migliorato' | 'stabile' | 'peggiorato' | 'lieve_miglioramento' | 'lieve_peggioramento'
+    if (delta !== null) {
+      const signedDelta = m.invertedSemantic ? -delta : delta;
+      if      (signedDelta >  1.0) trend = 'migliorato';
+      else if (signedDelta >  0.3) trend = 'lieve_miglioramento';
+      else if (signedDelta < -1.0) trend = 'peggiorato';
+      else if (signedDelta < -0.3) trend = 'lieve_peggioramento';
+      else                          trend = 'stabile';
+    }
+
+    // sparkline: ultimi valori della finestra
+    const sparkVals = windowDocs.map(d => {
+      const v = m.key === 'intensitaDolore'
+        ? (d.intensitaDolore != null ? Number(d.intensitaDolore) : (d.pain != null ? Number(d.pain) : null))
+        : (d[m.key] != null ? Number(d[m.key]) : null);
+      return v;
+    }).filter(v => v !== null);
+
+    return {
+      ...m,
+      curAvg,
+      prvAvg,
+      delta,
+      trend,
+      sparkVals,
+    };
+  });
+}
+
+/**
+ * Livello di fiducia dell'analisi basato su quantità e continuità dati.
+ * Ritorna: { label: 'Alta'|'Media'|'Bassa', color, note }
+ */
+function fuConfidenceLevel(windowDocs, allDocs, windowDays) {
+  const n = windowDocs.length;
+  const totalDays = windowDays;
+
+  // Frequenza attesa: circa 1-2 check a settimana
+  const expectedMin = Math.max(2, Math.floor(totalDays / 7));
+
+  // Controlla gap (buchi > 14 gg)
+  let maxGapDays = 0;
+  if (allDocs.length > 1) {
+    function docTs(d) {
+      if (d.timestamp && d.timestamp.toDate) return d.timestamp.toDate().getTime();
+      if (d.timestamp && typeof d.timestamp.seconds === 'number') return d.timestamp.seconds * 1000;
+      if (d.date && /^\d{4}-\d{2}-\d{2}/.test(d.date)) return new Date(d.date).getTime();
+      return 0;
+    }
+    const sorted = [...allDocs].sort((a, b) => docTs(a) - docTs(b));
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = (docTs(sorted[i]) - docTs(sorted[i-1])) / (24*60*60*1000);
+      if (gap > maxGapDays) maxGapDays = gap;
+    }
+  }
+
+  if (n >= expectedMin && maxGapDays < 21) {
+    return { label: 'Alta', color: '#2e7d32', icon: '●' };
+  } else if (n >= Math.max(2, Math.floor(expectedMin / 2)) && maxGapDays < 35) {
+    return { label: 'Media', color: '#e65100', icon: '◑' };
+  } else {
+    return { label: 'Bassa', color: '#9e9e9e', icon: '○', note: n < 2 ? 'Dati insufficienti' : 'Dati discontinui' };
+  }
+}
+
+/**
+ * Genera etichetta globale e frase interpretativa basate sui delta e sulla finestra.
+ */
+function fuGenerateInterpretation(deltas, windowDays, confidence, limited) {
+  const en  = deltas.find(d => d.key === 'energia');
+  const sn  = deltas.find(d => d.key === 'sonno');
+  const dol = deltas.find(d => d.key === 'intensitaDolore');
+  const str = deltas.find(d => d.key === 'stress');
+
+  const scores = deltas.map(d => {
+    const w = { migliorato: 2, lieve_miglioramento: 1, stabile: 0, lieve_peggioramento: -1, peggiorato: -2 };
+    return d.delta !== null ? (w[d.trend] ?? 0) : 0;
+  });
+  const totalScore = scores.reduce((a, b) => a + b, 0);
+  const hasData = deltas.some(d => d.curAvg !== null);
+
+  // Etichetta globale
+  let globalLabel, globalColor, globalIcon;
+  if (!hasData || limited) {
+    globalLabel = 'Dati limitati';     globalColor = '#9e9e9e'; globalIcon = '—';
+  } else if (totalScore >= 4) {
+    globalLabel = 'In miglioramento';  globalColor = '#2e7d32'; globalIcon = '↗';
+  } else if (totalScore >= 2) {
+    if (windowDays >= 90) { globalLabel = 'Miglioramento parziale'; globalColor = '#2e7d32'; globalIcon = '↗'; }
+    else { globalLabel = 'Lieve miglioramento'; globalColor = '#4caf50'; globalIcon = '↗'; }
+  } else if (totalScore >= -1) {
+    globalLabel = 'Stabile';           globalColor = '#9e9e9e'; globalIcon = '→';
+  } else if (totalScore >= -3) {
+    globalLabel = 'Da monitorare';     globalColor = '#e65100'; globalIcon = '↘';
+  } else {
+    globalLabel = 'In peggioramento';  globalColor = '#e53935'; globalIcon = '↘';
+  }
+
+  // Frasi interpretative per finestra temporale
+  let frase = '';
+  const prefissoW = {
+    14:  'Ultimi 14 gg',
+    30:  'Ultimi 30 gg',
+    90:  'Ultimi 3 mesi',
+    180: 'Ultimi 6 mesi',
+    365: 'Ultimo anno',
+  }[windowDays] || `Ultimi ${windowDays} gg`;
+
+  if (!hasData || limited) {
+    frase = 'Dati insufficienti per un\'analisi affidabile.';
+  } else if (confidence.label === 'Bassa') {
+    frase = 'Dati troppo discontinui per leggere un trend chiaro.';
+  } else {
+    const parti = [];
+    if (dol && dol.delta !== null) {
+      if (dol.trend === 'migliorato')          parti.push('dolore in calo ✅');
+      else if (dol.trend === 'peggiorato')     parti.push('dolore in aumento ⚠️');
+      else if (dol.trend === 'lieve_peggioramento') parti.push('dolore in lieve aumento');
+    }
+    if (en && en.delta !== null) {
+      if (en.trend === 'migliorato')           parti.push('energia in ripresa');
+      else if (en.trend === 'peggiorato')      parti.push('energia in calo');
+    }
+    if (str && str.delta !== null) {
+      if (str.trend === 'peggiorato')          parti.push('stress ancora instabile');
+      else if (str.trend === 'lieve_peggioramento') parti.push('stress in leggero aumento');
+      else if (str.trend === 'migliorato')     parti.push('stress in calo');
+    }
+    if (sn && sn.delta !== null) {
+      if (sn.trend === 'peggiorato')           parti.push('sonno non migliora');
+      else if (sn.trend === 'migliorato')      parti.push('sonno in miglioramento');
+    }
+
+    if (!parti.length) {
+      frase = `${prefissoW}: quadro stabile, nessuna variazione significativa.`;
+    } else if (totalScore >= 2) {
+      frase = `Lieve miglioramento. ${parti.slice(0,2).map(s=>s.charAt(0).toUpperCase()+s.slice(1)).join(', ')}.`;
+    } else if (totalScore <= -2) {
+      frase = `Trend in peggioramento. ${parti.slice(0,2).map(s=>s.charAt(0).toUpperCase()+s.slice(1)).join(', ')}.`;
+    } else {
+      frase = `Quadro stabile. ${parti.slice(0,2).map(s=>s.charAt(0).toUpperCase()+s.slice(1)).join(', ')}.`;
+    }
+
+    // Contesto per periodo più lungo
+    if (windowDays >= 90) {
+      if (totalScore >= 3)       frase = 'Miglioramento reale nel medio periodo, ma non ancora del tutto consolidato.';
+      else if (totalScore >= 1)  frase = 'Progressi evidenti nel percorso, con buona tenuta generale.';
+      else if (totalScore <= -2) frase = 'Trend in peggioramento nel medio periodo. Rivaluta il programma.';
+    }
+    if (windowDays >= 180) {
+      if (totalScore >= 2) frase = 'Buona tenuta nel tempo. I progressi sono consolidati.';
+      else if (totalScore < 0) frase = 'Miglioramento con ricadute. Monitorare la sostenibilità del percorso.';
+    }
+  }
+
+  // Frase operativa breve per Nuova Seduta
+  let fraseOperativa = '';
+  if (dol?.curAvg > 5)           fraseOperativa = 'Dolore presente ma non in escalation. Monitora risposta.';
+  else if (totalScore >= 2)      fraseOperativa = 'Trend recente in miglioramento: seduta mantenibile.';
+  else if (str?.curAvg >= 7)     fraseOperativa = 'Stress in aumento nelle ultime settimane: tieni margine.';
+  else if (totalScore <= -2)     fraseOperativa = 'Quadro altalenante: non forzare progressioni.';
+  else                           fraseOperativa = `Ultimi ${windowDays} gg stabili: seduta regolare.`;
+
+  return { globalLabel, globalColor, globalIcon, frase, fraseOperativa, totalScore };
+}
+
+/**
+ * Baseline iniziale: prende i primi 2-3 docs disponibili e calcola valori medi iniziali.
+ */
+function fuGetBaseline(allDocs) {
+  if (!allDocs || allDocs.length < 3) return null;
+  const firstDocs = allDocs.slice(0, 3);
+  return {
+    energia:         fuAvg(firstDocs, 'energia'),
+    sonno:           fuAvg(firstDocs, 'sonno'),
+    intensitaDolore: fuAvg(firstDocs, 'intensitaDolore'),
+    stress:          fuAvg(firstDocs, 'stress'),
+  };
+}
+
+/**
+ * Conta flare-up (dolore >= 6) negli ultimi N giorni.
+ */
+function fuCountFlareUps(docs, windowDays) {
+  if (!docs || !docs.length) return { count: 0, areeFrequenti: [], altalenanti: 0 };
+  const { windowDocs } = fuFilterByWindow(docs, windowDays);
+  const highPain = windowDocs.filter(d => {
+    const v = d.intensitaDolore != null ? Number(d.intensitaDolore) : (d.pain != null ? Number(d.pain) : 0);
+    return v >= 6;
+  });
+
+  // Zone più segnalate
+  const zoneCounts = {};
+  highPain.forEach(d => {
+    (d.zoneDolorose || []).forEach(z => {
+      const lbl = z.label || z;
+      zoneCounts[lbl] = (zoneCounts[lbl] || 0) + 1;
+    });
+  });
+  const areeFrequenti = Object.entries(zoneCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([l]) => l);
+
+  // Sedute altalenanti: alternanze dolore alto/basso
+  let altalenanti = 0;
+  const pVals = windowDocs.map(d => d.intensitaDolore != null ? Number(d.intensitaDolore) : 0);
+  for (let i = 1; i < pVals.length - 1; i++) {
+    if ((pVals[i] > pVals[i-1] + 2 && pVals[i] > pVals[i+1] + 2) ||
+        (pVals[i] < pVals[i-1] - 2 && pVals[i] < pVals[i+1] - 2)) altalenanti++;
+  }
+
+  return { count: highPain.length, areeFrequenti, altalenanti };
+}
+
+/**
+ * Costruisce le sparkline SVG inline molto compatte per una metrica.
+ * invertedColor: se true, valori alti = colore negativo
+ */
+function fuSparklineSvg(vals, invertedColor) {
+  if (!vals || !vals.length) return '<span style="font-size:9px;color:var(--text3);">—</span>';
+  const W = 48, H = 18, pad = 2;
+  const max = 10, min = 0;
+  const points = vals.map((v, i) => {
+    const x = pad + (vals.length > 1 ? (i / (vals.length - 1)) * (W - pad*2) : (W - pad*2)/2);
+    const y = pad + (1 - (v - min) / (max - min)) * (H - pad*2);
+    return `${x},${y}`;
+  });
+  const lastV = vals[vals.length - 1];
+  const col = invertedColor
+    ? (lastV === 0 ? '#2e7d32' : lastV < 4 ? '#4caf50' : lastV < 7 ? '#e65100' : '#e53935')
+    : (lastV >= 7 ? '#2e7d32' : lastV >= 5 ? '#e65100' : '#e53935');
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:inline-block;vertical-align:middle;">`;
+  if (points.length >= 2) {
+    svg += `<polyline points="${points.join(' ')}" fill="none" stroke="${col}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>`;
+  }
+  // dot finale
+  const lastPt = points[points.length-1].split(',');
+  svg += `<circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="2.5" fill="${col}"/>`;
+  svg += `</svg>`;
+  return svg;
+}
+
+/**
+ * Icona trend + colore per un singolo delta item.
+ */
+function fuTrendIcon(trend, invertedSemantic) {
+  const cfg = {
+    migliorato:          { icon: '↗', color: '#2e7d32', bg: '#e8f5e9' },
+    lieve_miglioramento: { icon: '↗', color: '#4caf50', bg: '#f1f8e9' },
+    stabile:             { icon: '→', color: '#9e9e9e', bg: '#f5f5f5' },
+    lieve_peggioramento: { icon: '↘', color: '#e65100', bg: '#fff3e0' },
+    peggiorato:          { icon: '↘', color: '#e53935', bg: '#ffebee' },
+  };
+  return cfg[trend] || cfg.stabile;
 }
 
 // ── deriveFollowupState ─────────────────────────────────────────────
@@ -15091,45 +15605,129 @@ async function sbLoadFollowupBanner(clientId) {
   // Render feedback buttons
   _sbRenderBannerFeedback(clientId);
 
+  // ── Calcola trend 14 gg per frase operativa ────────────────────
+  const { windowDocs: wDocs14, prevDocs: pDocs14, limited: lim14 } = fuFilterByWindow(docs, 14);
+  const deltas14   = fuComputeDeltas(wDocs14, pDocs14);
+  const conf14     = fuConfidenceLevel(wDocs14, docs, 14);
+  const interp14   = fuGenerateInterpretation(deltas14, 14, conf14, lim14);
+
+  // Anche 30 gg per confronto rapido
+  const { windowDocs: wDocs30, prevDocs: pDocs30, limited: lim30 } = fuFilterByWindow(docs, 30);
+  const deltas30   = fuComputeDeltas(wDocs30, pDocs30);
+  const interp30   = fuGenerateInterpretation(deltas30, 30, fuConfidenceLevel(wDocs30, docs, 30), lim30);
+
+  // Delta rows compatti per la sezione espansa
+  function sbDeltaRow(d) {
+    const ic = fuTrendIcon(d.trend);
+    const curStr = d.curAvg != null ? d.curAvg.toFixed(1) : '—';
+    const deltaStr = d.delta != null ? ((d.delta > 0 ? '+' : '') + d.delta.toFixed(1)) : '';
+    return `<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:11px;min-width:66px;font-weight:600;color:var(--text2);">${d.emoji} ${d.label}</span>
+      <div style="flex:1;">${fuSparklineSvg(d.sparkVals, d.invertedSemantic)}</div>
+      <span style="font-size:12px;font-weight:800;font-family:'DM Mono',monospace;color:var(--text);min-width:22px;text-align:right;">${curStr}</span>
+      <span style="font-size:11px;font-weight:700;min-width:30px;text-align:right;color:${ic.color};">${deltaStr}</span>
+      <span style="font-size:12px;color:${ic.color};">${ic.icon}</span>
+    </div>`;
+  }
+
   wrap.innerHTML = `
     <div style="background:${bBg};border:1.5px solid ${bBdr};border-radius:var(--radius);overflow:hidden;">
-      <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-        <div>
-          <div style="display:flex;align-items:center;gap:7px;">
-            <span style="font-size:14px;">${state.emoji}</span>
-            <span style="font-size:12px;font-weight:700;color:var(--text);">${state.stato}</span>
+      <!-- HEADER collassabile -->
+      <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:15px;">${state.emoji}</span>
+            <span style="font-size:13px;font-weight:800;color:var(--text);">${state.stato}</span>
+            <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${interp14.globalColor}18;color:${interp14.globalColor};border:1px solid ${interp14.globalColor}33;">${interp14.globalIcon} ${interp14.globalLabel}</span>
           </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:1px;margin-left:21px;">${bSub}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px;">${bSub}</div>
         </div>
-        <span style="font-size:11px;color:var(--text3);font-weight:700;">▼</span>
+        <span style="font-size:11px;color:var(--text3);font-weight:700;margin-left:8px;">▼</span>
       </div>
+
+      <!-- BODY espandibile -->
       <div style="background:var(--surface);border-top:1px solid var(--border);padding:10px 14px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px;">Trend ultime risposte</div>
-        <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">⚡ Energia</span>
-            <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(energia,false)}</div>
-            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#1565c0;width:16px;">${lastV(energia)??'—'}</span>
-            ${arrow(energia,false)}
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">😴 Sonno</span>
-            <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(sonno,false)}</div>
-            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#6a1b9a;width:16px;">${lastV(sonno)??'—'}</span>
-            ${arrow(sonno,false)}
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">🦴 Dolore</span>
-            <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(dolore,true)}</div>
-            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#e53935;width:16px;">${lastV(dolore)===0?'✓':lastV(dolore)??'—'}</span>
-            ${arrow(dolore,true)}
-          </div>
-          ${extraRow}
+
+        <!-- FRASE OPERATIVA 14 GG -->
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 11px;border-left:3px solid ${interp14.globalColor};font-size:12px;line-height:1.55;margin-bottom:10px;">
+          <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);display:block;margin-bottom:3px;">📋 Decisione seduta</span>
+          ${interp14.fraseOperativa}
         </div>
-        ${lastDiffHtml ? `<div style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid var(--border);margin-bottom:8px;"><span style="font-size:11px;color:var(--text3);">Ultima seduta:</span>${lastDiffHtml}</div>` : ''}
-        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;border-left:3px solid #1565c0;font-size:12px;line-height:1.5;">${bSugg}</div>
+
+        <!-- MINI SELETTORE 14/30 GG -->
+        <div style="display:flex;gap:4px;margin-bottom:8px;">
+          <button id="sb-tw-${clientId}-14" onclick="sbSwitchTrendWindow(${clientId}, 14)"
+            style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;border:1.5px solid var(--accent);background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">14 gg</button>
+          <button id="sb-tw-${clientId}-30" onclick="sbSwitchTrendWindow(${clientId}, 30)"
+            style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">30 gg</button>
+        </div>
+
+        <!-- DELTA METRICHE -->
+        <div id="sb-tw-content-${clientId}">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);display:flex;gap:7px;padding-bottom:3px;">
+            <span style="min-width:66px;">Metrica</span><span style="flex:1;">Trend</span><span style="min-width:22px;text-align:right;">Ora</span><span style="min-width:30px;text-align:right;">Δ</span><span style="min-width:12px;"></span>
+          </div>
+          ${deltas14.map(sbDeltaRow).join('')}
+        </div>
+
+        <!-- FIDUCIA -->
+        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);">Fiducia dati:</span>
+          <span style="font-size:10px;font-weight:700;color:${conf14.color};">${conf14.icon} ${conf14.label}${conf14.note ? ' · '+conf14.note : ''}</span>
+        </div>
+
+        ${lastDiffHtml ? `<div style="display:flex;align-items:center;gap:8px;padding-top:8px;margin-top:6px;border-top:1px solid var(--border);"><span style="font-size:11px;color:var(--text3);">Ultima seduta:</span>${lastDiffHtml}</div>` : ''}
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;border-left:3px solid #1565c0;font-size:12px;line-height:1.5;margin-top:8px;">${bSugg}</div>
+
+        ${extraRow ? `<div style="margin-top:6px;">${extraRow}</div>` : ''}
       </div>
     </div>`;
+
+  // Salva docs per switch finestra nel seduta builder
+  window._sbDocs = window._sbDocs || {};
+  window._sbDocs[clientId] = docs;
+}
+
+/** Switch finestra temporale nel seduta builder (14 vs 30 gg) */
+function sbSwitchTrendWindow(clientId, days) {
+  const docs = window._sbDocs?.[clientId] || [];
+  [14, 30].forEach(d => {
+    const btn = document.getElementById(`sb-tw-${clientId}-${d}`);
+    if (!btn) return;
+    const active = d === days;
+    btn.style.background  = active ? 'var(--accent)' : 'transparent';
+    btn.style.color       = active ? 'white'          : 'var(--text3)';
+    btn.style.borderColor = active ? 'var(--accent)'  : 'var(--border)';
+  });
+
+  const cont = document.getElementById(`sb-tw-content-${clientId}`);
+  if (!cont) return;
+
+  const { windowDocs, prevDocs, limited } = fuFilterByWindow(docs, days);
+  const deltas = fuComputeDeltas(windowDocs, prevDocs);
+  const conf   = fuConfidenceLevel(windowDocs, docs, days);
+  const interp = fuGenerateInterpretation(deltas, days, conf, limited);
+
+  function sbDeltaRow(d) {
+    const ic = fuTrendIcon(d.trend);
+    const curStr   = d.curAvg != null ? d.curAvg.toFixed(1) : '—';
+    const deltaStr = d.delta  != null ? ((d.delta > 0 ? '+' : '') + d.delta.toFixed(1)) : '';
+    return `<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:11px;min-width:66px;font-weight:600;color:var(--text2);">${d.emoji} ${d.label}</span>
+      <div style="flex:1;">${fuSparklineSvg(d.sparkVals, d.invertedSemantic)}</div>
+      <span style="font-size:12px;font-weight:800;font-family:'DM Mono',monospace;color:var(--text);min-width:22px;text-align:right;">${curStr}</span>
+      <span style="font-size:11px;font-weight:700;min-width:30px;text-align:right;color:${ic.color};">${deltaStr}</span>
+      <span style="font-size:12px;color:${ic.color};">${ic.icon}</span>
+    </div>`;
+  }
+
+  cont.innerHTML = `
+    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);display:flex;gap:7px;padding-bottom:3px;">
+      <span style="min-width:66px;">Metrica</span><span style="flex:1;">Trend</span><span style="min-width:22px;text-align:right;">Ora</span><span style="min-width:30px;text-align:right;">Δ</span><span style="min-width:12px;"></span>
+    </div>
+    ${deltas.map(sbDeltaRow).join('')}
+    <div style="margin-top:6px;font-size:11px;color:var(--text2);background:var(--surface2);border-radius:6px;padding:7px 9px;border-left:2px solid ${interp.globalColor};">${interp.fraseOperativa}</div>
+  `;
 }
 
 // ===== FOLLOW-UP BANNER IN MODALE SEDUTA =====
@@ -15253,20 +15851,56 @@ async function wuLoadFollowupBanner(clientId) {
   // ── Semaforo, titolo, sub, suggerimento con nuova logica ────────
   const bannerEl = document.getElementById('wu-followup-banner');
   bannerEl.className = state.colore;
-  document.getElementById('wu-fu-title').textContent  = state.emoji + ' ' + state.stato;
-  document.getElementById('wu-fu-sub').textContent    = (() => {
+
+  // Calcola trend 14 gg per delta e frase operativa
+  const { windowDocs: wDocs14, prevDocs: pDocs14, limited: lim14 } = fuFilterByWindow(docs, 14);
+  const deltas14  = fuComputeDeltas(wDocs14, pDocs14);
+  const conf14    = fuConfidenceLevel(wDocs14, docs, 14);
+  const interp14  = fuGenerateInterpretation(deltas14, 14, conf14, lim14);
+
+  document.getElementById('wu-fu-title').textContent = state.emoji + ' ' + state.stato;
+  document.getElementById('wu-fu-sub').textContent   = (() => {
     const lastEn  = energia.length ? energia[energia.length-1] : null;
     const lastSn  = sonno.length   ? sonno[sonno.length-1]     : null;
     const lastDol = dolore.length  ? dolore[dolore.length-1]   : 0;
     const zonesStr = (state.lastPost?.zoneDolorose||[]).map(z=>z.label||z).join(', ');
     return [
-      lastEn != null ? `Energia ${lastEn}/10` : null,
-      lastSn != null ? `Sonno ${lastSn}/10` : null,
-      lastDol > 0 ? `Dolore ${lastDol}/10${zonesStr?' ('+zonesStr+')':''}` : null,
+      lastEn  != null ? `Energia ${lastEn}/10` : null,
+      lastSn  != null ? `Sonno ${lastSn}/10`   : null,
+      lastDol > 0     ? `Dolore ${lastDol}/10${zonesStr?' ('+zonesStr+')':''}` : null,
     ].filter(Boolean).join(' · ');
   })();
+
+  // Inietta badge trend globale accanto al titolo se il div esiste, altrimenti crea pill inline
+  const wuTrendBadgeEl = document.getElementById('wu-fu-trend-badge');
+  if (wuTrendBadgeEl) {
+    wuTrendBadgeEl.innerHTML = `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${interp14.globalColor}18;color:${interp14.globalColor};border:1px solid ${interp14.globalColor}33;">${interp14.globalIcon} ${interp14.globalLabel}</span>`;
+  }
+
+  // Frase operativa nel box suggerimento
   document.getElementById('wu-fu-sugg-text').innerHTML =
+    `<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">📋 Decisione seduta</div>` +
+    `<div style="margin-bottom:6px;">${interp14.fraseOperativa}</div>` +
     `<strong>${state.suggerimento}</strong> ${state.spiegazione}`;
+
+  // Delta metriche nel body (iniettate dopo le trend bars esistenti)
+  const wuDeltaEl = document.getElementById('wu-fu-delta-rows');
+  if (wuDeltaEl) {
+    wuDeltaEl.innerHTML = deltas14.map(d => {
+      const ic = fuTrendIcon(d.trend);
+      const curStr   = d.curAvg != null ? d.curAvg.toFixed(1) : '—';
+      const deltaStr = d.delta  != null ? ((d.delta > 0 ? '+' : '') + d.delta.toFixed(1)) : '';
+      return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:11px;min-width:62px;font-weight:600;color:var(--text2);">${d.emoji} ${d.label}</span>
+        <div style="flex:1;">${fuSparklineSvg(d.sparkVals, d.invertedSemantic)}</div>
+        <span style="font-size:12px;font-weight:800;font-family:'DM Mono',monospace;color:var(--text);min-width:20px;text-align:right;">${curStr}</span>
+        <span style="font-size:11px;font-weight:700;min-width:28px;text-align:right;color:${ic.color};">${deltaStr}</span>
+        <span style="font-size:12px;color:${ic.color};">${ic.icon}</span>
+      </div>`;
+    }).join('') +
+    `<div style="margin-top:5px;font-size:9px;color:${conf14.color};font-weight:700;">Fiducia: ${conf14.label}${conf14.note ? ' · '+conf14.note : ''}</div>`;
+  }
+
   bannerEl.style.display = 'block';
 }
 
