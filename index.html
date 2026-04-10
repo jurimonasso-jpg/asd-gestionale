@@ -14310,35 +14310,37 @@ async function loadFollowupCharts(clientId) {
       });
 
       function cellStyle(vals, isDolore, isStress) {
-        if (!vals.length) return 'background:var(--surface2);color:var(--text3);';
+        if (!vals.length) return 'background:#f0f0f0;color:#ccc;';
         const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
         if (isDolore) {
-          if (avg === 0) return 'background:var(--green-bg);color:var(--green);';
-          if (avg < 4)  return 'background:#fff3e0;color:var(--yellow);';
-          return 'background:var(--red-bg);color:var(--red);';
+          if (avg === 0) return 'background:#e8f5e9;color:#2e7d32;';
+          if (avg < 4)  return 'background:#fff3e0;color:#e65100;';
+          return 'background:#ffebee;color:#c62828;';
         }
         if (isStress) {
-          // stress: high = bad
-          if (avg <= 3) return 'background:var(--green-bg);color:var(--green);';
-          if (avg <= 6) return 'background:#fff3e0;color:var(--yellow);';
-          return 'background:var(--red-bg);color:var(--red);';
+          if (avg <= 3) return 'background:#e8f5e9;color:#2e7d32;';
+          if (avg <= 6) return 'background:#fff3e0;color:#e65100;';
+          return 'background:#ffebee;color:#c62828;';
         }
-        if (avg >= 7) return 'background:var(--green-bg);color:var(--green);';
-        if (avg >= 5) return 'background:#fff3e0;color:var(--yellow);';
-        return 'background:var(--red-bg);color:var(--red);';
+        if (avg >= 7) return 'background:#e8f5e9;color:#1b5e20;';
+        if (avg >= 5) return 'background:#fff8e1;color:#e65100;';
+        return 'background:#ffebee;color:#c62828;';
       }
 
-      let html = `<div style="display:grid;grid-template-columns:36px repeat(7,1fr);gap:3px;">`;
+      let html = `<div style="display:grid;grid-template-columns:34px repeat(7,1fr);gap:3px;">`;
       html += `<div></div>`;
-      days.forEach(d => { html += `<div style="text-align:center;font-weight:800;color:var(--text3);font-family:'DM Mono',monospace;padding-bottom:4px;font-size:10px;">${d}</div>`; });
+      days.forEach(d => { html += `<div style="text-align:center;font-weight:800;color:var(--text2);font-family:'DM Mono',monospace;padding-bottom:3px;font-size:10px;">${d}</div>`; });
       metrics.forEach(m => {
-        html += `<div style="display:flex;align-items:center;font-size:10px;font-weight:700;color:var(--text2);padding-right:2px;">${m.label}</div>`;
+        html += `<div style="display:flex;align-items:center;font-size:9px;font-weight:700;color:var(--text2);letter-spacing:.3px;">${m.label}</div>`;
         byDay.forEach((dayDocs) => {
           const vals = dayDocs.map(d => d[m.key]).filter(v => v != null && v !== undefined);
           const avg  = vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
           const style = cellStyle(vals, m.isDolore, m.isStress);
-          const display = avg === null ? '<span style="opacity:.2;font-size:14px;">·</span>' : m.isDolore ? (avg === 0 ? '✓' : avg) : avg;
-          html += `<div style="${style}border-radius:6px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:800;font-family:'DM Mono',monospace;font-size:11px;">${display}</div>`;
+          const display = avg === null
+            ? `<span style="color:#d0d0d0;font-size:12px;font-weight:400;">·</span>`
+            : m.isDolore ? (avg === 0 ? `<span style="font-size:11px;">✓</span>` : avg)
+            : avg;
+          html += `<div style="${style}border-radius:5px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-family:'DM Mono',monospace;font-size:11px;">${display}</div>`;
         });
       });
       html += `</div>`;
@@ -14349,28 +14351,48 @@ async function loadFollowupCharts(clientId) {
       const reversed = [...docs].reverse().slice(0, 12);
       if (reversed.length === 0) return '<div style="font-size:11px;color:var(--text3);font-family:\'DM Mono\',monospace;padding:8px 0;">Nessuna risposta.</div>';
       return reversed.map(d => {
-        const diff   = legacyPercezionePill(d);
-        const isPost = d.tipo === 'post_seduta';
+        const diff    = legacyPercezionePill(d);
+        const isPost  = d.tipo === 'post_seduta';
         const hasPain = (d.intensitaDolore || 0) > 0;
         const rawDate = d.date || '';
-        let fmtDate = rawDate;
+        let fmtDate   = rawDate;
         if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) fmtDate = rawDate.slice(8,10) + '/' + rawDate.slice(5,7);
         else if (/^\d{2}\/\d{2}/.test(rawDate)) fmtDate = rawDate.slice(0,5);
 
-        const enColor = d.energia<=4?'var(--red)':d.energia<=6?'var(--yellow)':'var(--green)';
-        const snColor = d.sonno<=4?'var(--red)':d.sonno<=6?'var(--yellow)':'var(--green)';
+        const enColor = !d.energia  ? 'var(--text3)' : d.energia<=4  ? 'var(--red)' : d.energia<=6  ? 'var(--yellow)' : 'var(--green)';
+        const snColor = !d.sonno    ? 'var(--text3)' : d.sonno<=4    ? 'var(--red)' : d.sonno<=6    ? 'var(--yellow)' : 'var(--green)';
 
-        return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;margin-bottom:3px;background:var(--surface);${hasPain?'border-left:2px solid var(--red);':'border-left:2px solid transparent;'}">
-          <div style="font-size:9px;font-family:'DM Mono',monospace;color:var(--text3);min-width:30px;flex-shrink:0;">${fmtDate}</div>
-          <div style="width:6px;height:6px;border-radius:50%;background:${isPost?'#1565c0':'#6a1b9a'};flex-shrink:0;"></div>
-          <div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
-            ${diff ? `<span style="font-size:10px;font-weight:700;color:${diff.color};">${diff.label}</span>` : ''}
-            ${hasPain ? `<span style="font-size:10px;font-weight:700;color:var(--red);">⚠️ ${d.intensitaDolore}/10</span>` : ''}
-            ${hasPain && d.zoneDolorose?.length ? `<span style="font-size:9px;color:#c62828;">${d.zoneDolorose.slice(0,2).map(z=>z.label).join(', ')}</span>` : ''}
-          </div>
-          <div style="display:flex;gap:6px;flex-shrink:0;">
-            ${d.energia  != null ? `<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;color:${enColor};">${d.energia}</span>` : ''}
-            ${d.sonno    != null ? `<span style="font-size:10px;font-family:'DM Mono',monospace;color:${snColor};">${d.sonno}</span>` : ''}
+        // tipo badge
+        const tipoBg    = isPost ? '#e8eef7' : '#f0edf7';
+        const tipoColor = isPost ? '#1565c0'  : '#6a1b9a';
+        const tipoLabel = isPost ? 'Post'     : 'Sett.';
+
+        // stato centro: dolore > seduta > niente
+        let statoEl = '';
+        if (hasPain) {
+          statoEl = `<span style="font-size:10px;font-weight:700;color:var(--red);">⚠️ ${d.intensitaDolore}/10</span>`;
+        } else if (diff) {
+          statoEl = `<span style="font-size:10px;font-weight:600;color:${diff.color};">${diff.label}</span>`;
+        } else {
+          statoEl = `<span style="font-size:10px;color:var(--text3);">—</span>`;
+        }
+
+        // zona dolore
+        const zonaEl = hasPain && d.zoneDolorose?.length
+          ? `<div style="font-size:9px;color:#c62828;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px;">${d.zoneDolorose.slice(0,2).map(z=>z.label).join(', ')}</div>`
+          : '';
+
+        return `<div style="display:grid;grid-template-columns:28px 34px 1fr auto;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;margin-bottom:2px;background:var(--surface);${hasPain?'border-left:2px solid var(--red);':'border-left:2px solid transparent;'}">
+          <!-- data -->
+          <div style="font-size:9px;font-family:'DM Mono',monospace;color:var(--text3);line-height:1.2;">${fmtDate}</div>
+          <!-- tipo -->
+          <div style="background:${tipoBg};color:${tipoColor};font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;text-align:center;white-space:nowrap;">${tipoLabel}</div>
+          <!-- stato + zona -->
+          <div style="min-width:0;">${statoEl}${zonaEl}</div>
+          <!-- valori -->
+          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+            ${d.energia != null ? `<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;color:${enColor};">${d.energia}</span>` : ''}
+            ${d.sonno   != null ? `<span style="font-size:10px;font-family:'DM Mono',monospace;color:${snColor};opacity:.8;">${d.sonno}</span>` : ''}
           </div>
         </div>`;
       }).join('');
@@ -14439,95 +14461,129 @@ async function loadFollowupCharts(clientId) {
       return `<span style="color:${good?'var(--green)':'var(--red)'};font-size:12px;">${up?'↑':'↓'}</span>`;
     }
 
+    // ── insight frase automatica ──
+    function _buildInsight(lastEn, lastSn, lastDol, lpDiffInfo, recentVals) {
+      const parts = [];
+      // Dolore
+      if (lastDol === 0) parts.push('nessun dolore');
+      else if (lastDol <= 3) parts.push('dolore lieve');
+      else if (lastDol <= 6) parts.push('dolore moderato');
+      else parts.push('dolore elevato — attenzione');
+      // Energia
+      if (lastEn >= 8) parts.push('energia ottima');
+      else if (lastEn >= 6) parts.push('energia buona');
+      else if (lastEn >= 4) parts.push('energia nella norma');
+      else parts.push('energia bassa');
+      // Sonno
+      if (lastSn >= 8) parts.push('sonno ottimo');
+      else if (lastSn >= 6) parts.push('sonno ok');
+      else if (lastSn >= 4) parts.push('sonno nella norma');
+      else parts.push('sonno scarso');
+      // Seduta
+      if (lpDiffInfo) {
+        const label = lpDiffInfo.label.toLowerCase();
+        if (label.includes('facile')) parts.push('carico troppo leggero');
+        else if (label.includes('dur')) parts.push('carico eccessivo');
+      }
+      return parts.join(' · ');
+    }
+    const _insightText = _buildInsight(lastEn, lastSn, lastDol, lpDiffInfo, recentVals);
+
     container.innerHTML = `
 
       <!-- ZONA OPERATIVA -->
 
-      <div style="background:${semColor};border:2px solid ${semBorder};border-radius:16px;padding:20px 18px 18px;margin-bottom:6px;">
+      <div style="background:${semColor};border:2px solid ${semBorder};border-radius:14px;padding:18px 16px 14px;margin-bottom:4px;">
 
-        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:${semAccent};margin-bottom:10px;">Stato oggi · ${lpDate}</div>
+        <!-- eyebrow -->
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;color:${semAccent};margin-bottom:8px;">Stato oggi · ${lpDate}</div>
 
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
-          <div style="font-size:40px;line-height:1;flex-shrink:0;">${semEmoji}</div>
+        <!-- stato principale -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <div style="font-size:36px;line-height:1;flex-shrink:0;">${semEmoji}</div>
           <div>
-            <div style="font-size:20px;font-weight:800;line-height:1.1;color:var(--text);">${semTitle}</div>
-            <div style="font-size:11px;color:var(--text2);margin-top:5px;font-family:'DM Mono',monospace;">${semSub || '—'}</div>
+            <div style="font-size:19px;font-weight:800;line-height:1.1;color:var(--text);">${semTitle}</div>
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;">
+        <!-- metriche inline — non più box separati, ma una strip leggera -->
+        <div style="display:flex;gap:0;border-radius:9px;overflow:hidden;border:1px solid rgba(0,0,0,0.07);">
 
-          <div style="background:rgba(255,255,255,0.6);border-radius:10px;padding:8px 6px;text-align:center;">
-            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">⚡ En.</div>
-            <div style="font-size:20px;font-weight:800;line-height:1;color:${lpEn<=4?'var(--red)':lpEn<=6?'var(--yellow)':'var(--green)'};">${lpEn}</div>
-            <div style="font-size:10px;margin-top:1px;">${_trendArrow(allDocs,'energia')}</div>
+          <div style="flex:1;padding:7px 4px 6px;text-align:center;background:rgba(255,255,255,0.55);border-right:1px solid rgba(0,0,0,0.07);">
+            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">⚡ En.</div>
+            <div style="font-size:17px;font-weight:800;line-height:1;color:${lpEn<=4?'var(--red)':lpEn<=6?'var(--yellow)':'var(--green)'};">${lpEn}</div>
+            <div style="font-size:9px;line-height:1;margin-top:2px;">${_trendArrow(allDocs,'energia')}</div>
           </div>
 
-          <div style="background:rgba(255,255,255,0.6);border-radius:10px;padding:8px 6px;text-align:center;">
-            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">😴 Son.</div>
-            <div style="font-size:20px;font-weight:800;line-height:1;color:${lpSn<=4?'var(--red)':lpSn<=6?'var(--yellow)':'var(--green)'};">${lpSn}</div>
-            <div style="font-size:10px;margin-top:1px;">${_trendArrow(allDocs,'sonno')}</div>
+          <div style="flex:1;padding:7px 4px 6px;text-align:center;background:rgba(255,255,255,0.55);border-right:1px solid rgba(0,0,0,0.07);">
+            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">😴 Son.</div>
+            <div style="font-size:17px;font-weight:800;line-height:1;color:${lpSn<=4?'var(--red)':lpSn<=6?'var(--yellow)':'var(--green)'};">${lpSn}</div>
+            <div style="font-size:9px;line-height:1;margin-top:2px;">${_trendArrow(allDocs,'sonno')}</div>
           </div>
 
-          <div style="background:rgba(255,255,255,0.6);border-radius:10px;padding:8px 6px;text-align:center;">
-            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">🔥 Sed.</div>
-            <div style="font-size:${lpDiffInfo?'11px':'20px'};font-weight:800;line-height:1.2;padding-top:${lpDiffInfo?'3px':'0'};color:${lpDiffInfo?lpDiffInfo.color:'var(--text3)'};">${lpDiffInfo ? lpDiffInfo.label : '—'}</div>
+          <div style="flex:1;padding:7px 4px 6px;text-align:center;background:rgba(255,255,255,0.55);border-right:1px solid rgba(0,0,0,0.07);">
+            <div style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">🔥 Sed.</div>
+            <div style="font-size:${lpDiffInfo?'10px':'17px'};font-weight:800;line-height:1;padding-top:${lpDiffInfo?'3px':'0'};color:${lpDiffInfo?lpDiffInfo.color:'var(--text3)'};">${lpDiffInfo ? lpDiffInfo.label : '—'}</div>
           </div>
 
-          <div style="background:${lpDol>0?'rgba(229,57,53,0.15)':'rgba(255,255,255,0.6)'};border-radius:10px;padding:8px 6px;text-align:center;${lpDol>0?'border:1.5px solid rgba(229,57,53,0.4);':''}">
-            <div style="font-size:8px;font-weight:700;color:${lpDol>0?'#c62828':'var(--text3)'};text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">🦴 Dol.</div>
-            <div style="font-size:${lpDol>0?'16px':'20px'};font-weight:800;line-height:1.2;color:${lpDol>0?'var(--red)':'var(--green)'};">${lpDol>0?'⚠️':'✓'}</div>
-            ${lpDol>0 ? `<div style="font-size:9px;font-weight:800;color:var(--red);margin-top:1px;">${lpDol}/10</div>` : ''}
+          <div style="flex:1;padding:7px 4px 6px;text-align:center;background:${lpDol>0?'rgba(229,57,53,0.12)':'rgba(255,255,255,0.55)'};">
+            <div style="font-size:8px;font-weight:700;color:${lpDol>0?'#c62828':'var(--text3)'};text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;">🦴 Dol.</div>
+            <div style="font-size:17px;font-weight:800;line-height:1;color:${lpDol>0?'var(--red)':'var(--green)'};">${lpDol>0?'⚠️':'✓'}</div>
+            ${lpDol>0 ? `<div style="font-size:9px;font-weight:700;color:var(--red);margin-top:2px;">${lpDol}/10</div>` : `<div style="font-size:9px;color:var(--text3);margin-top:2px;">ok</div>`}
           </div>
 
         </div>
 
+        <!-- zone dolorose: solo se presenti -->
         ${lpDol>0 && lastPost?.zoneDolorose?.length
-          ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid ${semBorder};display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-              <span style="font-size:9px;color:#c62828;font-weight:700;">📍 Zone:</span>
-              ${lastPost.zoneDolorose.map(z=>`<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#ffebee;color:#c62828;font-weight:600;">${z.label}</span>`).join('')}
+          ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:3px;align-items:center;">
+              <span style="font-size:9px;color:#c62828;font-weight:700;flex-shrink:0;">📍</span>
+              ${lastPost.zoneDolorose.map(z=>`<span style="font-size:10px;padding:1px 7px;border-radius:20px;background:#ffebee;color:#c62828;font-weight:600;">${z.label}</span>`).join('')}
              </div>`
           : ''}
 
       </div>
 
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:24px;padding:0 2px;">
-        <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">${docs.length} risposte</div>
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-        <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">ultima: ${lastLbl}</div>
+      <!-- insight automatico -->
+      <div style="padding:8px 14px 0;margin-bottom:18px;">
+        <div style="font-size:11px;color:var(--text2);line-height:1.5;font-family:'DM Mono',monospace;letter-spacing:.01em;">${_insightText}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:1px;">${docs.length} risposte · ultima: ${lastLbl}</div>
       </div>
 
       <!-- ZONA ANALITICA -->
 
-      <div style="margin-bottom:16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <!-- Andamento -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
           <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);">Andamento</div>
           <div style="display:flex;gap:2px;">
-            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
-            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
-            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Settim.</button>
+            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;border:1px solid var(--accent);background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;line-height:1.4;">Tutte</button>
+            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:10px;font-weight:600;padding:3px 9px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;line-height:1.4;">Post-sed.</button>
+            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:10px;font-weight:600;padding:3px 9px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;line-height:1.4;">Settim.</button>
           </div>
         </div>
-        <div style="background:var(--surface);border-radius:10px;padding:12px 10px 8px;">
+        <div style="background:var(--surface);border-radius:10px;padding:10px 10px 7px;">
           <div id="fu-svg-${clientId}"></div>
-          <div style="display:flex;gap:10px;margin-top:6px;">
+          <div style="display:flex;gap:8px;margin-top:5px;">
             <span style="font-size:9px;font-family:'DM Mono',monospace;color:#1565c0;">● En</span>
-            <span style="font-size:9px;font-family:'DM Mono',monospace;color:#6a1b9a;">● Son</span>
+            <span style="font-size:9px;font-family:'DM Mono',monospace;color:#9c6fbf;">● Son</span>
             <span style="font-size:9px;font-family:'DM Mono',monospace;color:#e53935;">● Dol</span>
-            <span style="font-size:9px;font-family:'DM Mono',monospace;color:#e65100;">● Str</span>
+            <span style="font-size:9px;font-family:'DM Mono',monospace;color:#e65100;opacity:.7;">● Str</span>
           </div>
         </div>
       </div>
 
-      <div style="margin-bottom:16px;">
-        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);margin-bottom:8px;">Pattern settimanale</div>
-        <div style="background:var(--surface);border-radius:10px;padding:12px 10px;">
+      <!-- Pattern settimanale -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);margin-bottom:6px;">Pattern settimanale</div>
+        <div style="background:var(--surface);border-radius:10px;padding:10px 10px;">
           ${fuBuildHeatmap(allDocs)}
         </div>
       </div>
 
+      <!-- Storico -->
       <div>
-        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);margin-bottom:8px;">Storico</div>
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--text3);margin-bottom:6px;">Storico</div>
         <div id="fu-history-${clientId}">${fuBuildHistory(allDocs)}</div>
       </div>
     `;
