@@ -81,17 +81,21 @@
   input.stress-range::-webkit-slider-thumb { background: var(--purple) !important; box-shadow: 0 2px 8px rgba(106,27,154,0.25) !important; }
   .stress-val { color: var(--purple) !important; }
 
-  /* TOGGLE SI/NO */
-  .toggle-row { display: flex; gap: 10px; }
-  .toggle-btn {
-    flex: 1; padding: 14px; border-radius: var(--radius);
+  /* CHIP DOLORE / REAZIONE CORPO */
+  .chip-list { display: flex; flex-direction: column; gap: 9px; }
+  .chip-option {
+    width: 100%; padding: 13px 16px; border-radius: var(--radius);
     border: 2px solid var(--border); background: var(--bg);
     color: var(--text); font-family: 'Outfit', sans-serif;
     font-size: 15px; font-weight: 600; cursor: pointer;
-    transition: all 0.18s; text-align: center;
+    transition: all 0.18s; text-align: left; display: flex; align-items: center; gap: 10px;
+    user-select: none;
   }
-  .toggle-btn.sel-no { border-color: var(--green); background: var(--green-bg); color: var(--green); }
-  .toggle-btn.sel-si { border-color: var(--red); background: var(--red-bg); color: var(--red); }
+  .chip-option:active { transform: scale(0.98); }
+  .chip-option.sel-green { border-color: var(--green); background: var(--green-bg); color: var(--green); }
+  .chip-option.sel-yellow { border-color: var(--yellow); background: var(--yellow-bg); color: var(--yellow); }
+  .chip-option.sel-red { border-color: var(--red); background: var(--red-bg); color: var(--red); }
+  .chip-option.sel-blue { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); }
 
   .pain-detail { margin-top: 18px; display: none; flex-direction: column; gap: 18px; }
   .pain-detail.visible { display: flex; }
@@ -157,6 +161,10 @@
   .esercizi-option .emo { font-size: 22px; }
   .esercizi-option .txt { font-size: 14px; font-weight: 600; color: var(--muted); }
   .esercizi-option.selected .txt { color: var(--red); }
+
+  /* CARD CONDIZIONALE */
+  .conditional-card { display: none; }
+  .conditional-card.visible { display: block; }
 
   /* TESTO LIBERO */
   textarea {
@@ -232,13 +240,16 @@
       <div class="slider-labels"><span>😴 A terra</span><span>⚡ Al massimo</span></div>
     </div>
 
-    <!-- Q2: DOLORE A RIPOSO -->
+    <!-- Q2: DOLORE -->
     <div class="card">
-      <div class="section-label">02 — Dolore</div>
-      <div class="question">Hai sentito dolori a riposo questa settimana?</div>
-      <div class="toggle-row">
-        <button class="toggle-btn" onclick="selectDolore('no', this)" type="button">✅ No, sto bene</button>
-        <button class="toggle-btn" onclick="selectDolore('si', this)" type="button">⚠️ Sì</button>
+      <div class="section-label">02 — Dolore / Fastidio</div>
+      <div class="question">Questa settimana il dolore o fastidio è stato:</div>
+      <div class="chip-list">
+        <button class="chip-option" onclick="selectDolore('assente', this)" type="button">✅ Assente</button>
+        <button class="chip-option" onclick="selectDolore('gestibile', this)" type="button">🟡 Presente ma gestibile</button>
+        <button class="chip-option" onclick="selectDolore('fastidioso', this)" type="button">🟠 Fastidioso a tratti</button>
+        <button class="chip-option" onclick="selectDolore('spesso', this)" type="button">🔴 Spesso presente</button>
+        <button class="chip-option" onclick="selectDolore('forte', this)" type="button">🔴 Più forte del solito</button>
       </div>
       <div class="pain-detail" id="painDetail">
         <div>
@@ -340,28 +351,70 @@
     <!-- Q5: ESERCIZI -->
     <div class="card">
       <div class="section-label">05 — Esercizi a casa</div>
-      <div class="question">Hai fatto gli esercizi assegnati a casa?</div>
+      <div class="question">Gli esercizi assegnati a casa li hai fatti?</div>
       <div class="esercizi-grid">
         <div class="esercizi-option" onclick="selectEsercizi('tutti', this)">
-          <span class="emo">✅</span><span class="txt">Sì, li ho fatti tutti</span>
+          <span class="emo">✅</span><span class="txt">Tutti</span>
         </div>
-        <div class="esercizi-option" onclick="selectEsercizi('in_parte', this)">
-          <span class="emo">🔶</span><span class="txt">In parte</span>
+        <div class="esercizi-option" onclick="selectEsercizi('in_gran_parte', this)">
+          <span class="emo">🔶</span><span class="txt">In gran parte</span>
+        </div>
+        <div class="esercizi-option" onclick="selectEsercizi('solo_qualcuno', this)">
+          <span class="emo">🔸</span><span class="txt">Solo qualcuno</span>
         </div>
         <div class="esercizi-option" onclick="selectEsercizi('no', this)">
-          <span class="emo">❌</span><span class="txt">No, non li ho fatti</span>
+          <span class="emo">❌</span><span class="txt">No</span>
         </div>
       </div>
     </div>
 
-    <!-- Q6: TESTO LIBERO -->
+    <!-- Q5b: MOTIVO ESERCIZI (condizionale) -->
+    <div class="card conditional-card" id="motivoCard">
+      <div class="section-label">05b — Motivo</div>
+      <div class="question">Il motivo principale è stato:</div>
+      <div class="esercizi-grid">
+        <div class="esercizi-option" onclick="selectMotivo('poco_tempo', this)">
+          <span class="emo">⏱️</span><span class="txt">Poco tempo</span>
+        </div>
+        <div class="esercizi-option" onclick="selectMotivo('dimenticati', this)">
+          <span class="emo">🧠</span><span class="txt">Dimenticati</span>
+        </div>
+        <div class="esercizi-option" onclick="selectMotivo('stanchezza', this)">
+          <span class="emo">😴</span><span class="txt">Troppa stanchezza</span>
+        </div>
+        <div class="esercizi-option" onclick="selectMotivo('dolore', this)">
+          <span class="emo">🩹</span><span class="txt">Dolore / fastidio</span>
+        </div>
+        <div class="esercizi-option" onclick="selectMotivo('non_sicuro', this)">
+          <span class="emo">❓</span><span class="txt">Non ero sicuro di farli bene</span>
+        </div>
+        <div class="esercizi-option" onclick="selectMotivo('no_voglia', this)">
+          <span class="emo">🙃</span><span class="txt">Non ne avevo voglia</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Q6: REAZIONE CORPO -->
     <div class="card">
-      <div class="section-label">06 — Messaggio <span class="optional-tag">opzionale</span></div>
+      <div class="section-label">06 — Reazione del corpo</div>
+      <div class="question">Nel complesso, questa settimana il tuo corpo ha reagito:</div>
+      <div class="chip-list">
+        <button class="chip-option" onclick="selectReazione('molto_bene', this)" type="button">🚀 Molto bene</button>
+        <button class="chip-option" onclick="selectReazione('bene', this)" type="button">💪 Bene</button>
+        <button class="chip-option" onclick="selectReazione('cosi_cosi', this)" type="button">🙂 Così così</button>
+        <button class="chip-option" onclick="selectReazione('con_fatica', this)" type="button">😓 Con fatica</button>
+        <button class="chip-option" onclick="selectReazione('male', this)" type="button">😔 Male</button>
+      </div>
+    </div>
+
+    <!-- Q7: TESTO LIBERO -->
+    <div class="card">
+      <div class="section-label">07 — Messaggio <span class="optional-tag">opzionale</span></div>
       <div class="question">Vuoi dirmi qualcosa?</div>
       <textarea id="noteLibere" placeholder="Come ti senti, qualcosa che hai notato, domande..."></textarea>
     </div>
 
-    <p class="note">Le risposte 1-5 sono necessarie · il messaggio è facoltativo 💪</p>
+    <p class="note">Le risposte 1-6 sono necessarie · il messaggio è facoltativo 💪</p>
 
     <button class="submit-btn" id="submitBtn" onclick="submitForm()" disabled>
       Invia risposta
@@ -404,7 +457,18 @@
 
   document.getElementById('loadingState').classList.remove('visible');
 
-  if (!clientId) {
+  // Modalità preview: se aperto in locale (file://) o senza parametri, mostra il form in anteprima
+  const isPreview = !clientId || window.location.protocol === 'file:';
+
+  if (isPreview && !clientId) {
+    document.getElementById('clientName').textContent = 'Anteprima';
+    document.getElementById('followupForm').style.display = 'flex';
+    // Disabilita il submit in preview
+    document.getElementById('submitBtn').onclick = function(e) {
+      e.preventDefault();
+      alert('✅ Anteprima: il form funziona correttamente.\nIn produzione i dati vengono inviati a Firebase con clientId=' + (clientId || 'N/D'));
+    };
+  } else if (!clientId) {
     document.getElementById('mainContent').style.display = 'none';
     document.getElementById('errorScreen').classList.add('visible');
   } else {
@@ -433,16 +497,52 @@
 </script>
 
 <script>
-  const state = { energia: 5, dolore: null, zone: {}, sonno: 5, stress: 5, esercizi: null, note: '' };
+  // Fallback: rimuove il loading se il modulo Firebase non è ancora partito dopo 800ms
+  // (succede quando il file viene aperto con file:// o senza connessione)
+  setTimeout(function() {
+    const loading = document.getElementById('loadingState');
+    const form = document.getElementById('followupForm');
+    if (loading && loading.classList.contains('visible')) {
+      loading.classList.remove('visible');
+      // Mostra il form in modalità preview
+      if (form && form.style.display === 'none' || form && form.style.display === '') {
+        document.getElementById('clientName').textContent = 'Anteprima';
+        form.style.display = 'flex';
+        var btn = document.getElementById('submitBtn');
+        if (btn) {
+          btn.onclick = function(e) {
+            e.preventDefault();
+            alert('✅ Anteprima locale: il form funziona.\nCaricalo su GitHub Pages per usarlo con Firebase.');
+          };
+        }
+      }
+    }
+  }, 800);
+
+  const state = {
+    energia: 5,
+    doloreGrado: null,  // 'assente'|'gestibile'|'fastidioso'|'spesso'|'forte'
+    zone: {},
+    sonno: 5,
+    stress: 5,
+    esercizi: null,     // 'tutti'|'in_gran_parte'|'solo_qualcuno'|'no'
+    motivoEsercizi: null,
+    reazioneCorpo: null,
+    note: ''
+  };
 
   function updateProgress() {
-    const doloreOk = state.dolore === 'no' || (state.dolore === 'si' && Object.keys(state.zone).length > 0);
-    const allOk = doloreOk && state.esercizi !== null;
+    const doloreOk = state.doloreGrado !== null &&
+      (state.doloreGrado === 'assente' || Object.keys(state.zone).length > 0);
+    const motivoOk = state.esercizi === null || state.esercizi === 'tutti' || state.motivoEsercizi !== null;
+    const allOk = doloreOk && state.esercizi !== null && motivoOk && state.reazioneCorpo !== null;
     document.getElementById('submitBtn').disabled = !allOk;
-    let filled = 3;
-    if (state.dolore !== null) filled++;
+
+    let filled = 3; // energia + sonno + stress sempre compilati
+    if (state.doloreGrado !== null) filled++;
     if (state.esercizi !== null) filled++;
-    document.getElementById('progressFill').style.width = ((filled / 5) * 100) + '%';
+    if (state.reazioneCorpo !== null) filled++;
+    document.getElementById('progressFill').style.width = ((filled / 6) * 100) + '%';
   }
 
   function updateSlider(type, val) {
@@ -471,18 +571,39 @@
     document.getElementById('zpval-' + zoneId(zona)).textContent = val;
   }
 
+  function _chipColorClass(val) {
+    if (val === 'assente' || val === 'molto_bene' || val === 'bene') return 'sel-green';
+    if (val === 'gestibile' || val === 'cosi_cosi' || val === 'bene') return 'sel-green';
+    if (val === 'fastidioso' || val === 'con_fatica') return 'sel-yellow';
+    if (val === 'spesso' || val === 'forte' || val === 'male') return 'sel-red';
+    return 'sel-blue';
+  }
+
+  // Mappa colori più precisa
+  const _doloreColors = { assente: 'sel-green', gestibile: 'sel-yellow', fastidioso: 'sel-yellow', spesso: 'sel-red', forte: 'sel-red' };
+  const _reazioneColors = { molto_bene: 'sel-green', bene: 'sel-green', cosi_cosi: 'sel-yellow', con_fatica: 'sel-yellow', male: 'sel-red' };
+
   function selectDolore(val, el) {
-    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('sel-no','sel-si'));
-    state.dolore = val;
-    if (val === 'no') {
-      el.classList.add('sel-no');
-      document.getElementById('painDetail').classList.remove('visible');
+    document.querySelectorAll('#painDetail').length; // no-op safety
+    document.querySelectorAll('.chip-list .chip-option').forEach(b => {
+      b.classList.remove('sel-green', 'sel-yellow', 'sel-red', 'sel-blue');
+    });
+    // Solo i chip del blocco dolore (Q2, primo chip-list nel DOM)
+    const allDoloreChips = el.closest('.chip-list').querySelectorAll('.chip-option');
+    allDoloreChips.forEach(b => b.classList.remove('sel-green', 'sel-yellow', 'sel-red', 'sel-blue'));
+
+    state.doloreGrado = val;
+    el.classList.add(_doloreColors[val] || 'sel-blue');
+
+    const hasDolore = val !== 'assente';
+    const detail = document.getElementById('painDetail');
+    if (hasDolore) {
+      detail.classList.add('visible');
+    } else {
+      detail.classList.remove('visible');
       state.zone = {};
       document.querySelectorAll('.zone-chip').forEach(c => c.classList.remove('selected'));
       document.getElementById('painSlidersContainer').innerHTML = '';
-    } else {
-      el.classList.add('sel-si');
-      document.getElementById('painDetail').classList.add('visible');
     }
     updateProgress();
   }
@@ -514,9 +635,37 @@
   }
 
   function selectEsercizi(val, el) {
-    document.querySelectorAll('.esercizi-option').forEach(e => e.classList.remove('selected'));
+    document.querySelectorAll('.esercizi-grid .esercizi-option').forEach(e => e.classList.remove('selected'));
+    // Solo il grid della card Q5 (non Q5b)
+    el.closest('.esercizi-grid').querySelectorAll('.esercizi-option').forEach(e => e.classList.remove('selected'));
     el.classList.add('selected');
     state.esercizi = val;
+
+    // Mostra/nascondi card motivo
+    const motivoCard = document.getElementById('motivoCard');
+    if (val !== 'tutti') {
+      motivoCard.classList.add('visible');
+    } else {
+      motivoCard.classList.remove('visible');
+      state.motivoEsercizi = null;
+      motivoCard.querySelectorAll('.esercizi-option').forEach(e => e.classList.remove('selected'));
+    }
+    updateProgress();
+  }
+
+  function selectMotivo(val, el) {
+    el.closest('.esercizi-grid').querySelectorAll('.esercizi-option').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    state.motivoEsercizi = val;
+    updateProgress();
+  }
+
+  function selectReazione(val, el) {
+    el.closest('.chip-list').querySelectorAll('.chip-option').forEach(b => {
+      b.classList.remove('sel-green', 'sel-yellow', 'sel-red', 'sel-blue');
+    });
+    state.reazioneCorpo = val;
+    el.classList.add(_reazioneColors[val] || 'sel-blue');
     updateProgress();
   }
 
@@ -525,19 +674,26 @@
     btn.disabled = true;
     btn.textContent = 'Invio in corso...';
     state.note = document.getElementById('noteLibere').value.trim();
+    const hasDolore = state.doloreGrado !== 'assente';
     const zoneDolorose = Object.entries(state.zone).map(([label, data]) => ({ label, intensity: data.intensity }));
     const intensitaMedia = zoneDolorose.length > 0
       ? Math.round(zoneDolorose.reduce((s, z) => s + z.intensity, 0) / zoneDolorose.length)
       : null;
     await window._submitToFirebase({
+      // Nuovi campi v2
+      doloreGrado: state.doloreGrado,
+      motivoEsercizi: state.motivoEsercizi || null,
+      reazioneCorpo: state.reazioneCorpo,
+      // Campi invariati
       energia: state.energia,
-      dolore: state.dolore === 'si',
-      zoneDolorose: state.dolore === 'si' ? zoneDolorose : [],
-      intensitaDolore: state.dolore === 'si' ? intensitaMedia : null,
       sonno: state.sonno,
       stress: state.stress,
       esercizi: state.esercizi,
-      note: state.note || null
+      note: state.note || null,
+      // Retrocompatibilità con vecchi record/letture nel gestionale
+      dolore: hasDolore,
+      zoneDolorose: hasDolore ? zoneDolorose : [],
+      intensitaDolore: hasDolore ? intensitaMedia : null,
     });
   }
 
