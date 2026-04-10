@@ -14530,67 +14530,44 @@ async function loadFollowupCharts(clientId) {
         </div>
       </div>
 
-      <!-- TREND GRAFICO -->
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📈 Grafico</div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
-          <div style="font-size:12px;font-weight:700;color:var(--text2);">Risorse vs Carico</div>
-          <div style="display:flex;gap:3px;background:var(--surface2);border-radius:8px;padding:3px;">
-            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:6px;border:none;background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
-            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
-            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Settim.</button>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:6px 8px;background:var(--surface2);border-radius:6px;">
-          <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;">↑ Alto = bene</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#1565c0;">● Energia</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#6a1b9a;">● Sonno</span>
-          <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;margin-top:4px;">↓ Basso = bene</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e53935;">● Dolore</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e65100;">● Stress</span>
-        </div>
-        <div id="fu-svg-${clientId}" style="padding-top:2px;"></div>
-      </div>
-
-      <!-- HEATMAP -->
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">🌡️ Heatmap settimane</div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
-        ${fuBuildHeatmap(allDocs)}
-      </div>
-
-      <!-- TREND NEL TEMPO -->
+      <!-- TREND NEL TEMPO (selettore unico che controlla anche il grafico) -->
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📊 Trend nel tempo</div>
       <div id="fu-trend-block-${clientId}" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
-        <!-- Selettore finestra temporale -->
-        <div style="display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;-webkit-overflow-scrolling:touch;">
+        <!-- Selettore finestra temporale — UNA vista attiva per volta -->
+        <div style="display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;-webkit-overflow-scrolling:touch;">
           ${[{v:14,l:'14 gg'},{v:30,l:'30 gg'},{v:90,l:'3 mesi'},{v:180,l:'6 mesi'},{v:365,l:'1 anno'}].map((w,i) =>
             `<button id="fu-tw-${clientId}-${w.v}" onclick="fuSwitchTimeWindow(${clientId},${w.v})"
               style="flex-shrink:0;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;border:1.5px solid ${i===0?'var(--accent)':'var(--border)'};background:${i===0?'var(--accent)':'transparent'};color:${i===0?'white':'var(--text3)'};cursor:pointer;font-family:'Outfit',sans-serif;white-space:nowrap;transition:all .15s;">${w.l}</button>`
           ).join('')}
         </div>
-        <!-- Contenuto dinamico trend -->
+        <!-- Contenuto dinamico trend (delta + frase + baseline + flare-up) -->
         <div id="fu-tw-content-${clientId}"></div>
       </div>
 
-      <!-- TREND GRAFICO -->
+      <!-- GRAFICO — segue il filtro temporale selezionato sopra -->
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:6px;">📈 Grafico</div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
-          <div style="font-size:12px;font-weight:700;color:var(--text2);">Risorse vs Carico</div>
-          <div style="display:flex;gap:3px;background:var(--surface2);border-radius:8px;padding:3px;">
-            <button id="fu-tab-all-${clientId}"  onclick="fuSwitchTab(${clientId},'all')"  style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:6px;border:none;background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">Tutte</button>
-            <button id="fu-tab-post-${clientId}" onclick="fuSwitchTab(${clientId},'post')" style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Post-sed.</button>
-            <button id="fu-tab-wk-${clientId}"   onclick="fuSwitchTab(${clientId},'wk')"   style="font-size:10px;font-weight:600;padding:4px 9px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">Settim.</button>
-          </div>
+        <!-- Label periodo attivo -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:700;color:var(--text2);">Risorse vs Carico</span>
+          <span id="fu-chart-period-label-${clientId}" style="font-size:10px;font-weight:700;font-family:'DM Mono',monospace;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:10px;border:1px solid var(--border);">Ultimi 14 giorni</span>
         </div>
-        <!-- Legenda semantica -->
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:6px 8px;background:var(--surface2);border-radius:6px;">
-          <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;">↑ Alto = bene</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#1565c0;">● Energia</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#6a1b9a;">● Sonno</span>
-          <span style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;margin-top:4px;">↓ Basso = bene</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e53935;">● Dolore</span>
-          <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e65100;">● Stress</span>
+        <!-- Legenda semantica a due aree distinte -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+          <div style="background:#e3f2fd18;border:1px solid #1565c022;border-radius:6px;padding:6px 8px;">
+            <div style="font-size:9px;font-weight:700;color:#1565c0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">⚡ Risorse — Alto = bene</div>
+            <div style="display:flex;gap:8px;">
+              <span style="font-size:10px;font-family:'DM Mono',monospace;color:#1565c0;">● Energia</span>
+              <span style="font-size:10px;font-family:'DM Mono',monospace;color:#6a1b9a;">● Sonno</span>
+            </div>
+          </div>
+          <div style="background:#ffebee18;border:1px solid #e5393522;border-radius:6px;padding:6px 8px;">
+            <div style="font-size:9px;font-weight:700;color:#c62828;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">⚠️ Carico — Basso = bene</div>
+            <div style="display:flex;gap:8px;">
+              <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e53935;">● Dolore</span>
+              <span style="font-size:10px;font-family:'DM Mono',monospace;color:#e65100;">● Stress</span>
+            </div>
+          </div>
         </div>
         <div id="fu-svg-${clientId}" style="padding-top:2px;"></div>
       </div>
@@ -14606,15 +14583,18 @@ async function loadFollowupCharts(clientId) {
       <div id="fu-history-${clientId}">${fuBuildHistory(allDocs)}</div>
     `;
 
-    // Store docs for tab switching
+    // Store docs for tab switching and chart rebuild
     window._fuDocs = window._fuDocs || {};
     window._fuDocs[clientId] = { all: allDocs, post: postDocs, wk: wkDocs };
 
-    // Render initial chart
-    document.getElementById('fu-svg-' + clientId).innerHTML = fuBuildSvgChart(allDocs);
-    // Store builder function
+    // Store chart builder function (used by fuSwitchTimeWindow to sync chart)
     window._fuBuildSvgChart = window._fuBuildSvgChart || {};
     window._fuBuildSvgChart[clientId] = fuBuildSvgChart;
+
+    // Render chart con la finestra di default 14 gg
+    const { windowDocs: _initDocs } = fuFilterByWindow(allDocs, 14);
+    const _initChart = document.getElementById('fu-svg-' + clientId);
+    if (_initChart) _initChart.innerHTML = fuBuildSvgChart(_initDocs.length >= 2 ? _initDocs : allDocs);
 
     // Render trend block (default 14 gg)
     fuRenderTrendBlock(clientId, allDocs, 14);
@@ -14638,7 +14618,7 @@ function fuSwitchTab(clientId, tab) {
   if (builder && svgEl) svgEl.innerHTML = builder(docs);
 }
 
-/** Switcha finestra temporale nel blocco trend Follow-Up */
+/** Switcha finestra temporale — sincronizza trend block E grafico SVG */
 function fuSwitchTimeWindow(clientId, days) {
   const allDocs = window._fuDocs?.[clientId]?.all || [];
   // Aggiorna stile pulsanti
@@ -14650,7 +14630,21 @@ function fuSwitchTimeWindow(clientId, days) {
     btn.style.color        = active ? 'white'          : 'var(--text3)';
     btn.style.borderColor  = active ? 'var(--accent)'  : 'var(--border)';
   });
+  // Aggiorna trend block (delta, frase, badge)
   fuRenderTrendBlock(clientId, allDocs, days);
+  // Sincronizza grafico SVG con la stessa finestra
+  const builder = window._fuBuildSvgChart?.[clientId];
+  const svgEl   = document.getElementById('fu-svg-' + clientId);
+  if (builder && svgEl) {
+    const { windowDocs } = fuFilterByWindow(allDocs, days);
+    svgEl.innerHTML = builder(windowDocs.length >= 2 ? windowDocs : allDocs);
+  }
+  // Aggiorna label periodo sul grafico
+  const labelEl = document.getElementById('fu-chart-period-label-' + clientId);
+  if (labelEl) {
+    const labels = {14:'Ultimi 14 giorni',30:'Ultimi 30 giorni',90:'Ultimi 3 mesi',180:'Ultimi 6 mesi',365:'Ultimo anno'};
+    labelEl.textContent = labels[days] || '';
+  }
 }
 
 /** Renderizza il blocco trend per la finestra selezionata */
@@ -15650,16 +15644,21 @@ async function sbLoadFollowupBanner(clientId) {
 
         <!-- FRASE OPERATIVA 14 GG -->
         <div style="background:var(--surface2);border-radius:8px;padding:9px 11px;border-left:3px solid ${interp14.globalColor};font-size:12px;line-height:1.55;margin-bottom:10px;">
-          <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);display:block;margin-bottom:3px;">📋 Decisione seduta</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text3);">📋 Decisione seduta</span>
+            <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;background:${conf14.color}18;color:${conf14.color};">${conf14.icon} ${conf14.label}</span>
+          </div>
           ${interp14.fraseOperativa}
         </div>
 
-        <!-- MINI SELETTORE 14/30 GG -->
+        <!-- MINI SELETTORE 14 / 30 GG / 3 MESI -->
         <div style="display:flex;gap:4px;margin-bottom:8px;">
           <button id="sb-tw-${clientId}-14" onclick="sbSwitchTrendWindow(${clientId}, 14)"
             style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;border:1.5px solid var(--accent);background:var(--accent);color:white;cursor:pointer;font-family:'Outfit',sans-serif;">14 gg</button>
           <button id="sb-tw-${clientId}-30" onclick="sbSwitchTrendWindow(${clientId}, 30)"
             style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">30 gg</button>
+          <button id="sb-tw-${clientId}-90" onclick="sbSwitchTrendWindow(${clientId}, 90)"
+            style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;border:1.5px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:'Outfit',sans-serif;">3 mesi</button>
         </div>
 
         <!-- DELTA METRICHE -->
@@ -15688,10 +15687,10 @@ async function sbLoadFollowupBanner(clientId) {
   window._sbDocs[clientId] = docs;
 }
 
-/** Switch finestra temporale nel seduta builder (14 vs 30 gg) */
+/** Switch finestra temporale nel seduta builder (14 / 30 gg / 3 mesi) */
 function sbSwitchTrendWindow(clientId, days) {
   const docs = window._sbDocs?.[clientId] || [];
-  [14, 30].forEach(d => {
+  [14, 30, 90].forEach(d => {
     const btn = document.getElementById(`sb-tw-${clientId}-${d}`);
     if (!btn) return;
     const active = d === days;
@@ -15721,12 +15720,40 @@ function sbSwitchTrendWindow(clientId, days) {
     </div>`;
   }
 
+  // Baseline per 3 mesi
+  let baselineRowHtml = '';
+  if (days >= 90) {
+    const bl = fuGetBaseline(docs);
+    if (bl) {
+      const bItems = [
+        { key:'energia',         label:'En.', inv:false },
+        { key:'sonno',           label:'Son.',inv:false },
+        { key:'intensitaDolore', label:'Dol.',inv:true  },
+        { key:'stress',          label:'Str.',inv:true  },
+      ].map(m => {
+        const bv = bl[m.key], cv = fuAvg(windowDocs, m.key);
+        if (bv == null || cv == null) return '';
+        const d2 = cv - bv;
+        const isPos = m.inv ? d2 < 0 : d2 > 0;
+        const col = Math.abs(d2) < 0.3 ? '#9e9e9e' : isPos ? '#2e7d32' : '#e53935';
+        return `<span style="font-size:10px;font-family:'DM Mono',monospace;color:${col};">${m.label} ${d2>0?'+':''}${d2.toFixed(1)}</span>`;
+      }).filter(Boolean).join('');
+      if (bItems) {
+        baselineRowHtml = `<div style="padding:5px 8px;background:var(--surface2);border-radius:6px;margin-top:6px;">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:3px;">Dal baseline iniziale</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">${bItems}</div>
+        </div>`;
+      }
+    }
+  }
+
   cont.innerHTML = `
     <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);display:flex;gap:7px;padding-bottom:3px;">
       <span style="min-width:66px;">Metrica</span><span style="flex:1;">Trend</span><span style="min-width:22px;text-align:right;">Ora</span><span style="min-width:30px;text-align:right;">Δ</span><span style="min-width:12px;"></span>
     </div>
     ${deltas.map(sbDeltaRow).join('')}
     <div style="margin-top:6px;font-size:11px;color:var(--text2);background:var(--surface2);border-radius:6px;padding:7px 9px;border-left:2px solid ${interp.globalColor};">${interp.fraseOperativa}</div>
+    ${baselineRowHtml}
   `;
 }
 
