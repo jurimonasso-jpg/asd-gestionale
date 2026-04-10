@@ -12054,9 +12054,11 @@ function _aiGenerateProposta(clientId, client) {
   // Valori: 'giusto' | 'non_seguito' | 'sottostimato'
   const lastBannerFeedback = lastNote?.bannerFeedback || null;
 
-  // Follow-up più recente
+  // Follow-up più recente (normalizzato — retrocompatibile con vecchi e nuovi campi)
   const lastFU = followupNotes[0] || null;
-  const fuDolore  = lastFU?.pain ?? null;
+  const lastFUnorm = lastFU ? normalizeFollowup(lastFU) : null;
+  // fuDolore: intensità dolore numerica (0 = assente). Legge sia vecchio pain/bool che nuovo intensitaDolore
+  const fuDolore  = lastFUnorm ? lastFUnorm.intensitaDolore : null;
   const fuTesto   = lastFU?.testo || lastFU?.text || lastFU?.note || '';
 
   // Banner alert corrente (dal sistema follow-up live)
@@ -14369,7 +14371,7 @@ async function loadFollowupCharts(clientId) {
     function fuBuildHistory(docs) {
       const reversed = [...docs].reverse().slice(0, 10);
       return reversed.map(d => {
-        const diff   = d.seduta ? DIFF_MAP[d.seduta] : null;
+        const diff   = legacyPercezionePill(d);
         const isPost = d.tipo === 'post_seduta';
         const isSett = d.tipo === 'check_settimanale';
         return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
@@ -14399,23 +14401,21 @@ async function loadFollowupCharts(clientId) {
     const lastDate = allDocs[allDocs.length-1];
     const lastLbl  = lastDate?.date || lastDate?.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '—';
 
-    // ── semaforo calc ──
-    const recentVals = allDocs.slice(-4);
+    // ══ semaforo calc (usa nuova logica v2) ══
+    const recentVals = allDocs.slice(-6);
+    const _semState  = deriveFollowupState(recentVals);
     const lastEn  = recentVals.map(d=>d.energia).filter(v=>v!=null).slice(-1)[0] ?? 5;
     const lastSn  = recentVals.map(d=>d.sonno).filter(v=>v!=null).slice(-1)[0] ?? 5;
-    const lastDol = recentVals.map(d=>d.intensitaDolore).filter(v=>v!=null).slice(-1)[0] ?? 0;
-    const enArr   = recentVals.map(d=>d.energia).filter(v=>v!=null);
-    const enTrend = enArr.length > 1 ? enArr[enArr.length-1] - enArr[enArr.length-2] : 0;
-    const snArr   = recentVals.map(d=>d.sonno).filter(v=>v!=null);
-    const snTrend = snArr.length > 1 ? snArr[snArr.length-1] - snArr[snArr.length-2] : 0;
-    let semColor, semEmoji, semTitle, semSub;
-    if (lastEn <= 4 || lastSn <= 4 || lastDol > 2 || (enTrend <= -2 && snTrend <= -1)) {
-      semColor='#fff5f5'; semEmoji='🔴'; semTitle='Attenzione'; semSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0?' · Dolore presente':''}`;
-    } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
-      semColor='#fffdf0'; semEmoji='⚠️'; semTitle='Monitorare'; semSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10`;
-    } else {
-      semColor='#f1f8f2'; semEmoji='🟢'; semTitle='In forma'; semSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
-    }
+    const lastDol = recentVals.map(d=>normalizeFollowup(d).intensitaDolore).filter(v=>v!=null).slice(-1)[0] ?? 0;
+    const semBgMap = { 'fu-green':'#f1f8f2','fu-yellow':'#fffdf0','fu-red':'#fff5f5','fu-gray':'var(--surface2)' };
+    const semColor = semBgMap[_semState.colore] || 'var(--surface2)';
+    const semEmoji = _semState.emoji;
+    const semTitle = _semState.stato;
+    const semSub   = [
+      lastEn != null ? ('Energia ' + lastEn + '/10') : null,
+      lastSn != null ? ('Sonno ' + lastSn + '/10') : null,
+      lastDol > 0 ? ('Dolore ' + lastDol + '/10') : null,
+    ].filter(Boolean).join(' · ');
 
     // ── last post-seduta doc ──
     const lastPost   = [...allDocs].reverse().find(d => d.tipo === 'post_seduta') || allDocs[allDocs.length-1];
@@ -14423,8 +14423,8 @@ async function loadFollowupCharts(clientId) {
     const lpEn       = lastPost?.energia ?? '—';
     const lpSn       = lastPost?.sonno   ?? '—';
     const lpDol      = lastPost?.intensitaDolore;
-    const lpDiff     = lastPost?.seduta;
-    const lpDiffInfo = lpDiff ? DIFF_MAP[lpDiff] : null;
+    // Pill ultima seduta retrocompatibile (legge sia vecchio .seduta che nuovo .percezioneSeduta)
+    const lpDiffInfo = lastPost ? legacyPercezionePill(lastPost) : null;
 
     function fmtDateLong(s) {
       if (!s) return '—';
@@ -14550,6 +14550,404 @@ function fuSwitchTab(clientId, tab) {
   if (builder && svgEl) svgEl.innerHTML = builder(docs);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// FOLLOW-UP V2 — NORMALIZZAZIONE, PUNTEGGIO, STATO, SUGGERIMENTO
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Mappa percezioneSeduta legacy ──────────────────────────────────
+function _mapPercezioneLegacy(doc) {
+  if (doc.percezioneSeduta) return doc.percezioneSeduta;
+  const v = doc.seduta || null;
+  const map = {
+    'facile': 'troppo_facile',
+    'giusto': 'giusta_allenante',
+    'era_giusto': 'giusta_allenante',
+    'impegnativo': 'impegnativa_ok',
+    'duro': 'troppo_dura',
+    'troppo_duro': 'troppo_dura',
+  };
+  return v ? (map[v] || v) : null;
+}
+
+// ── Mappa doloreGrado da bool+intensità legacy ──────────────────────
+function _mapDoloreGrado(doc) {
+  if (doc.doloreGrado) return doc.doloreGrado;
+  const hasPain = doc.dolore === true || doc.dolore === 'si';
+  if (!hasPain) return 'assente';
+  const i = doc.intensitaDolore ?? doc.pain ?? 0;
+  if (i <= 0)  return 'assente';
+  if (i <= 3)  return 'gestibile';
+  if (i <= 6)  return 'fastidioso';
+  if (i <= 8)  return 'spesso';
+  return 'forte';
+}
+
+// ── Mappa esercizi legacy ───────────────────────────────────────────
+function _mapEsercizi(val) {
+  const map = {
+    'tutti': 'tutti',
+    'in_parte': 'in_gran_parte',
+    'in_gran_parte': 'in_gran_parte',
+    'solo_qualcuno': 'solo_qualcuno',
+    'no': 'no',
+  };
+  return val ? (map[val] || val) : null;
+}
+
+// ── normalizePostSeduta ─────────────────────────────────────────────
+function normalizePostSeduta(doc) {
+  return {
+    tipo:              'post_seduta',
+    timestamp:         doc.timestamp || 0,
+    energia:           doc.energia != null ? Number(doc.energia) : null,
+    sonno:             doc.sonno   != null ? Number(doc.sonno)   : null,
+    percezioneSeduta:  _mapPercezioneLegacy(doc),
+    recupero:          doc.recupero || null,
+    doloreGrado:       _mapDoloreGrado(doc),
+    zoneDolorose:      doc.zoneDolorose || [],
+    intensitaDolore:   doc.intensitaDolore != null ? Number(doc.intensitaDolore) : (doc.pain != null ? Number(doc.pain) : 0),
+    _raw:              doc,
+  };
+}
+
+// ── normalizeSettimanale ────────────────────────────────────────────
+function normalizeSettimanale(doc) {
+  return {
+    tipo:              'check_settimanale',
+    timestamp:         doc.timestamp || 0,
+    energia:           doc.energia != null ? Number(doc.energia) : null,
+    sonno:             doc.sonno   != null ? Number(doc.sonno)   : null,
+    stress:            doc.stress  != null ? Number(doc.stress)  : null,
+    doloreGrado:       _mapDoloreGrado(doc),
+    zoneDolorose:      doc.zoneDolorose || [],
+    intensitaDolore:   doc.intensitaDolore != null ? Number(doc.intensitaDolore) : 0,
+    esercizi:          _mapEsercizi(doc.esercizi),
+    motivoEsercizi:    doc.motivoEsercizi || null,
+    reazioneCorpo:     doc.reazioneCorpo || null,
+    note:              doc.note || doc.testo || doc.text || '',
+    _raw:              doc,
+  };
+}
+
+// ── normalizeFollowup (dispatcher) ─────────────────────────────────
+function normalizeFollowup(doc) {
+  if (doc.tipo === 'post_seduta') return normalizePostSeduta(doc);
+  if (doc.tipo === 'check_settimanale') return normalizeSettimanale(doc);
+  // fallback: guess by fields
+  if (doc.percezioneSeduta || doc.seduta || doc.recupero) return normalizePostSeduta(doc);
+  return normalizeSettimanale(doc);
+}
+
+// ── computeFollowupScore ────────────────────────────────────────────
+// Restituisce { score, contributi[] }
+function computeFollowupScore(norms) {
+  let score = 0;
+  const contributi = [];
+
+  function _scoreEnergiaVal(v) {
+    if (v == null) return 0;
+    if (v >= 8) return 8;
+    if (v >= 6) return 3;
+    if (v >= 4) return -5;
+    return -12;
+  }
+  function _scoreSonnoVal(v) {
+    if (v == null) return 0;
+    if (v >= 8) return 5;
+    if (v >= 6) return 2;
+    if (v >= 4) return -4;
+    return -10;
+  }
+  function _scoreStressVal(v) {
+    if (v == null) return 0;
+    if (v <= 3) return 3;
+    if (v <= 5) return 0;
+    if (v <= 7) return -4;
+    return -9;
+  }
+
+  const PESO_PERCEZIONE = {
+    'giusta_allenante': 8, 'giusta_leggera': 3, 'troppo_facile': -2,
+    'impegnativa_ok': -3, 'troppo_dura': -12,
+  };
+  const PESO_RECUPERO = {
+    'meglio': 8, 'normale': 4, 'stanco_normale': -2,
+    'troppo_affaticato': -10, 'piu_dolorante': -18,
+  };
+  const PESO_DOLORE = {
+    'assente': 5, 'gestibile': -3, 'fastidioso': -7,
+    'spesso': -12, 'forte': -18,
+  };
+  const PESO_REAZIONE = {
+    'molto_bene': 8, 'bene': 4, 'cosi_cosi': -2,
+    'con_fatica': -7, 'male': -14,
+  };
+  const PESO_ESERCIZI = {
+    'tutti': 4, 'in_gran_parte': 1, 'solo_qualcuno': -2, 'no': -4,
+  };
+
+  // Prendi i dati più recenti (post + sett separati)
+  const lastPost = [...norms].filter(n => n.tipo === 'post_seduta').sort((a,b) => b.timestamp - a.timestamp)[0] || null;
+  const lastSett = [...norms].filter(n => n.tipo === 'check_settimanale').sort((a,b) => b.timestamp - a.timestamp)[0] || null;
+  const last = norms.sort ? [...norms].sort((a,b) => b.timestamp - a.timestamp)[0] : null;
+
+  // Energia (usa il più recente tra post e sett)
+  const energiaVal = last?.energia;
+  const ds = _scoreEnergiaVal(energiaVal);
+  if (ds !== 0) { score += ds; contributi.push({ campo: 'energia', valore: energiaVal, peso: ds }); }
+
+  // Sonno
+  const sonnoVal = last?.sonno;
+  const ss = _scoreSonnoVal(sonnoVal);
+  if (ss !== 0) { score += ss; contributi.push({ campo: 'sonno', valore: sonnoVal, peso: ss }); }
+
+  // Stress (solo settimanale)
+  if (lastSett?.stress != null) {
+    const strs = _scoreStressVal(lastSett.stress);
+    if (strs !== 0) { score += strs; contributi.push({ campo: 'stress', valore: lastSett.stress, peso: strs }); }
+  }
+
+  // Percezione seduta (solo post-seduta)
+  if (lastPost?.percezioneSeduta) {
+    const ps = PESO_PERCEZIONE[lastPost.percezioneSeduta] ?? 0;
+    if (ps !== 0) { score += ps; contributi.push({ campo: 'percezioneSeduta', valore: lastPost.percezioneSeduta, peso: ps }); }
+  }
+
+  // Recupero (solo post-seduta)
+  if (lastPost?.recupero) {
+    const rs = PESO_RECUPERO[lastPost.recupero] ?? 0;
+    if (rs !== 0) { score += rs; contributi.push({ campo: 'recupero', valore: lastPost.recupero, peso: rs }); }
+  }
+
+  // Dolore — usa il peggiore tra post e sett recenti
+  const doloreGradoRaw = lastPost?.doloreGrado || lastSett?.doloreGrado || 'assente';
+  const dls = PESO_DOLORE[doloreGradoRaw] ?? 0;
+  if (dls !== 0) { score += dls; contributi.push({ campo: 'doloreGrado', valore: doloreGradoRaw, peso: dls }); }
+
+  // Reazione corpo (solo settimanale)
+  if (lastSett?.reazioneCorpo) {
+    const rcs = PESO_REAZIONE[lastSett.reazioneCorpo] ?? 0;
+    if (rcs !== 0) { score += rcs; contributi.push({ campo: 'reazioneCorpo', valore: lastSett.reazioneCorpo, peso: rcs }); }
+  }
+
+  // Aderenza esercizi (solo settimanale)
+  if (lastSett?.esercizi) {
+    const es = PESO_ESERCIZI[lastSett.esercizi] ?? 0;
+    if (es !== 0) { score += es; contributi.push({ campo: 'esercizi', valore: lastSett.esercizi, peso: es }); }
+  }
+
+  // Cap score
+  score = Math.max(-40, Math.min(40, score));
+
+  return { score, contributi, lastPost, lastSett };
+}
+
+// ── applyFollowupOverrides ──────────────────────────────────────────
+function applyFollowupOverrides(scoreResult, norms) {
+  let { score, contributi, lastPost, lastSett } = scoreResult;
+  const overrides = [];
+
+  const recupero     = lastPost?.recupero || null;
+  const percez       = lastPost?.percezioneSeduta || null;
+  const doloreGrado  = lastPost?.doloreGrado || lastSett?.doloreGrado || 'assente';
+  const dolorePresente = doloreGrado !== 'assente';
+  const reazioneCorpo = lastSett?.reazioneCorpo || null;
+  const energia      = lastPost?.energia ?? lastSett?.energia ?? null;
+  const scorePost    = (() => {
+    if (!lastPost) return 0;
+    return computeFollowupScore([lastPost]).score;
+  })();
+  const scoreSett    = (() => {
+    if (!lastSett) return 0;
+    return computeFollowupScore([lastSett]).score;
+  })();
+
+  // O1: piu_dolorante + dolore presente → Recupero consigliato
+  if (recupero === 'piu_dolorante' && dolorePresente) {
+    score = Math.min(score, -15);
+    overrides.push({ rule: 'O1', msg: 'oggi si sente più dolorante del solito' });
+  }
+
+  // O2: troppo_dura + troppo_affaticato → Recupero consigliato
+  if (percez === 'troppo_dura' && recupero === 'troppo_affaticato') {
+    score = Math.min(score, -15);
+    overrides.push({ rule: 'O2', msg: 'seduta precedente troppo dura e recupero incompleto' });
+  }
+
+  // O3: energia/sonno bassi ma dolore assente → non oltre "Da gestire"
+  if (doloreGrado === 'assente' && energia != null && energia <= 5 && score < -5) {
+    score = Math.max(score, -4); // porta a "Da adattare" max
+    overrides.push({ rule: 'O3', msg: 'stanco ma senza dolore — non serve ridurre al massimo' });
+  }
+
+  // O4: settimanale male/con_fatica + post negativo → amplifica
+  if ((reazioneCorpo === 'male' || reazioneCorpo === 'con_fatica') && scorePost < 0) {
+    score = Math.max(-40, Math.round(score * 1.4));
+    overrides.push({ rule: 'O4', msg: 'settimana con fatica e seduta difficile — peso combinato' });
+  }
+
+  // O5: post buono ma settimanale brutto → cap a "Da gestire"
+  if (lastPost && lastSett && scorePost > 10 && scoreSett < -5) {
+    score = Math.min(score, 4); // max "Da gestire"
+    overrides.push({ rule: 'O5', msg: 'la settimana generale pesa più del singolo giorno' });
+  }
+
+  return { score, contributi, overrides, lastPost, lastSett };
+}
+
+// ── deriveFollowupState ─────────────────────────────────────────────
+// Restituisce { stato, livello, suggerimento, spiegazione, colore, emoji, overrides }
+function deriveFollowupState(docs) {
+  if (!docs || !docs.length) {
+    return {
+      stato: 'Nessun dato', livello: 'gray', colore: 'fu-gray',
+      emoji: '⬜', suggerimento: 'Seduta regolare',
+      spiegazione: 'Nessun follow-up disponibile.', overrides: [],
+    };
+  }
+
+  const norms = docs.map(normalizeFollowup);
+  const rawScore = computeFollowupScore(norms);
+  const result   = applyFollowupOverrides(rawScore, norms);
+  const { score, contributi, overrides, lastPost, lastSett } = result;
+
+  // Mapping score → stato
+  let stato, livello, colore, emoji;
+  if (score >= 15) {
+    stato = 'Pronto'; livello = 'green'; colore = 'fu-green'; emoji = '🟢';
+  } else if (score >= 5) {
+    stato = 'Da gestire'; livello = 'yellow'; colore = 'fu-yellow'; emoji = '🟡';
+  } else if (score >= -5) {
+    stato = 'Da adattare'; livello = 'orange'; colore = 'fu-yellow'; emoji = '⚠️';
+  } else {
+    stato = 'Recupero consigliato'; livello = 'red'; colore = 'fu-red'; emoji = '🔴';
+  }
+
+  // Suggerimento operativo
+  const SUGG_MAP = {
+    'Pronto':               'Seduta regolare',
+    'Da gestire':           'Tieni la seduta ma monitora',
+    'Da adattare':          'Riduci leggermente il carico',
+    'Recupero consigliato': 'Recupero attivo / deload',
+  };
+  // Override suggerimento per O1
+  let suggerimento = SUGG_MAP[stato] || 'Seduta regolare';
+  if (overrides.find(o => o.rule === 'O1')) suggerimento = 'Attenzione al dolore oggi';
+  if (overrides.find(o => o.rule === 'O2')) suggerimento = 'Recupero attivo / deload';
+
+  // Spiegazione — prendi i 2 contributi negativi più pesanti + eventuali override
+  const negativi = [...contributi]
+    .filter(c => c.peso < 0)
+    .sort((a, b) => a.peso - b.peso)
+    .slice(0, 2);
+
+  const LABEL_CAMPO = {
+    energia: v => `energia bassa (${v}/10)`,
+    sonno:   v => `sonno insufficiente (${v}/10)`,
+    stress:  v => `stress alto (${v}/10)`,
+    percezioneSeduta: v => ({
+      'troppo_dura': 'seduta percepita troppo dura',
+      'impegnativa_ok': 'seduta molto impegnativa',
+      'troppo_facile': 'seduta troppo facile',
+    }[v] || v),
+    recupero: v => ({
+      'troppo_affaticato': 'recupero incompleto',
+      'piu_dolorante': 'oggi più dolorante del solito',
+      'stanco_normale': 'ancora un po\' stanco',
+    }[v] || v),
+    doloreGrado: v => ({
+      'fastidioso': 'dolore fastidioso presente',
+      'spesso': 'dolore ricorrente',
+      'forte': 'dolore forte presente',
+      'gestibile': 'dolore lieve presente',
+    }[v] || v),
+    reazioneCorpo: v => ({
+      'male': 'settimana con reazione negativa al corpo',
+      'con_fatica': 'settimana con fatica',
+    }[v] || v),
+    esercizi: v => v === 'no' ? 'nessun esercizio a casa questa settimana' : 'scarsa aderenza esercizi casa',
+  };
+
+  let partiSpiegazione = negativi.map(c =>
+    (LABEL_CAMPO[c.campo] ? LABEL_CAMPO[c.campo](c.valore) : c.campo)
+  );
+  overrides.forEach(o => {
+    if (!partiSpiegazione.includes(o.msg)) partiSpiegazione.push(o.msg);
+  });
+
+  let spiegazione = '';
+  if (stato === 'Pronto') {
+    spiegazione = 'Energia e recupero nella norma — buona sessione.';
+  } else if (partiSpiegazione.length > 0) {
+    spiegazione = partiSpiegazione.slice(0, 3).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('. ') + '.';
+  } else {
+    spiegazione = 'Profilo nella media — monitora durante la seduta.';
+  }
+
+  return { stato, livello, colore, emoji, suggerimento, spiegazione, score, overrides, lastPost, lastSett, norms };
+}
+
+// ── legacyPercezionePill ─────────────────────────────────────────────
+// Restituisce label e colore CSS per la pill "Ultima seduta"
+function legacyPercezionePill(doc) {
+  if (!doc) return null;
+  const val = _mapPercezioneLegacy(doc);
+  const labels = {
+    'troppo_facile':   { label: 'Troppo facile',    color: '#2e7d32' },
+    'giusta_leggera':  { label: 'Giusta ma leggera', color: '#1565c0' },
+    'giusta_allenante':{ label: 'Giusta e allenante', color: '#1565c0' },
+    'impegnativa_ok':  { label: 'Impegnativa',       color: '#e65100' },
+    'troppo_dura':     { label: 'Troppo dura',       color: '#c62828' },
+  };
+  return val ? (labels[val] || { label: val, color: '#555' }) : null;
+}
+
+// ── _buildFuBannerHtml ───────────────────────────────────────────────
+// Helper condiviso per generare il contenuto del banner follow-up
+function _buildFuBannerHtml(state, energia, sonno, dolore, miniBarFn) {
+  const { stato, emoji, suggerimento, spiegazione, lastPost } = state;
+  const zonesStr = (lastPost?.zoneDolorose || []).map(z => z.label || z).join(', ');
+  const lastDol  = dolore.length ? dolore[dolore.length-1] : 0;
+  const lastEn   = energia.length ? energia[energia.length-1] : null;
+  const lastSn   = sonno.length ? sonno[sonno.length-1] : null;
+
+  const sub = [
+    lastEn != null ? `Energia ${lastEn}/10` : null,
+    lastSn != null ? `Sonno ${lastSn}/10` : null,
+    lastDol > 0 ? `Dolore ${lastDol}/10${zonesStr ? ' (' + zonesStr + ')' : ''}` : null,
+  ].filter(Boolean).join(' · ');
+
+  const pillHtml = (() => {
+    if (!lastPost) return '';
+    const pill = legacyPercezionePill(lastPost._raw || lastPost);
+    if (!pill) return '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid var(--border);margin-bottom:8px;">
+      <span style="font-size:11px;color:var(--text3);">Ultima seduta:</span>
+      <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:${pill.color}22;color:${pill.color};">${pill.label}</span>
+    </div>`;
+  })();
+
+  const suggHtml = `<strong>${suggerimento}</strong> ${spiegazione}`;
+
+  return { sub, pillHtml, suggHtml, emoji, stato };
+}
+
+// ── getFollowupConfidenceAdjust ──────────────────────────────────────
+// Legge i feedback storici (bannerFeedback) e restituisce un delta score
+// giusto +1, sottostimato -2 (più prudente), non_seguito 0
+function getFollowupConfidenceAdjust(sessionNotes) {
+  if (!sessionNotes || !sessionNotes.length) return 0;
+  let adj = 0;
+  const recent = sessionNotes.slice(0, 10);
+  for (const n of recent) {
+    const fb = n.bannerFeedback || null;
+    if (fb === 'giusto')       adj += 1;
+    if (fb === 'sottostimato') adj -= 2;
+    // non_seguito è neutro
+  }
+  return Math.max(-8, Math.min(4, adj));
+}
+
 // ===== FOLLOW-UP BANNER NEL SEDUTA BUILDER (agenda) =====
 async function sbLoadFollowupBanner(clientId) {
   const wrap = document.getElementById('sb-fu-banner-wrap');
@@ -14569,58 +14967,53 @@ async function sbLoadFollowupBanner(clientId) {
 
   if (!docs.length) return;
 
-  const recent  = docs.slice(-6);
-  const energia = recent.map(d => d.energia).filter(v => v != null);
-  const sonno   = recent.map(d => d.sonno).filter(v => v != null);
-  const dolore  = recent.map(d => d.intensitaDolore).filter(v => v != null);
+  const recent = docs.slice(-6);
 
-  const lastEn   = energia.length ? energia[energia.length-1] : 5;
-  const lastSn   = sonno.length   ? sonno[sonno.length-1]     : 5;
-  const lastDol  = dolore.length  ? dolore[dolore.length-1]   : 0;
-  const enTrend  = energia.length > 1 ? lastEn - energia[energia.length-2] : 0;
-  const snTrend  = sonno.length   > 1 ? lastSn - sonno[sonno.length-2]     : 0;
+  // ── Calcola stato con nuova logica ──────────────────────────────
+  const state = deriveFollowupState(recent);
 
-  let bColor, bBg, bBorder, bEmoji, bTitle, bSub, bSugg;
-
-  // Ultimo documento con dolore segnalato — per mostrare le zone
-  const lastWithPain = [...docs].reverse().find(d => (d.intensitaDolore ?? 0) > 0);
-  const lastPainZones = lastWithPain?.zoneDolorose || [];
-  const zonesStr = lastPainZones.length
-    ? lastPainZones.map(z => z.label || z).join(', ')
-    : '';
-
-  if (lastEn <= 4 || lastSn <= 4 || lastDol > 2 || (enTrend <= -2 && snTrend <= -1)) {
-    bColor='#c62828'; bBg='#fff5f5'; bBorder='#ef9a9a';
-    bEmoji='🔴'; bTitle='Attenzione';
-    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : ''}`;
-    bSugg='<strong>Riduci il carico oggi.</strong> Trend negativo — considera una seduta di recupero attivo o deload.';
-    _wuCurrentBannerAlert = { tipo: 'attenzione', testo: 'Riduci il carico oggi' };
-  } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
-    bColor='#e65100'; bBg='#fffdf0'; bBorder='#ffe082';
-    bEmoji='⚠️'; bTitle='Monitorare';
-    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10${lastDol>0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : ''}`;
-    bSugg='<strong>Mantieni il carico della scorsa seduta.</strong> Energia in calo — allarga il warm-up e verifica come risponde.';
-    _wuCurrentBannerAlert = { tipo: 'monitorare', testo: 'Mantieni il carico, non aumentare' };
-  } else {
-    bColor='#2e7d32'; bBg='#f1f8f2'; bBorder='#a5d6a7';
-    bEmoji='🟢'; bTitle='In forma';
-    bSub=`Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
-    bSugg='<strong>Buon momento per progredire.</strong> Energia e sonno stabili — puoi aumentare carico o volume.';
-    _wuCurrentBannerAlert = { tipo: 'progressione', testo: 'Energia ok, considera progressione' };
+  // Aggiusta score con confidence storica (session notes)
+  const sessionNotes = getSessionNotes(clientId).slice(0, 10);
+  const confAdj = getFollowupConfidenceAdjust(sessionNotes);
+  // Aggiustamento confidence: se molti "giusto" allarga soglie verso progressione
+  // Se molti "sottostimato" rende il sistema più prudente
+  if (confAdj !== 0) {
+    const adjScore = Math.max(-40, Math.min(40, state.score + confAdj));
+    // Ricalcola stato se il adj score supera una soglia
+    if (adjScore >= 15 && state.stato !== 'Pronto') {
+      state.stato = 'Pronto'; state.emoji = '🟢'; state.colore = 'fu-green';
+      state.suggerimento = 'Seduta regolare'; state.spiegazione = 'Energia e recupero nella norma — buona sessione.';
+    } else if (adjScore < -5 && state.stato === 'Da gestire') {
+      state.stato = 'Da adattare'; state.emoji = '⚠️'; state.colore = 'fu-yellow';
+      state.suggerimento = 'Riduci leggermente il carico';
+    }
   }
 
-  // Render feedback buttons
-  _sbRenderBannerFeedback(clientId);
+  // Imposta _wuCurrentBannerAlert per generateSuggestion
+  const tipoMap = {
+    'Pronto': 'progressione',
+    'Da gestire': 'monitorare',
+    'Da adattare': 'monitorare',
+    'Recupero consigliato': 'attenzione',
+  };
+  _wuCurrentBannerAlert = { tipo: tipoMap[state.stato] || 'monitorare', testo: state.suggerimento };
 
-  // Last seduta difficulty
-  const lastPost = [...docs].reverse().find(d => d.tipo === 'post_seduta');
-  const labelMap = { facile:'Troppo facile', giusto:'Era giusto', impegnativo:'Impegnativo', duro:'Troppo duro' };
-  const colorMap = { facile:'#2e7d32', giusto:'#1565c0', impegnativo:'#e65100', duro:'#c62828' };
-  const lastDiffHtml = lastPost?.seduta
-    ? `<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:${colorMap[lastPost.seduta]}22;color:${colorMap[lastPost.seduta]};">${labelMap[lastPost.seduta]||lastPost.seduta}</span>`
+  // ── Trend arrays (per minibar) ──────────────────────────────────
+  const energia = recent.map(d => d.energia).filter(v => v != null);
+  const sonno   = recent.map(d => d.sonno).filter(v => v != null);
+  const dolore  = recent.map(d => {
+    const n = normalizeFollowup(d);
+    return n.intensitaDolore ?? 0;
+  }).filter(v => v != null);
+
+  // ── Pill ultima seduta (retrocompatibile) ───────────────────────
+  const lastPostRaw = [...docs].reverse().find(d => d.tipo === 'post_seduta');
+  const pill = lastPostRaw ? legacyPercezionePill(lastPostRaw) : null;
+  const lastDiffHtml = pill
+    ? `<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;background:${pill.color}22;color:${pill.color};">${pill.label}</span>`
     : '';
 
-  // Trend bars helper
+  // ── Trend bars ──────────────────────────────────────────────────
   function miniBar(vals, invert) {
     if (!vals.length) return '<span style="font-size:10px;color:var(--text3);">—</span>';
     const max = invert ? Math.max(...vals,1) : 10;
@@ -14631,25 +15024,55 @@ async function sbLoadFollowupBanner(clientId) {
       return `<div style="display:inline-block;width:8px;height:${h}px;background:${col};opacity:${op};border-radius:2px 2px 0 0;vertical-align:bottom;margin-right:2px;"></div>`;
     }).join('');
   }
-
-  const last  = arr => arr.length ? arr[arr.length-1] : null;
-  const arrow = (arr, invert) => {
+  const lastV  = arr => arr.length ? arr[arr.length-1] : null;
+  const arrow  = (arr, invert) => {
     if (arr.length < 2) return '';
     const d = arr[arr.length-1] - arr[arr.length-2];
     const up = d > 0, dn = d < 0;
-    const good = invert ? dn : up;
-    const bad  = invert ? up : dn;
-    const col  = good ? '#2e7d32' : bad ? '#e53935' : '#9e9e9e';
+    const col = (invert ? dn : up) ? '#2e7d32' : (invert ? up : dn) ? '#e53935' : '#9e9e9e';
     return `<span style="color:${col};font-size:12px;">${up?'↑':dn?'↓':'→'}</span>`;
   };
 
+  // ── Ultimo settimanale — recupero + reazione corpo ──────────────
+  const lastSettNorm = state.lastSett;
+  let extraRow = '';
+  if (lastSettNorm?.reazioneCorpo) {
+    const rcLabel = { molto_bene:'Molto bene', bene:'Bene', cosi_cosi:'Così così', con_fatica:'Con fatica', male:'Male' };
+    const rcColor = { molto_bene:'#2e7d32', bene:'#1565c0', cosi_cosi:'#e65100', con_fatica:'#e53935', male:'#c62828' };
+    const rc = lastSettNorm.reazioneCorpo;
+    extraRow = `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+      <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">🏃 Corpo</span>
+      <span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;background:${rcColor[rc]||'#555'}22;color:${rcColor[rc]||'#555'};">${rcLabel[rc]||rc}</span>
+    </div>`;
+  }
+
+  // ── Sub-titolo ──────────────────────────────────────────────────
+  const lastEn  = lastV(energia);
+  const lastSn  = lastV(sonno);
+  const lastDol = lastV(dolore) || 0;
+  const zonesStr = (state.lastPost?.zoneDolorose||[]).map(z=>z.label||z).join(', ');
+  const bSub = [
+    lastEn != null ? `Energia ${lastEn}/10` : null,
+    lastSn != null ? `Sonno ${lastSn}/10` : null,
+    lastDol > 0 ? `Dolore ${lastDol}/10${zonesStr?' ('+zonesStr+')':''}` : null,
+  ].filter(Boolean).join(' · ');
+
+  const bSugg = `<strong>${state.suggerimento}</strong> ${state.spiegazione}`;
+  const bgMap = { 'fu-green':'#f1f8f2','fu-yellow':'#fffdf0','fu-red':'#fff5f5','fu-gray':'var(--surface2)' };
+  const brMap = { 'fu-green':'#a5d6a7','fu-yellow':'#ffe082','fu-red':'#ef9a9a','fu-gray':'var(--border)' };
+  const bBg  = bgMap[state.colore] || 'var(--surface2)';
+  const bBdr = brMap[state.colore] || 'var(--border)';
+
+  // Render feedback buttons
+  _sbRenderBannerFeedback(clientId);
+
   wrap.innerHTML = `
-    <div style="background:${bBg};border:1.5px solid ${bBorder};border-radius:var(--radius);overflow:hidden;">
+    <div style="background:${bBg};border:1.5px solid ${bBdr};border-radius:var(--radius);overflow:hidden;">
       <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
         <div>
           <div style="display:flex;align-items:center;gap:7px;">
-            <span style="font-size:14px;">${bEmoji}</span>
-            <span style="font-size:12px;font-weight:700;color:var(--text);">${bTitle}</span>
+            <span style="font-size:14px;">${state.emoji}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--text);">${state.stato}</span>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:1px;margin-left:21px;">${bSub}</div>
         </div>
@@ -14661,21 +15084,22 @@ async function sbLoadFollowupBanner(clientId) {
           <div style="display:flex;align-items:center;gap:8px;">
             <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">⚡ Energia</span>
             <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(energia,false)}</div>
-            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#1565c0;width:16px;">${last(energia)??'—'}</span>
+            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#1565c0;width:16px;">${lastV(energia)??'—'}</span>
             ${arrow(energia,false)}
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">😴 Sonno</span>
             <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(sonno,false)}</div>
-            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#6a1b9a;width:16px;">${last(sonno)??'—'}</span>
+            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#6a1b9a;width:16px;">${lastV(sonno)??'—'}</span>
             ${arrow(sonno,false)}
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
             <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">🦴 Dolore</span>
             <div style="display:flex;align-items:flex-end;height:20px;flex:1;">${miniBar(dolore,true)}</div>
-            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#e53935;width:16px;">${last(dolore)===0?'✓':last(dolore)??'—'}</span>
+            <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:#e53935;width:16px;">${lastV(dolore)===0?'✓':lastV(dolore)??'—'}</span>
             ${arrow(dolore,true)}
           </div>
+          ${extraRow}
         </div>
         ${lastDiffHtml ? `<div style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid var(--border);margin-bottom:8px;"><span style="font-size:11px;color:var(--text3);">Ultima seduta:</span>${lastDiffHtml}</div>` : ''}
         <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;border-left:3px solid #1565c0;font-size:12px;line-height:1.5;">${bSugg}</div>
@@ -14720,11 +15144,28 @@ async function wuLoadFollowupBanner(clientId) {
 
   // Keep last 6 entries for trend
   const recent = docs.slice(-6);
+
+  // ── Calcola stato con nuova logica ──────────────────────────────
+  const state = deriveFollowupState(recent);
+
+  // Imposta _wuCurrentBannerAlert per generateSuggestion
+  const tipoMap = {
+    'Pronto': 'progressione',
+    'Da gestire': 'monitorare',
+    'Da adattare': 'monitorare',
+    'Recupero consigliato': 'attenzione',
+  };
+  _wuCurrentBannerAlert = { tipo: tipoMap[state.stato] || 'monitorare', testo: state.suggerimento };
+
+  // ── Trend arrays (energia, sonno, dolore normalizzato) ──────────
   const energia = recent.map(d => d.energia ?? null).filter(v => v !== null);
   const sonno   = recent.map(d => d.sonno ?? null).filter(v => v !== null);
-  const dolore  = recent.map(d => d.intensitaDolore ?? null).filter(v => v !== null);
+  const dolore  = recent.map(d => {
+    const n = normalizeFollowup(d);
+    return n.intensitaDolore ?? 0;
+  }).filter(v => v != null);
 
-  // Render bars helper
+  // Render bars helper (DOM-based, stessa struttura dell'originale)
   function renderBars(containerId, vals, color, valId, arrId, isDolore) {
     const c = document.getElementById(containerId);
     if (!c) return;
@@ -14748,7 +15189,7 @@ async function wuLoadFollowupBanner(clientId) {
     if (valEl) valEl.textContent = isDolore ? (last === 0 ? '✓' : '!') : last;
     if (arrEl) {
       const up = diff > 0, dn = diff < 0;
-      const isGoodUp = !isDolore; // for dolore, up is bad
+      const isGoodUp = !isDolore;
       arrEl.textContent = up ? '↑' : dn ? '↓' : '→';
       arrEl.style.color = up ? (isGoodUp ? 'var(--green)' : 'var(--accent)') : dn ? (isGoodUp ? 'var(--accent)' : 'var(--green)') : 'var(--text3)';
     }
@@ -14758,70 +15199,53 @@ async function wuLoadFollowupBanner(clientId) {
   renderBars('wu-bars-sonno',   sonno,   '#6a1b9a',        'wu-val-sonno',   'wu-arr-sonno',   false);
   renderBars('wu-bars-dolore',  dolore,  'var(--accent)',  'wu-val-dolore',  'wu-arr-dolore',  true);
 
-  // Last session difficulty (from post-seduta responses)
-  const lastPost = [...docs].reverse().find(d => d.tipo === 'post_seduta');
-  const lastRow  = document.getElementById('wu-fu-last-row');
-  if (lastPost && lastPost.seduta) {
-    const diffMap = {
-      'facile':      'fu-diff-easy',
-      'giusto':      'fu-diff-ok',
-      'impegnativo': 'fu-diff-hard',
-      'duro':        'fu-diff-tohard',
-    };
-    const labelMap = {
-      'facile':'Troppo facile', 'giusto':'Era giusto', 'impegnativo':'Impegnativo', 'duro':'Troppo duro'
-    };
-    const pill = document.getElementById('wu-fu-last-diff');
-    pill.textContent = labelMap[lastPost.seduta] || lastPost.seduta;
-    pill.className   = 'fu-diff-pill ' + (diffMap[lastPost.seduta] || 'fu-diff-ok');
-    const dateStr = lastPost.date || lastPost.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '';
-    document.getElementById('wu-fu-last-date').textContent = dateStr;
-    lastRow.style.display = 'flex';
+  // ── Last session difficulty pill (retrocompatibile) ─────────────
+  const lastPostRaw = [...docs].reverse().find(d => d.tipo === 'post_seduta');
+  const lastRow     = document.getElementById('wu-fu-last-row');
+  if (lastPostRaw) {
+    const pill = legacyPercezionePill(lastPostRaw);
+    if (pill) {
+      const pillClass = {
+        'troppo_facile':    'fu-diff-easy',
+        'giusta_leggera':   'fu-diff-ok',
+        'giusta_allenante': 'fu-diff-ok',
+        'impegnativa_ok':   'fu-diff-hard',
+        'troppo_dura':      'fu-diff-tohard',
+      };
+      const pillEl = document.getElementById('wu-fu-last-diff');
+      pillEl.textContent = pill.label;
+      pillEl.className   = 'fu-diff-pill ' + (pillClass[_mapPercezioneLegacy(lastPostRaw)] || 'fu-diff-ok');
+      const dateStr = lastPostRaw.date || lastPostRaw.timestamp?.toDate?.()?.toLocaleDateString('it-IT') || '';
+      document.getElementById('wu-fu-last-date').textContent = dateStr;
+      lastRow.style.display = 'flex';
+    } else {
+      lastRow.style.display = 'none';
+    }
   } else {
     lastRow.style.display = 'none';
   }
 
-  // Semaforo + suggestion
-  const lastEn  = energia.length ? energia[energia.length - 1] : 5;
-  const lastSn  = sonno.length   ? sonno[sonno.length - 1]     : 5;
-  const lastDol = dolore.length  ? dolore[dolore.length - 1]   : 0;
-  const enTrend = energia.length > 1 ? lastEn - energia[energia.length - 2] : 0;
-  const snTrend = sonno.length   > 1 ? lastSn - sonno[sonno.length - 2]     : 0;
-
-  let color = 'fu-green', title = '🟢 Cliente in forma', sub = '', sugg = '';
-
-  // Ultimo documento con dolore — per mostrare le zone
-  const lastWithPain = [...docs].reverse().find(d => (d.intensitaDolore ?? 0) > 0);
-  const lastPainZones = lastWithPain?.zoneDolorose || [];
-  const zonesStr = lastPainZones.length
-    ? lastPainZones.map(z => z.label || z).join(', ')
-    : '';
-
-  if (lastEn <= 4 || lastSn <= 4 || lastDol > 2 || (enTrend <= -2 && snTrend <= -1)) {
-    color = 'fu-red';
-    title = '🔴 Attenzione';
-    sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10` + (lastDol > 0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : '');
-    sugg  = '<strong>Riduci il carico oggi.</strong> Energia e/o sonno bassi — considera una seduta di recupero attivo o deload. Chiedi come si sente prima di iniziare.';
-    _wuCurrentBannerAlert = { tipo: 'attenzione', testo: 'Riduci il carico oggi' };
-  } else if (lastEn <= 6 || lastSn <= 5 || enTrend < 0) {
-    color = 'fu-yellow';
-    title = '🟡 Monitorare';
-    sub   = `Energia ${lastEn}/10 · Sonno ${lastSn}/10` + (lastDol > 0 ? (' · Dolore ' + lastDol + '/10' + (zonesStr ? ' (' + zonesStr + ')' : '')) : '');
-    sugg  = '<strong>Mantieni il carico della scorsa seduta, non aumentare.</strong> Trend in leggero calo — allarga il warm-up e valuta come risponde.';
-    _wuCurrentBannerAlert = { tipo: 'monitorare', testo: 'Mantieni il carico, non aumentare' };
-  } else {
-    sub  = `Energia ${lastEn}/10 · Sonno ${lastSn}/10 · Nessun dolore`;
-    sugg = '<strong>Buon momento per progredire.</strong> Energia e sonno stabili — puoi aumentare carico o volume su Fase 1 e 2.';
-    _wuCurrentBannerAlert = { tipo: 'progressione', testo: 'Energia ok, considera progressione' };
-  }
-
+  // ── Semaforo, titolo, sub, suggerimento con nuova logica ────────
   const bannerEl = document.getElementById('wu-followup-banner');
-  bannerEl.className = color;
-  document.getElementById('wu-fu-title').textContent = title;
-  document.getElementById('wu-fu-sub').textContent   = sub;
-  document.getElementById('wu-fu-sugg-text').innerHTML = sugg;
+  bannerEl.className = state.colore;
+  document.getElementById('wu-fu-title').textContent  = state.emoji + ' ' + state.stato;
+  document.getElementById('wu-fu-sub').textContent    = (() => {
+    const lastEn  = energia.length ? energia[energia.length-1] : null;
+    const lastSn  = sonno.length   ? sonno[sonno.length-1]     : null;
+    const lastDol = dolore.length  ? dolore[dolore.length-1]   : 0;
+    const zonesStr = (state.lastPost?.zoneDolorose||[]).map(z=>z.label||z).join(', ');
+    return [
+      lastEn != null ? `Energia ${lastEn}/10` : null,
+      lastSn != null ? `Sonno ${lastSn}/10` : null,
+      lastDol > 0 ? `Dolore ${lastDol}/10${zonesStr?' ('+zonesStr+')':''}` : null,
+    ].filter(Boolean).join(' · ');
+  })();
+  document.getElementById('wu-fu-sugg-text').innerHTML =
+    `<strong>${state.suggerimento}</strong> ${state.spiegazione}`;
   bannerEl.style.display = 'block';
 }
+
+
 
 renderDashboard();
 renderClients();
