@@ -10080,28 +10080,57 @@ const STATS_MANUAL_FREQ = {
   'loris': 1, 'flavio': 2, 'lara': 2
 };
 
+// Restituisce la data effettiva di inizio conteggio per un cliente.
+// Per clienti con slot fissi: usa c.sessionStart.
+// Per clienti manuali: usa c.sessionStart se impostato, altrimenti
+// cerca la prima seduta in archivio come fallback.
+function _statsClientStartDate(client) {
+  if (!client) return null;
+  if (client.sessionStart) return client.sessionStart; // 'YYYY-MM-DD'
+  // Fallback: prima seduta manuale archiviata per questo cliente
+  const archive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]');
+  const clientSessions = archive
+    .filter(s => s.clientId == client.id && s.date)
+    .map(s => s.date)
+    .sort();
+  if (clientSessions.length > 0) return clientSessions[0];
+  // Ultimo fallback: prima seduta in workouts
+  const wDates = workouts
+    .filter(w => w.clientId === client.id && w.createdAt)
+    .map(w => w.createdAt.split('T')[0])
+    .sort();
+  return wDates.length > 0 ? wDates[0] : null;
+}
+
 function _statsGetExpectedWeeklyFreq(client) {
   if (!client) return 0;
-  // Se ha slot fissi, la frequenza attesa è il numero di giorni fissi a settimana
-  if (client.schedule && client.schedule.length > 0) {
-    return client.schedule.length;
-  }
-  // Altrimenti cerca per nome (case-insensitive)
+  if (client.schedule && client.schedule.length > 0) return client.schedule.length;
   const key = (client.nome || '').toLowerCase();
   return STATS_MANUAL_FREQ[key] || 0;
 }
 
+// Settimane effettive nel range [start, end], con minimo di ~1 giorno
 function _statsWeeksInRange(start, end) {
   const ms = end.getTime() - start.getTime();
-  return Math.max(ms / (7 * 86400000), 0.143); // min ~1 giorno
+  return Math.max(ms / (7 * 86400000), 0.143);
+}
+
+// Settimane effettive nel range [start, end] clippando all'inizio reale del cliente.
+// Se il cliente è entrato dopo bounds.start, conta solo dal suo inizio.
+// Se è entrato dopo bounds.end, restituisce 0 (non era ancora attivo).
+function _statsWeeksActive(client, boundsStart, boundsEnd) {
+  const startDateStr = _statsClientStartDate(client);
+  if (!startDateStr) return _statsWeeksInRange(boundsStart, boundsEnd); // nessun dato → usa tutto il range
+  const clientStart = new Date(startDateStr + 'T00:00:00');
+  if (clientStart > boundsEnd) return 0; // non ancora attivo nel periodo
+  const effectiveStart = clientStart > boundsStart ? clientStart : boundsStart;
+  return _statsWeeksInRange(effectiveStart, boundsEnd);
 }
 
 function _statsAvailableSlots(bounds, skipped) {
-  // Base massima: 28 posti/settimana
   const MAX_WEEK = 28;
   const weeks = _statsWeeksInRange(bounds.start, bounds.end);
   const totalMax = Math.round(MAX_WEEK * weeks);
-  // Riduci per festività/chiusura e colpa mia (slot non erogabili)
   const notErogable = (skipped.fest || 0) + (skipped.me || 0);
   return Math.max(totalMax - notErogable, 1);
 }
@@ -10110,9 +10139,11 @@ function _statsGetClientExpected(client, bounds, skippedByClient) {
   if (!client) return 0;
   const weeklyFreq = _statsGetExpectedWeeklyFreq(client);
   if (weeklyFreq === 0) return 0;
-  const weeks = _statsWeeksInRange(bounds.start, bounds.end);
-  const rawExpected = weeklyFreq * weeks;
-  // Correggi per sedute saltate non imputabili al cliente
+  // Settimane effettive in cui il cliente era già attivo nel periodo
+  const weeksActive = _statsWeeksActive(client, bounds.start, bounds.end);
+  if (weeksActive === 0) return 0;
+  const rawExpected = weeklyFreq * weeksActive;
+  // Correggi per slot non imputabili al cliente (mia colpa + festività)
   const sk = skippedByClient[client.id] || {};
   const notClientFault = (sk.me || 0) + (sk.fest || 0);
   return Math.max(Math.round(rawExpected) - notClientFault, 0);
@@ -10135,9 +10166,13 @@ function _statsGenerateAlerts(curSedute, prevSedute, bounds, allClients, skipped
     const pSedute = prevSedute.filter(w => w.clientId === c.id);
     const sk = skippedCur.byClient[c.id] || {};
 
-    // Cancellazioni: 1+ volte "colpa sua"
+    // Era già attivo nel periodo?
+    const weeksActive = _statsWeeksActive(c, bounds.start, bounds.end);
+    if (weeksActive === 0) return; // non ancora attivo, nessun alert
+
+    // Cancellazioni colpa sua
     if ((sk.client || 0) >= 1) {
-      alerts.push({ type: 'cancel', name: `${c.nome} ${c.cognome}`, count: sk.client, msg: `${sk.client} cancellazion${sk.client > 1 ? 'i' : 'e'}` });
+      alerts.push({ type: 'cancel', name: `${c.nome} ${c.cognome}`, msg: `${sk.client} cancellazion${sk.client > 1 ? 'i' : 'e'}` });
     }
 
     // Frequenza in calo vs periodo precedente
@@ -10147,15 +10182,11 @@ function _statsGenerateAlerts(curSedute, prevSedute, bounds, allClients, skipped
 
     // Assente da >10 giorni (per vista settimana/mese)
     if (_statsView === 'week' || _statsView === 'month') {
-      const lastSed = curSedute.filter(w => w.clientId === c.id).map(w => new Date(w.createdAt)).sort((a,b)=>b-a)[0];
-      if (!lastSed) {
-        const expectedFreq = _statsGetExpectedWeeklyFreq(c);
-        if (expectedFreq > 0) {
-          // Cliente atteso ma non presente nel periodo
-          const daysSinceStart = (new Date() - bounds.start) / 86400000;
-          if (daysSinceStart > 10) {
-            alerts.push({ type: 'absent', name: `${c.nome} ${c.cognome}`, msg: `assente nel periodo` });
-          }
+      const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
+      if (expected > 0 && cSedute.length === 0) {
+        const daysSinceStart = (new Date() - bounds.start) / 86400000;
+        if (daysSinceStart > 10) {
+          alerts.push({ type: 'absent', name: `${c.nome} ${c.cognome}`, msg: `assente nel periodo` });
         }
       }
     }
@@ -10167,11 +10198,12 @@ function _statsGenerateAlerts(curSedute, prevSedute, bounds, allClients, skipped
     }
   });
 
-  // No show clienti senza slot fisso (0/N)
+  // No show clienti manuali
   allClients.filter(c => !c.sonoIo && (!clientId || c.id == clientId) && (!c.schedule || c.schedule.length === 0)).forEach(c => {
     const key = (c.nome || '').toLowerCase();
-    const freq = STATS_MANUAL_FREQ[key];
-    if (!freq) return;
+    if (!STATS_MANUAL_FREQ[key]) return;
+    const weeksActive = _statsWeeksActive(c, bounds.start, bounds.end);
+    if (weeksActive === 0) return;
     const cSedute = curSedute.filter(w => w.clientId === c.id);
     const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
     if (cSedute.length === 0 && expected > 0) {
@@ -10179,7 +10211,7 @@ function _statsGenerateAlerts(curSedute, prevSedute, bounds, allClients, skipped
     }
   });
 
-  // Deduplicazione per nome e priorità
+  // Deduplicazione per tipo+nome, max 5
   const seen = new Set();
   return alerts.filter(a => {
     const key = `${a.type}-${a.name}`;
@@ -10290,54 +10322,55 @@ function renderStats() {
   const allFilteredClients = clients.filter(c => !c.sonoIo && (!clientId || c.id == clientId));
   const alerts = _statsGenerateAlerts(curSedute, prevSedute, bounds, allFilteredClients, skippedCur);
 
-  // Frequenza per cliente
+  // Frequenza per cliente — solo clienti attivi nel periodo (sessionStart <= bounds.end)
   const byClientMap = {};
   allFilteredClients.forEach(c => {
+    const weeksActive = _statsWeeksActive(c, bounds.start, bounds.end);
+    if (weeksActive === 0) return; // non ancora attivo nel periodo, skip
     const cSedute = curSedute.filter(w => w.clientId === c.id);
     const sk = skippedCur.byClient[c.id] || {};
     const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
     const hasPain = cSedute.some(w => w.tipoSeduta === 'dolori' && w.painStart?.length);
     const noShow = cSedute.length === 0 && expected > 0 && (!c.schedule || c.schedule.length === 0);
+    // Mostra solo se ha sedute o ha frequenza attesa (è un cliente atteso nel periodo)
+    if (cSedute.length === 0 && expected === 0) return;
     byClientMap[c.id] = {
       id: c.id, name: `${c.nome} ${c.cognome}`,
       sedute: cSedute.length, expected, sk,
       adherePct: expected > 0 ? Math.min(Math.round(cSedute.length / expected * 100), 100) : (cSedute.length > 0 ? 100 : null),
-      hasPain, noShow
+      hasPain, noShow,
+      startDateStr: _statsClientStartDate(c)
     };
   });
 
-  // Clienti senza slot fisso ma con manuale freq
+  // Clienti manuali senza schedule ma con STATS_MANUAL_FREQ
   allFilteredClients.filter(c => !c.schedule || c.schedule.length === 0).forEach(c => {
-    if (!byClientMap[c.id]) {
-      const key = (c.nome || '').toLowerCase();
-      if (!STATS_MANUAL_FREQ[key]) return;
-      const cSedute = curSedute.filter(w => w.clientId === c.id);
-      const sk = skippedCur.byClient[c.id] || {};
-      const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
-      byClientMap[c.id] = {
-        id: c.id, name: `${c.nome} ${c.cognome}`,
-        sedute: cSedute.length, expected, sk,
-        adherePct: expected > 0 ? Math.min(Math.round(cSedute.length / expected * 100), 100) : null,
-        hasPain: false, noShow: cSedute.length === 0 && expected > 0
-      };
-    }
+    if (byClientMap[c.id]) return;
+    const key = (c.nome || '').toLowerCase();
+    if (!STATS_MANUAL_FREQ[key]) return;
+    const weeksActive = _statsWeeksActive(c, bounds.start, bounds.end);
+    if (weeksActive === 0) return;
+    const cSedute = curSedute.filter(w => w.clientId === c.id);
+    const sk = skippedCur.byClient[c.id] || {};
+    const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
+    if (cSedute.length === 0 && expected === 0) return;
+    byClientMap[c.id] = {
+      id: c.id, name: `${c.nome} ${c.cognome}`,
+      sedute: cSedute.length, expected, sk,
+      adherePct: expected > 0 ? Math.min(Math.round(cSedute.length / expected * 100), 100) : null,
+      hasPain: false, noShow: cSedute.length === 0 && expected > 0,
+      startDateStr: _statsClientStartDate(c)
+    };
   });
 
-  // Solo clienti rilevanti (con sedute o con frequenza attesa)
-  const clientRows = Object.values(byClientMap).filter(d => d.sedute > 0 || d.expected > 0);
+  const clientRows = Object.values(byClientMap);
 
   // Ordinamento
   const sortFn = {
-    less: (a, b) => {
-      const pa = a.adherePct ?? 101, pb = b.adherePct ?? 101;
-      return pa - pb;
-    },
-    more: (a, b) => {
-      const pa = a.adherePct ?? -1, pb = b.adherePct ?? -1;
-      return pb - pa;
-    },
+    less:   (a, b) => { const pa = a.adherePct ?? 101, pb = b.adherePct ?? 101; return pa - pb; },
+    more:   (a, b) => { const pa = a.adherePct ?? -1,  pb = b.adherePct ?? -1;  return pb - pa; },
     cancel: (a, b) => (b.sk.client || 0) - (a.sk.client || 0),
-    pain: (a, b) => (b.hasPain ? 1 : 0) - (a.hasPain ? 1 : 0)
+    pain:   (a, b) => (b.hasPain ? 1 : 0) - (a.hasPain ? 1 : 0)
   };
   clientRows.sort(sortFn[_statsFreqSort] || sortFn.less);
 
@@ -10354,7 +10387,9 @@ function renderStats() {
     <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Sedute effettuate</div>
     <div style="font-size:36px;font-weight:800;color:var(--accent);line-height:1;">${curSedute.length}</div>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
-      ${diffPct !== null ? `<div style="${mono};font-size:10px;color:${diffColor};">${diffArrow} ${diffPct}% vs prec. (${prevSedute.length})</div>` : `<div style="${mono};font-size:10px;color:var(--text3);">— vs periodo prec.</div>`}
+      ${diffPct !== null
+        ? `<div style="${mono};font-size:10px;color:${diffColor};">${diffArrow} ${diffPct}% vs prec. (${prevSedute.length})</div>`
+        : `<div style="${mono};font-size:10px;color:var(--text3);">— vs periodo prec.</div>`}
     </div>
   </div>`;
 
@@ -10368,21 +10403,20 @@ function renderStats() {
         <div style="height:100%;width:${fillPct}%;background:${fillBarColor};border-radius:2px;transition:width .4s;"></div>
       </div>
       <div style="${mono};font-size:10px;color:var(--text3);">${curSedute.length} su ${availSlots} slot</div>
-      ${fillDiff !== null ? `<div style="${mono};font-size:10px;color:${fillDiffColor};margin-top:2px;">${fillDiff >= 0 ? '+' : ''}${fillDiff}% dalla settimana prec.</div>` : ''}
+      ${fillDiff !== null ? `<div style="${mono};font-size:10px;color:${fillDiffColor};margin-top:2px;">${fillDiff >= 0 ? '+' : ''}${fillDiff}% vs prec.</div>` : ''}
     </div>
   </div>`;
 
   // Card 3: Sedute annullate
-  const skippedDiffLabel = skippedPrev.total > 0 ? `prec: ${skippedPrev.total}` : null;
   html += `<div style="${cardStyle}">
     <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Sedute annullate</div>
     <div style="font-size:36px;font-weight:800;color:${skippedCur.total > 0 ? 'var(--accent)' : 'var(--green)'};line-height:1;">${skippedCur.total}</div>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
       ${skippedCur.client > 0 ? `<div style="${mono};font-size:10px;color:var(--accent);">✕ sua: ${skippedCur.client}</div>` : ''}
-      ${skippedCur.me > 0 ? `<div style="${mono};font-size:10px;color:var(--yellow);">○ mia: ${skippedCur.me}</div>` : ''}
-      ${skippedCur.fest > 0 ? `<div style="${mono};font-size:10px;color:var(--accent2);">🎉 fest.: ${skippedCur.fest}</div>` : ''}
+      ${skippedCur.me > 0     ? `<div style="${mono};font-size:10px;color:var(--yellow);">○ mia: ${skippedCur.me}</div>` : ''}
+      ${skippedCur.fest > 0   ? `<div style="${mono};font-size:10px;color:var(--accent2);">🎉 fest.: ${skippedCur.fest}</div>` : ''}
       ${skippedCur.total === 0 ? `<div style="${mono};font-size:10px;color:var(--green);">nessuna</div>` : ''}
-      ${skippedDiffLabel ? `<div style="${mono};font-size:9px;color:var(--text3);margin-top:2px;">${skippedDiffLabel}</div>` : ''}
+      ${skippedPrev.total > 0 ? `<div style="${mono};font-size:9px;color:var(--text3);margin-top:2px;">prec: ${skippedPrev.total}</div>` : ''}
     </div>
   </div>`;
 
@@ -10392,17 +10426,17 @@ function renderStats() {
     <div style="font-size:36px;font-weight:800;color:${painColor};line-height:1;">${painPct}%</div>
     <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
       ${painDiff !== null ? `<div style="${mono};font-size:10px;color:${painDiffColor};">${painDiff <= 0 ? '↓' : '↑'} dal ${prevPainPct}%</div>` : ''}
-      ${painClientIds.size > 0 ? `<div style="${mono};font-size:10px;color:var(--text3);">Clienti coinvolti: ${painClientIds.size}</div>` : ''}
+      ${painClientIds.size > 0 ? `<div style="${mono};font-size:10px;color:var(--text3);">Clienti: ${painClientIds.size}</div>` : ''}
       ${topPainZones.length > 0 ? `<div style="${mono};font-size:10px;color:var(--text3);">↑ ${topPainZones[0][0]}</div>` : ''}
     </div>
   </div>`;
 
   html += `</div>`;
 
-  // ── GRAFICO + ALERT (due colonne su tablet, una su mobile) ──
+  // ── GRAFICO + ALERT ──
   html += `<div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:16px;">`;
 
-  // Grafico sedute per giorno
+  // Grafico
   html += `<div style="${cardStyle}">
     <div style="${mono};font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">${periodData.label}</div>
     <div style="display:flex;align-items:flex-end;gap:5px;height:90px;">
@@ -10418,15 +10452,15 @@ function renderStats() {
     </div>
   </div>`;
 
-  // Box Attenzione questa settimana
-  const alertIconMap = { cancel: '✕', drop: '↓', absent: '○', pain: '💢', noshow: '!' };
+  // Alert
+  const alertIconMap  = { cancel: '✕', drop: '↓', absent: '○', pain: '💢', noshow: '!' };
   const alertColorMap = { cancel: 'var(--accent)', drop: 'var(--yellow)', absent: 'var(--text3)', pain: 'var(--accent)', noshow: 'var(--accent)' };
   html += `<div style="${cardStyle}">
     <div style="${mono};font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">⚡ Attenzione questa settimana</div>
     ${alerts.length === 0
       ? `<div style="font-size:13px;color:var(--green);font-weight:600;">✓ Settimana regolare</div><div style="${mono};font-size:10px;color:var(--text3);margin-top:4px;">Nessuna criticità rilevata</div>`
       : alerts.map(a => `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border);">
-          <span style="font-size:11px;color:${alertColorMap[a.type] || 'var(--text3)'};font-weight:700;flex-shrink:0;">${alertIconMap[a.type] || '·'}</span>
+          <span style="font-size:11px;color:${alertColorMap[a.type] || 'var(--text3)'};font-weight:700;flex-shrink:0;margin-top:1px;">${alertIconMap[a.type] || '·'}</span>
           <div>
             <div style="font-size:12px;font-weight:700;line-height:1.3;">${a.name}</div>
             <div style="${mono};font-size:10px;color:var(--text3);">${a.msg}</div>
@@ -10439,12 +10473,11 @@ function renderStats() {
 
   // ── FREQUENZA PER CLIENTE ──
   if (clientRows.length > 0) {
-    // Filtro ordinamento
     const sortBtns = [
-      { v: 'less', label: 'Meno assidui' },
-      { v: 'more', label: 'Più assidui' },
-      { v: 'cancel', label: 'Cancellazioni' },
-      { v: 'pain', label: 'Dolori' }
+      { v: 'less',   label: 'Meno assidui' },
+      { v: 'more',   label: 'Più assidui'  },
+      { v: 'cancel', label: 'Cancellazioni'},
+      { v: 'pain',   label: 'Dolori'       }
     ];
     html += `<div style="${cardStyle};margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px;">
@@ -10458,22 +10491,22 @@ function renderStats() {
         const adherePct = data.adherePct;
         const hasExpected = data.expected > 0;
 
+        // Indicatore inizio parziale nel periodo
+        const startedMid = data.startDateStr && data.startDateStr > bounds.start.toISOString().split('T')[0];
+        const startNote = startedMid ? `<span style="${mono};font-size:9px;color:var(--accent2);" title="Inizio: ${data.startDateStr}">dal ${data.startDateStr}</span>` : '';
+
         // Badge stato
         let badge = '', badgeStyle = '';
         if (data.noShow || (data.sedute === 0 && hasExpected)) {
-          badge = 'NO SHOW';
-          badgeStyle = `background:var(--red-bg);color:var(--red);border:1px solid var(--red);`;
+          badge = 'NO SHOW'; badgeStyle = `background:var(--red-bg);color:var(--red);border:1px solid var(--red);`;
         } else if (!hasExpected || adherePct === null) {
           badge = '';
         } else if (adherePct >= 90) {
-          badge = `${adherePct}%`;
-          badgeStyle = `background:var(--green-bg);color:var(--green);border:1px solid var(--green);`;
+          badge = `${adherePct}%`; badgeStyle = `background:var(--green-bg);color:var(--green);border:1px solid var(--green);`;
         } else if (adherePct >= 60) {
-          badge = `${adherePct}%`;
-          badgeStyle = `background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow);`;
+          badge = `${adherePct}%`; badgeStyle = `background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow);`;
         } else {
-          badge = `${adherePct}%`;
-          badgeStyle = `background:var(--red-bg);color:var(--red);border:1px solid var(--red);`;
+          badge = `${adherePct}%`; badgeStyle = `background:var(--red-bg);color:var(--red);border:1px solid var(--red);`;
         }
 
         const barColor = !hasExpected || adherePct === null ? 'var(--accent)' :
@@ -10483,8 +10516,8 @@ function renderStats() {
         const skHtml = Object.values(sk).some(v => v > 0)
           ? `<div style="${mono};font-size:9px;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;">
               ${sk.client > 0 ? `<span style="color:var(--accent);">✕ sua: ${sk.client}</span>` : ''}
-              ${sk.me > 0 ? `<span style="color:var(--yellow);">○ mia: ${sk.me}</span>` : ''}
-              ${sk.fest > 0 ? `<span style="color:var(--accent2);">🎉 fest.: ${sk.fest}</span>` : ''}
+              ${sk.me > 0     ? `<span style="color:var(--yellow);">○ mia: ${sk.me}</span>` : ''}
+              ${sk.fest > 0   ? `<span style="color:var(--accent2);">🎉 fest.: ${sk.fest}</span>` : ''}
              </div>` : '';
 
         return `<div style="margin-bottom:14px;">
@@ -10493,6 +10526,7 @@ function renderStats() {
               <div style="width:4px;height:4px;border-radius:50%;background:${barColor};flex-shrink:0;"></div>
               <span style="font-size:13px;font-weight:700;">${data.name}</span>
               ${data.hasPain ? `<span style="font-size:10px;">💢</span>` : ''}
+              ${startNote}
             </div>
             <div style="display:flex;align-items:center;gap:6px;">
               ${hasExpected ? `<span style="${mono};font-size:10px;color:var(--text3);">${data.sedute}/${data.expected}</span>` : `<span style="${mono};font-size:10px;color:var(--text3);">${data.sedute} sed.</span>`}
