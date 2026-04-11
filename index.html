@@ -10115,14 +10115,13 @@ function _statsWeeksInRange(start, end) {
   return Math.max(ms / (7 * 86400000), 0.143);
 }
 
-// Settimane effettive nel range [start, end] clippando all'inizio reale del cliente.
-// Se il cliente è entrato dopo bounds.start, conta solo dal suo inizio.
-// Se è entrato dopo bounds.end, restituisce 0 (non era ancora attivo).
+// Controlla se il cliente era attivo nel periodo (almeno un giorno)
+// Usata per alert e visibilità nella lista
 function _statsWeeksActive(client, boundsStart, boundsEnd) {
   const startDateStr = _statsClientStartDate(client);
-  if (!startDateStr) return _statsWeeksInRange(boundsStart, boundsEnd); // nessun dato → usa tutto il range
+  if (!startDateStr) return _statsWeeksInRange(boundsStart, boundsEnd);
   const clientStart = new Date(startDateStr + 'T00:00:00');
-  if (clientStart > boundsEnd) return 0; // non ancora attivo nel periodo
+  if (clientStart > boundsEnd) return 0;
   const effectiveStart = clientStart > boundsStart ? clientStart : boundsStart;
   return _statsWeeksInRange(effectiveStart, boundsEnd);
 }
@@ -10135,18 +10134,46 @@ function _statsAvailableSlots(bounds, skipped) {
   return Math.max(totalMax - notErogable, 1);
 }
 
+// Conta le sedute attese per un cliente nel range, partendo dalla sua sessionStart.
+// Per clienti con slot fissi: conta esattamente quante occorrenze dei giorni fissi
+// cadono nel range [effectiveStart, bounds.end], poi sottrae colpa_mia e festività.
+// Per clienti manuali (senza schedule): usa la stima a settimane.
 function _statsGetClientExpected(client, bounds, skippedByClient) {
   if (!client) return 0;
-  const weeklyFreq = _statsGetExpectedWeeklyFreq(client);
-  if (weeklyFreq === 0) return 0;
-  // Settimane effettive in cui il cliente era già attivo nel periodo
-  const weeksActive = _statsWeeksActive(client, bounds.start, bounds.end);
-  if (weeksActive === 0) return 0;
-  const rawExpected = weeklyFreq * weeksActive;
-  // Correggi per slot non imputabili al cliente (mia colpa + festività)
+
+  const startDateStr = _statsClientStartDate(client);
+  // Se la sessionStart è oltre la fine del periodo, cliente non ancora attivo
+  if (startDateStr && startDateStr > bounds.end.toISOString().split('T')[0]) return 0;
+
+  // Data effettiva di inizio nel periodo (max tra sessionStart e bounds.start)
+  let effectiveStart = new Date(bounds.start);
+  effectiveStart.setHours(0, 0, 0, 0);
+  if (startDateStr) {
+    const cs = new Date(startDateStr + 'T00:00:00');
+    if (cs > effectiveStart) effectiveStart = new Date(cs);
+  }
+
   const sk = skippedByClient[client.id] || {};
   const notClientFault = (sk.me || 0) + (sk.fest || 0);
-  return Math.max(Math.round(rawExpected) - notClientFault, 0);
+
+  // Clienti con slot fissi: conta le occorrenze esatte dei giorni fissi nel range
+  if (client.schedule && client.schedule.length > 0) {
+    const DAY_NAMES = ['Domenica','Lunedi','Martedi','Mercoledi','Giovedi','Venerdi','Sabato'];
+    const DAY_NAMES_IT = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+    const fixedDays = new Set(client.schedule.map(s => s.giorno));
+    let count = 0;
+    const endD = new Date(bounds.end); endD.setHours(23,59,59,999);
+    for (let d = new Date(effectiveStart); d <= endD; d.setDate(d.getDate() + 1)) {
+      if (fixedDays.has(DAY_NAMES_IT[d.getDay()])) count++;
+    }
+    return Math.max(count - notClientFault, 0);
+  }
+
+  // Clienti manuali (Loris, Flavio, Lara): stima a settimane dalla sessionStart
+  const weeklyFreq = _statsGetExpectedWeeklyFreq(client);
+  if (weeklyFreq === 0) return 0;
+  const weeksActive = _statsWeeksInRange(effectiveStart, bounds.end);
+  return Math.max(Math.round(weeklyFreq * weeksActive) - notClientFault, 0);
 }
 
 function _statsGetPainZones(sedute) {
