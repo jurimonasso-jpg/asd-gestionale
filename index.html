@@ -10073,6 +10073,129 @@ function _statsPeriodLabel(bounds) {
   return `${fmt(bounds.start)} — ${fmt(bounds.end)}`;
 }
 
+// ── STATS HELPERS ────────────────────────────────────────────────────────────
+
+// Clienti senza slot fisso con frequenza attesa manuale
+const STATS_MANUAL_FREQ = {
+  'loris': 1, 'flavio': 2, 'lara': 2
+};
+
+function _statsGetExpectedWeeklyFreq(client) {
+  if (!client) return 0;
+  // Se ha slot fissi, la frequenza attesa è il numero di giorni fissi a settimana
+  if (client.schedule && client.schedule.length > 0) {
+    return client.schedule.length;
+  }
+  // Altrimenti cerca per nome (case-insensitive)
+  const key = (client.nome || '').toLowerCase();
+  return STATS_MANUAL_FREQ[key] || 0;
+}
+
+function _statsWeeksInRange(start, end) {
+  const ms = end.getTime() - start.getTime();
+  return Math.max(ms / (7 * 86400000), 0.143); // min ~1 giorno
+}
+
+function _statsAvailableSlots(bounds, skipped) {
+  // Base massima: 28 posti/settimana
+  const MAX_WEEK = 28;
+  const weeks = _statsWeeksInRange(bounds.start, bounds.end);
+  const totalMax = Math.round(MAX_WEEK * weeks);
+  // Riduci per festività/chiusura e colpa mia (slot non erogabili)
+  const notErogable = (skipped.fest || 0) + (skipped.me || 0);
+  return Math.max(totalMax - notErogable, 1);
+}
+
+function _statsGetClientExpected(client, bounds, skippedByClient) {
+  if (!client) return 0;
+  const weeklyFreq = _statsGetExpectedWeeklyFreq(client);
+  if (weeklyFreq === 0) return 0;
+  const weeks = _statsWeeksInRange(bounds.start, bounds.end);
+  const rawExpected = weeklyFreq * weeks;
+  // Correggi per sedute saltate non imputabili al cliente
+  const sk = skippedByClient[client.id] || {};
+  const notClientFault = (sk.me || 0) + (sk.fest || 0);
+  return Math.max(Math.round(rawExpected) - notClientFault, 0);
+}
+
+function _statsGetPainZones(sedute) {
+  const zoneFreq = {};
+  sedute.filter(w => w.painStart?.length).forEach(w => {
+    w.painStart.forEach(p => { zoneFreq[p.label] = (zoneFreq[p.label] || 0) + 1; });
+  });
+  return Object.entries(zoneFreq).sort((a, b) => b[1] - a[1]);
+}
+
+function _statsGenerateAlerts(curSedute, prevSedute, bounds, allClients, skippedCur) {
+  const alerts = [];
+  const clientId = document.getElementById('stats-client-filter')?.value || '';
+
+  allClients.filter(c => !c.sonoIo && (!clientId || c.id == clientId)).forEach(c => {
+    const cSedute = curSedute.filter(w => w.clientId === c.id);
+    const pSedute = prevSedute.filter(w => w.clientId === c.id);
+    const sk = skippedCur.byClient[c.id] || {};
+
+    // Cancellazioni: 1+ volte "colpa sua"
+    if ((sk.client || 0) >= 1) {
+      alerts.push({ type: 'cancel', name: `${c.nome} ${c.cognome}`, count: sk.client, msg: `${sk.client} cancellazion${sk.client > 1 ? 'i' : 'e'}` });
+    }
+
+    // Frequenza in calo vs periodo precedente
+    if (pSedute.length > 0 && cSedute.length < pSedute.length) {
+      alerts.push({ type: 'drop', name: `${c.nome} ${c.cognome}`, msg: `frequenza in calo (${cSedute.length} vs ${pSedute.length})` });
+    }
+
+    // Assente da >10 giorni (per vista settimana/mese)
+    if (_statsView === 'week' || _statsView === 'month') {
+      const lastSed = curSedute.filter(w => w.clientId === c.id).map(w => new Date(w.createdAt)).sort((a,b)=>b-a)[0];
+      if (!lastSed) {
+        const expectedFreq = _statsGetExpectedWeeklyFreq(c);
+        if (expectedFreq > 0) {
+          // Cliente atteso ma non presente nel periodo
+          const daysSinceStart = (new Date() - bounds.start) / 86400000;
+          if (daysSinceStart > 10) {
+            alerts.push({ type: 'absent', name: `${c.nome} ${c.cognome}`, msg: `assente nel periodo` });
+          }
+        }
+      }
+    }
+
+    // Dolore ricorrente
+    const painSedute = curSedute.filter(w => w.clientId === c.id && w.tipoSeduta === 'dolori' && w.painStart?.length);
+    if (painSedute.length >= 2) {
+      alerts.push({ type: 'pain', name: `${c.nome} ${c.cognome}`, msg: `dolore ricorrente (${painSedute.length} sed.)` });
+    }
+  });
+
+  // No show clienti senza slot fisso (0/N)
+  allClients.filter(c => !c.sonoIo && (!clientId || c.id == clientId) && (!c.schedule || c.schedule.length === 0)).forEach(c => {
+    const key = (c.nome || '').toLowerCase();
+    const freq = STATS_MANUAL_FREQ[key];
+    if (!freq) return;
+    const cSedute = curSedute.filter(w => w.clientId === c.id);
+    const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
+    if (cSedute.length === 0 && expected > 0) {
+      alerts.push({ type: 'noshow', name: `${c.nome} ${c.cognome}`, msg: 'no show' });
+    }
+  });
+
+  // Deduplicazione per nome e priorità
+  const seen = new Set();
+  return alerts.filter(a => {
+    const key = `${a.type}-${a.name}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 5);
+}
+
+let _statsFreqSort = 'less'; // 'less' | 'more' | 'cancel' | 'pain'
+
+function _statsSetFreqSort(v) {
+  _statsFreqSort = v;
+  renderStats();
+}
+
 function renderStats() {
   const container = document.getElementById('stats-content');
   if (!container) return;
@@ -10100,7 +10223,7 @@ function renderStats() {
     return true;
   };
 
-  // Sessioni manuali archiviate come "done" (clienti senza slot fisso: Lara, Loris, Flavio…)
+  // Sessioni manuali archiviate come "done"
   const archivedManual = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]')
     .filter(s => s.outcome === 'done' && s.id && String(s.id).startsWith('ms_'))
     .map(s => {
@@ -10130,113 +10253,261 @@ function renderStats() {
     return d >= bounds.prevStart && d < bounds.prevEnd;
   });
 
-  // Sedute saltate nel periodo
-  const skippedCur = _countSkipped(bounds.start, bounds.end, clientId);
+  // Sedute saltate
+  const skippedCur  = _countSkipped(bounds.start, bounds.end, clientId);
   const skippedPrev = _countSkipped(bounds.prevStart, bounds.prevEnd, clientId);
 
+  // KPI: sedute effettuate
   const diff = curSedute.length - prevSedute.length;
+  const diffPct = prevSedute.length > 0 ? Math.round(Math.abs(diff) / prevSedute.length * 100) : null;
+  const diffArrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
   const diffColor = diff > 0 ? 'var(--green)' : diff < 0 ? 'var(--red)' : 'var(--text3)';
-  const diffLabel = diff > 0 ? `↑ +${diff}` : diff < 0 ? `↓ ${diff}` : '→ uguale';
 
-  // Per cliente: sedute nel periodo
-  const byClient = {};
-  curSedute.forEach(w => {
-    const c = clients.find(cl=>cl.id===w.clientId);
-    const name = c ? `${c.nome} ${c.cognome}` : `#${w.clientId}`;
-    if (!byClient[name]) byClient[name] = { id: w.clientId, sedute:0, pain:0 };
-    byClient[name].sedute++;
-    if (w.tipoSeduta==='dolori' && w.painStart?.length) byClient[name].pain++;
-  });
-  // Aggiungi clienti che hanno solo lezioni saltate (nessuna seduta effettuata)
-  Object.entries(skippedCur.byClient).forEach(([cid, sk]) => {
-    const c = clients.find(cl=>cl.id==cid);
-    if (!c) return;
-    const name = `${c.nome} ${c.cognome}`;
-    if (!byClient[name]) byClient[name] = { id: parseInt(cid), sedute:0, pain:0 };
-  });
+  // KPI: riempimento agenda
+  const availSlots = _statsAvailableSlots(bounds, skippedCur);
+  const fillPct = Math.min(Math.round(curSedute.length / availSlots * 100), 100);
+  const prevAvailSlots = _statsAvailableSlots({ start: bounds.prevStart, end: bounds.prevEnd }, skippedPrev);
+  const prevFillPct = prevSedute.length > 0 ? Math.min(Math.round(prevSedute.length / prevAvailSlots * 100), 100) : null;
+  const fillDiff = prevFillPct !== null ? fillPct - prevFillPct : null;
+  const fillDiffColor = fillDiff === null ? 'var(--text3)' : fillDiff >= 0 ? 'var(--green)' : 'var(--red)';
+  const fillColor = fillPct >= 75 ? 'var(--green)' : fillPct >= 50 ? 'var(--yellow)' : 'var(--red)';
 
-  // Per giorno della settimana (o per settimana se mese/3m)
+  // KPI: sedute con dolori
+  const painCount = curSedute.filter(w => w.tipoSeduta === 'dolori' && w.painStart?.length).length;
+  const painPct = curSedute.length ? Math.round(painCount / curSedute.length * 100) : 0;
+  const prevPainCount = prevSedute.filter(w => w.tipoSeduta === 'dolori' && w.painStart?.length).length;
+  const prevPainPct = prevSedute.length ? Math.round(prevPainCount / prevSedute.length * 100) : null;
+  const painDiff = prevPainPct !== null ? painPct - prevPainPct : null;
+  const painDiffColor = painDiff === null ? 'var(--text3)' : painDiff <= 0 ? 'var(--green)' : 'var(--red)';
+  const painColor = painPct === 0 ? 'var(--green)' : painPct <= 10 ? 'var(--yellow)' : 'var(--accent)';
+  const topPainZones = _statsGetPainZones(curSedute);
+  const painClientIds = new Set(curSedute.filter(w => w.tipoSeduta === 'dolori' && w.painStart?.length).map(w => w.clientId));
+
+  // Per giorno
   const periodData = _buildPeriodBars(curSedute, bounds);
 
-  // Sedute con dolori %
-  const painCount = curSedute.filter(w=>w.tipoSeduta==='dolori'&&w.painStart?.length).length;
-  const painPct = curSedute.length ? Math.round(painCount/curSedute.length*100) : 0;
+  // Alert
+  const allFilteredClients = clients.filter(c => !c.sonoIo && (!clientId || c.id == clientId));
+  const alerts = _statsGenerateAlerts(curSedute, prevSedute, bounds, allFilteredClients, skippedCur);
 
-  // Render
+  // Frequenza per cliente
+  const byClientMap = {};
+  allFilteredClients.forEach(c => {
+    const cSedute = curSedute.filter(w => w.clientId === c.id);
+    const sk = skippedCur.byClient[c.id] || {};
+    const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
+    const hasPain = cSedute.some(w => w.tipoSeduta === 'dolori' && w.painStart?.length);
+    const noShow = cSedute.length === 0 && expected > 0 && (!c.schedule || c.schedule.length === 0);
+    byClientMap[c.id] = {
+      id: c.id, name: `${c.nome} ${c.cognome}`,
+      sedute: cSedute.length, expected, sk,
+      adherePct: expected > 0 ? Math.min(Math.round(cSedute.length / expected * 100), 100) : (cSedute.length > 0 ? 100 : null),
+      hasPain, noShow
+    };
+  });
 
-  // KPI row
-  let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">
-    <div class="stat-box">
-      <div class="stat-value" style="color:var(--accent);">${curSedute.length}</div>
-      <div class="stat-label">Sedute effettuate</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-value" style="color:${diffColor};font-size:24px;">${diffLabel}</div>
-      <div class="stat-label">vs periodo prec. (${prevSedute.length})</div>
-    </div>
-    <div class="stat-box" style="grid-column:span 1;">
-      <div class="stat-value" style="color:var(--red);">${skippedCur.total}</div>
-      <div class="stat-label">Sedute saltate</div>
-      <div style="font-family:'DM Mono';font-size:9px;margin-top:6px;display:flex;flex-direction:column;gap:2px;">
-        ${skippedCur.client>0?`<span style="color:var(--red);">❌ sua: ${skippedCur.client}</span>`:''}
-        ${skippedCur.me>0?`<span style="color:var(--yellow);">❌❌ mia: ${skippedCur.me}</span>`:''}
-        ${skippedCur.fest>0?`<span style="color:var(--accent2);">🎉 fest.: ${skippedCur.fest}</span>`:''}
-        ${skippedCur.total===0?`<span style="color:var(--text3);">nessuna</span>`:''}
-        ${skippedPrev.total>0?`<span style="color:var(--text3);margin-top:2px;">prec: ${skippedPrev.total}</span>`:''}
-      </div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-value" style="color:var(--yellow);">${painPct}%</div>
-      <div class="stat-label">Sedute con dolori</div>
-      <div style="font-family:'DM Mono';font-size:9px;color:var(--text3);margin-top:4px;">${painCount} su ${curSedute.length}</div>
+  // Clienti senza slot fisso ma con manuale freq
+  allFilteredClients.filter(c => !c.schedule || c.schedule.length === 0).forEach(c => {
+    if (!byClientMap[c.id]) {
+      const key = (c.nome || '').toLowerCase();
+      if (!STATS_MANUAL_FREQ[key]) return;
+      const cSedute = curSedute.filter(w => w.clientId === c.id);
+      const sk = skippedCur.byClient[c.id] || {};
+      const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
+      byClientMap[c.id] = {
+        id: c.id, name: `${c.nome} ${c.cognome}`,
+        sedute: cSedute.length, expected, sk,
+        adherePct: expected > 0 ? Math.min(Math.round(cSedute.length / expected * 100), 100) : null,
+        hasPain: false, noShow: cSedute.length === 0 && expected > 0
+      };
+    }
+  });
+
+  // Solo clienti rilevanti (con sedute o con frequenza attesa)
+  const clientRows = Object.values(byClientMap).filter(d => d.sedute > 0 || d.expected > 0);
+
+  // Ordinamento
+  const sortFn = {
+    less: (a, b) => {
+      const pa = a.adherePct ?? 101, pb = b.adherePct ?? 101;
+      return pa - pb;
+    },
+    more: (a, b) => {
+      const pa = a.adherePct ?? -1, pb = b.adherePct ?? -1;
+      return pb - pa;
+    },
+    cancel: (a, b) => (b.sk.client || 0) - (a.sk.client || 0),
+    pain: (a, b) => (b.hasPain ? 1 : 0) - (a.hasPain ? 1 : 0)
+  };
+  clientRows.sort(sortFn[_statsFreqSort] || sortFn.less);
+
+  // ── RENDER ──────────────────────────────────────────────────────────────────
+
+  const mono = `font-family:'DM Mono',monospace`;
+  const cardStyle = `background:var(--surface);border-radius:var(--radius);padding:16px;border:1px solid var(--border);`;
+
+  // ── KPI ROW ──
+  let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">`;
+
+  // Card 1: Sedute effettuate
+  html += `<div style="${cardStyle}">
+    <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Sedute effettuate</div>
+    <div style="font-size:36px;font-weight:800;color:var(--accent);line-height:1;">${curSedute.length}</div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
+      ${diffPct !== null ? `<div style="${mono};font-size:10px;color:${diffColor};">${diffArrow} ${diffPct}% vs prec. (${prevSedute.length})</div>` : `<div style="${mono};font-size:10px;color:var(--text3);">— vs periodo prec.</div>`}
     </div>
   </div>`;
 
-  // Bar chart periodo
-  html += `<div class="card" style="margin-bottom:20px;">
-    <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px;">${periodData.label}</div>
-    <div style="display:flex;align-items:flex-end;gap:6px;height:80px;">
+  // Card 2: Riempimento agenda
+  const fillBarColor = fillPct >= 75 ? '#2e7d32' : fillPct >= 50 ? '#e65100' : '#e53935';
+  html += `<div style="${cardStyle}">
+    <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Riempimento agenda</div>
+    <div style="font-size:36px;font-weight:800;color:${fillColor};line-height:1;">${fillPct}%</div>
+    <div style="margin-top:8px;">
+      <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:6px;">
+        <div style="height:100%;width:${fillPct}%;background:${fillBarColor};border-radius:2px;transition:width .4s;"></div>
+      </div>
+      <div style="${mono};font-size:10px;color:var(--text3);">${curSedute.length} su ${availSlots} slot</div>
+      ${fillDiff !== null ? `<div style="${mono};font-size:10px;color:${fillDiffColor};margin-top:2px;">${fillDiff >= 0 ? '+' : ''}${fillDiff}% dalla settimana prec.</div>` : ''}
+    </div>
+  </div>`;
+
+  // Card 3: Sedute annullate
+  const skippedDiffLabel = skippedPrev.total > 0 ? `prec: ${skippedPrev.total}` : null;
+  html += `<div style="${cardStyle}">
+    <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Sedute annullate</div>
+    <div style="font-size:36px;font-weight:800;color:${skippedCur.total > 0 ? 'var(--accent)' : 'var(--green)'};line-height:1;">${skippedCur.total}</div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
+      ${skippedCur.client > 0 ? `<div style="${mono};font-size:10px;color:var(--accent);">✕ sua: ${skippedCur.client}</div>` : ''}
+      ${skippedCur.me > 0 ? `<div style="${mono};font-size:10px;color:var(--yellow);">○ mia: ${skippedCur.me}</div>` : ''}
+      ${skippedCur.fest > 0 ? `<div style="${mono};font-size:10px;color:var(--accent2);">🎉 fest.: ${skippedCur.fest}</div>` : ''}
+      ${skippedCur.total === 0 ? `<div style="${mono};font-size:10px;color:var(--green);">nessuna</div>` : ''}
+      ${skippedDiffLabel ? `<div style="${mono};font-size:9px;color:var(--text3);margin-top:2px;">${skippedDiffLabel}</div>` : ''}
+    </div>
+  </div>`;
+
+  // Card 4: Sedute con dolori
+  html += `<div style="${cardStyle}">
+    <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Sedute con dolori</div>
+    <div style="font-size:36px;font-weight:800;color:${painColor};line-height:1;">${painPct}%</div>
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:3px;">
+      ${painDiff !== null ? `<div style="${mono};font-size:10px;color:${painDiffColor};">${painDiff <= 0 ? '↓' : '↑'} dal ${prevPainPct}%</div>` : ''}
+      ${painClientIds.size > 0 ? `<div style="${mono};font-size:10px;color:var(--text3);">Clienti coinvolti: ${painClientIds.size}</div>` : ''}
+      ${topPainZones.length > 0 ? `<div style="${mono};font-size:10px;color:var(--text3);">↑ ${topPainZones[0][0]}</div>` : ''}
+    </div>
+  </div>`;
+
+  html += `</div>`;
+
+  // ── GRAFICO + ALERT (due colonne su tablet, una su mobile) ──
+  html += `<div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:16px;">`;
+
+  // Grafico sedute per giorno
+  html += `<div style="${cardStyle}">
+    <div style="${mono};font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">${periodData.label}</div>
+    <div style="display:flex;align-items:flex-end;gap:5px;height:90px;">
       ${periodData.bars.map(b => {
-        const h = periodData.max > 0 ? Math.max(4, Math.round(b.val/periodData.max*72)) : 4;
+        const h = periodData.max > 0 ? Math.max(4, Math.round(b.val / periodData.max * 80)) : 4;
         const isNow = b.isCurrent;
-        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
-          <div style="font-family:'DM Mono';font-size:9px;color:${b.val>0?'var(--text2)':'var(--text3)'};">${b.val||''}</div>
-          <div style="width:100%;height:${h}px;background:${isNow?'var(--accent)':'var(--surface2)'};border:1px solid ${isNow?'var(--accent)':'var(--border)'};border-radius:3px 3px 0 0;" title="${b.label}: ${b.val} sedute"></div>
-          <div style="font-family:'DM Mono';font-size:8px;color:${isNow?'var(--accent)':'var(--text3)'};text-align:center;line-height:1.2;">${b.label}</div>
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">
+          <div style="${mono};font-size:9px;color:${b.val > 0 ? 'var(--text2)' : 'transparent'};">${b.val || '·'}</div>
+          <div style="width:100%;height:${h}px;background:${isNow ? 'var(--accent)' : 'var(--surface2)'};border:1px solid ${isNow ? 'var(--accent)' : 'var(--border)'};border-radius:4px 4px 0 0;" title="${b.label}: ${b.val} sedute"></div>
+          <div style="${mono};font-size:8px;color:${isNow ? 'var(--accent)' : 'var(--text3)'};text-align:center;line-height:1.2;">${b.label}</div>
         </div>`;
       }).join('')}
     </div>
   </div>`;
 
-  // Per cliente table
-  const clientRows = Object.entries(byClient).sort((a,b)=>b[1].sedute-a[1].sedute);
+  // Box Attenzione questa settimana
+  const alertIconMap = { cancel: '✕', drop: '↓', absent: '○', pain: '💢', noshow: '!' };
+  const alertColorMap = { cancel: 'var(--accent)', drop: 'var(--yellow)', absent: 'var(--text3)', pain: 'var(--accent)', noshow: 'var(--accent)' };
+  html += `<div style="${cardStyle}">
+    <div style="${mono};font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">⚡ Attenzione questa settimana</div>
+    ${alerts.length === 0
+      ? `<div style="font-size:13px;color:var(--green);font-weight:600;">✓ Settimana regolare</div><div style="${mono};font-size:10px;color:var(--text3);margin-top:4px;">Nessuna criticità rilevata</div>`
+      : alerts.map(a => `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border);">
+          <span style="font-size:11px;color:${alertColorMap[a.type] || 'var(--text3)'};font-weight:700;flex-shrink:0;">${alertIconMap[a.type] || '·'}</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;line-height:1.3;">${a.name}</div>
+            <div style="${mono};font-size:10px;color:var(--text3);">${a.msg}</div>
+          </div>
+        </div>`).join('')
+    }
+  </div>`;
+
+  html += `</div>`;
+
+  // ── FREQUENZA PER CLIENTE ──
   if (clientRows.length > 0) {
-    html += `<div class="card" style="margin-bottom:20px;">
-      <div style="font-family:'DM Mono';font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">Sedute per cliente</div>
-      ${clientRows.map(([name, data]) => {
-        const pct = curSedute.length ? Math.round(data.sedute/curSedute.length*100) : 0;
-        const sk = skippedCur.byClient[data.id] || {};
-        const skTotal = (sk.client||0)+(sk.me||0)+(sk.fest||0);
-        const skHtml = skTotal > 0
-          ? `<div style="font-family:'DM Mono';font-size:9px;margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;">
-              ${sk.client>0?`<span style="color:var(--red);">❌ sua: ${sk.client}</span>`:''}
-              ${sk.me>0?`<span style="color:var(--yellow);">❌❌ mia: ${sk.me}</span>`:''}
-              ${sk.fest>0?`<span style="color:var(--accent2);">🎉 fest.: ${sk.fest}</span>`:''}
+    // Filtro ordinamento
+    const sortBtns = [
+      { v: 'less', label: 'Meno assidui' },
+      { v: 'more', label: 'Più assidui' },
+      { v: 'cancel', label: 'Cancellazioni' },
+      { v: 'pain', label: 'Dolori' }
+    ];
+    html += `<div style="${cardStyle};margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px;">
+        <div style="${mono};font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;">Frequenza per cliente</div>
+        <select style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;background:var(--surface2);color:var(--text2);${mono}" onchange="_statsSetFreqSort(this.value)">
+          ${sortBtns.map(b => `<option value="${b.v}" ${_statsFreqSort === b.v ? 'selected' : ''}>${b.label}</option>`).join('')}
+        </select>
+      </div>
+      ${clientRows.map(data => {
+        const sk = data.sk;
+        const adherePct = data.adherePct;
+        const hasExpected = data.expected > 0;
+
+        // Badge stato
+        let badge = '', badgeStyle = '';
+        if (data.noShow || (data.sedute === 0 && hasExpected)) {
+          badge = 'NO SHOW';
+          badgeStyle = `background:var(--red-bg);color:var(--red);border:1px solid var(--red);`;
+        } else if (!hasExpected || adherePct === null) {
+          badge = '';
+        } else if (adherePct >= 90) {
+          badge = `${adherePct}%`;
+          badgeStyle = `background:var(--green-bg);color:var(--green);border:1px solid var(--green);`;
+        } else if (adherePct >= 60) {
+          badge = `${adherePct}%`;
+          badgeStyle = `background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow);`;
+        } else {
+          badge = `${adherePct}%`;
+          badgeStyle = `background:var(--red-bg);color:var(--red);border:1px solid var(--red);`;
+        }
+
+        const barColor = !hasExpected || adherePct === null ? 'var(--accent)' :
+          adherePct >= 90 ? 'var(--green)' : adherePct >= 60 ? '#e65100' : 'var(--accent)';
+        const barW = hasExpected && adherePct !== null ? `${adherePct}%` : `${data.expected > 0 ? 0 : 100}%`;
+
+        const skHtml = Object.values(sk).some(v => v > 0)
+          ? `<div style="${mono};font-size:9px;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;">
+              ${sk.client > 0 ? `<span style="color:var(--accent);">✕ sua: ${sk.client}</span>` : ''}
+              ${sk.me > 0 ? `<span style="color:var(--yellow);">○ mia: ${sk.me}</span>` : ''}
+              ${sk.fest > 0 ? `<span style="color:var(--accent2);">🎉 fest.: ${sk.fest}</span>` : ''}
              </div>` : '';
-        return `<div style="margin-bottom:12px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <span style="font-size:13px;font-weight:600;">${name}</span>
-            <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">${data.sedute} sed.${data.pain>0?' · <span style="color:var(--red);">💢 '+data.pain+'</span>':''}</span>
+
+        return `<div style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="width:4px;height:4px;border-radius:50%;background:${barColor};flex-shrink:0;"></div>
+              <span style="font-size:13px;font-weight:700;">${data.name}</span>
+              ${data.hasPain ? `<span style="font-size:10px;">💢</span>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              ${hasExpected ? `<span style="${mono};font-size:10px;color:var(--text3);">${data.sedute}/${data.expected}</span>` : `<span style="${mono};font-size:10px;color:var(--text3);">${data.sedute} sed.</span>`}
+              ${badge ? `<span style="${mono};font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;${badgeStyle}">${badge}</span>` : ''}
+            </div>
           </div>
           <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:3px;">
-            <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;"></div>
+            <div style="height:100%;width:${barW};background:${barColor};border-radius:2px;transition:width .4s;"></div>
           </div>
           ${skHtml}
         </div>`;
       }).join('')}
     </div>`;
   } else {
-    html += `<div class="card" style="margin-bottom:20px;text-align:center;padding:32px;color:var(--text3);">Nessuna seduta nel periodo selezionato</div>`;
+    html += `<div style="${cardStyle};text-align:center;padding:32px;color:var(--text3);">Nessuna seduta nel periodo selezionato</div>`;
   }
 
   container.innerHTML = html;
