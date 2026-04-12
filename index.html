@@ -15580,7 +15580,7 @@ function calculateHealthScore(clientId) {
   const norms30 = fu30.map(normalizeFollowup);
 
   // ── 4B: Sintomi/Dolore — max 25 ──────────────────────────────────
-  let pain = 18; // neutro = nessun dolore segnalato → buon segno
+  let pain = 25; // nessun dato = nessun dolore segnalato = punteggio pieno
   if (norms14.length > 0) {
     const vals      = norms14.map(n => n.intensitaDolore ?? 0);
     const avgDolore = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -15616,7 +15616,7 @@ function calculateHealthScore(clientId) {
   }
 
   // ── 4C: Recupero percepito — max 20 ──────────────────────────────
-  let recovery = 14; // neutro
+  let recovery = 20; // nessun dato = non risultano problemi di recupero = punteggio pieno
   if (norms14.length > 0) {
     const eVals  = norms14.map(n => n.energia).filter(v => v != null);
     const sVals  = norms14.map(n => n.sonno).filter(v => v != null);
@@ -15635,7 +15635,7 @@ function calculateHealthScore(clientId) {
   // ── 4D: Continuità attiva — max 20 ────────────────────────────────
   // Mappa legacy: 'in_parte' → equivale a 'in_gran_parte' (0.6)
   const EX_SCORE = { 'tutti':1, 'in_gran_parte':0.7, 'in_parte':0.6, 'solo_qualcuno':0.35, 'no':0 };
-  let continuity = 13; // neutro
+  let continuity = 20; // nessun dato = non risultano salti degli esercizi = punteggio pieno
   const fuSett30 = norms30.filter(n => n.tipo === 'check_settimanale' && n.esercizi != null);
   if (fuSett30.length >= 1) {
     const avgEx = fuSett30.reduce((sum,n) => sum + (EX_SCORE[n.esercizi] ?? 0.35), 0) / fuSett30.length;
