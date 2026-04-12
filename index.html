@@ -4663,7 +4663,7 @@ function showPage(pageId) {
   const navItems = document.querySelectorAll('.nav-item');
   if (navMap[pageId] !== undefined && navItems[navMap[pageId]]) navItems[navMap[pageId]].classList.add('active');
   if (pageId === 'dashboard') renderDashboard();
-  if (pageId === 'clients') renderClients();
+  if (pageId === 'clients') { _buildLastFollowupMap().then(() => renderClients()); }
   if (pageId === 'workouts') renderWorkouts();
   if (pageId === 'catalog') renderCatalog();
   if (pageId === 'agenda') renderAgenda();
@@ -4913,6 +4913,43 @@ const PERCORSO_CHECKLIST = [
 
 let clientSortMode = 'nome';
 let clientHealthSortDir = 0; // 0=neutro, 1=desc(↓), -1=asc(↑)
+// Cache ultima data follow-up per cliente { clientId: 'YYYY-MM-DD' | null }
+window._lastFollowupMap = {};
+
+async function _buildLastFollowupMap() {
+  const map = {};
+  // Prima passa: localStorage (sempre disponibile)
+  clients.forEach(c => {
+    const lsDocs = JSON.parse(localStorage.getItem('followup_notes_' + c.id) || '[]');
+    const dates = lsDocs
+      .map(d => d.date || (d.timestamp ? (d.timestamp.toDate ? d.timestamp.toDate().toISOString().slice(0,10) : String(d.timestamp).slice(0,10)) : '') || '')
+      .filter(Boolean)
+      .sort((x, y) => y.localeCompare(x));
+    map[c.id] = dates[0] || null;
+  });
+  // Seconda passa: Firebase (sovrascrive se trova dati più recenti)
+  if (window._db && window._fsCollection && window._fsDocs && window._fsQuery && window._fsWhere && window._fsOrderBy) {
+    try {
+      await Promise.all(clients.map(async c => {
+        try {
+          const q = window._fsQuery(
+            window._fsCollection(window._db, 'followups'),
+            window._fsWhere('clientId', '==', String(c.id)),
+            window._fsOrderBy('timestamp', 'desc')
+          );
+          const snap = await window._fsDocs(q);
+          const docs = snap.docs.map(d => d.data());
+          const dates = docs
+            .map(d => d.date || (d.timestamp?.toDate ? d.timestamp.toDate().toISOString().slice(0,10) : '') || '')
+            .filter(Boolean)
+            .sort((x, y) => y.localeCompare(x));
+          if (dates[0]) map[c.id] = dates[0];
+        } catch(_) {}
+      }));
+    } catch(_) {}
+  }
+  window._lastFollowupMap = map;
+}
 
 function setClientSort(mode) {
   if (mode === 'health') {
@@ -4942,7 +4979,11 @@ function setClientSort(mode) {
       else btn.textContent = '♥ Health';
     }
   });
-  filterClients();
+  if (mode === 'followup') {
+    _buildLastFollowupMap().then(() => filterClients());
+  } else {
+    filterClients();
+  }
 }
 
 function renderClients(filter = '') {
@@ -5001,18 +5042,9 @@ function renderClients(filter = '') {
       return clientHealthSortDir * (hsB - hsA);
     }
     if (clientSortMode === 'followup') {
-      // Mai compilato → in fondo; poi ordinati per data decrescente (più recente prima)
-      const getLastFollowup = (clientId) => {
-        const lsDocs = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]');
-        if (!lsDocs.length) return null;
-        const sorted = lsDocs
-          .map(d => d.date || (d.timestamp ? d.timestamp.split('T')[0] : '') || '')
-          .filter(Boolean)
-          .sort((x, y) => y.localeCompare(x));
-        return sorted[0] || null;
-      };
-      const fuA = getLastFollowup(a.id);
-      const fuB = getLastFollowup(b.id);
+      // Usa la map precalcolata (Firebase + localStorage)
+      const fuA = window._lastFollowupMap[a.id] || null;
+      const fuB = window._lastFollowupMap[b.id] || null;
       // Chi non ha mai compilato va in fondo
       if (!fuA && !fuB) return (a.cognome + a.nome).localeCompare(b.cognome + b.nome);
       if (!fuA) return 1;
@@ -5064,9 +5096,8 @@ function renderClients(filter = '') {
 
     const nSedute = seduteMap[c.id] || 0;
     const lastDate = lastSessionMap[c.id] ? new Date(lastSessionMap[c.id]).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit'}) : '—';
-    const _fuDocs = JSON.parse(localStorage.getItem('followup_notes_' + c.id) || '[]');
-    const _fuDates = _fuDocs.map(d => d.date || (d.timestamp ? d.timestamp.split('T')[0] : '') || '').filter(Boolean).sort((x,y) => y.localeCompare(x));
-    const lastFollowupDate = _fuDates.length ? new Date(_fuDates[0]).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit'}) : null;
+    const _fuRaw = window._lastFollowupMap[c.id] || null;
+    const lastFollowupDate = _fuRaw ? new Date(_fuRaw).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit'}) : null;
 
     return `<div class="client-card" onclick="openClientDetail(${c.id})" style="${c.exCliente ? 'opacity:0.5;' : ''}">
       <div class="client-avatar">${initials}</div>
