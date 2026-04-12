@@ -3265,6 +3265,7 @@ window.fbLoadFromCloud = async function() {
         <button id="sort-btn-recente" onclick="setClientSort('recente')" style="padding:4px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;border-radius:20px;cursor:pointer;">Ultima seduta</button>
         <button id="sort-btn-percorso" onclick="setClientSort('percorso')" style="padding:4px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;border-radius:20px;cursor:pointer;">Percorso</button>
         <button id="sort-btn-health" onclick="setClientSort('health')" style="padding:4px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;border-radius:20px;cursor:pointer;">♥ Health</button>
+        <button id="sort-btn-followup" onclick="setClientSort('followup')" style="padding:4px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;border-radius:20px;cursor:pointer;">📬 Follow-up</button>
       </div>
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2);">
         <input type="checkbox" id="show-ex-clienti" onchange="filterClients()" style="accent-color:var(--accent);">
@@ -4928,7 +4929,7 @@ function setClientSort(mode) {
     clientHealthSortDir = 0;
   }
   // Update button styles
-  ['nome','sedute','recente','percorso','health'].forEach(m => {
+  ['nome','sedute','recente','percorso','health','followup'].forEach(m => {
     const btn = document.getElementById('sort-btn-' + m);
     if (!btn) return;
     const isActive = m === clientSortMode;
@@ -4999,6 +5000,25 @@ function renderClients(filter = '') {
       const hsB = calculateHealthScore(b.id).total;
       return clientHealthSortDir * (hsB - hsA);
     }
+    if (clientSortMode === 'followup') {
+      // Mai compilato → in fondo; poi ordinati per data decrescente (più recente prima)
+      const getLastFollowup = (clientId) => {
+        const lsDocs = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]');
+        if (!lsDocs.length) return null;
+        const sorted = lsDocs
+          .map(d => d.date || (d.timestamp ? d.timestamp.split('T')[0] : '') || '')
+          .filter(Boolean)
+          .sort((x, y) => y.localeCompare(x));
+        return sorted[0] || null;
+      };
+      const fuA = getLastFollowup(a.id);
+      const fuB = getLastFollowup(b.id);
+      // Chi non ha mai compilato va in fondo
+      if (!fuA && !fuB) return (a.cognome + a.nome).localeCompare(b.cognome + b.nome);
+      if (!fuA) return 1;
+      if (!fuB) return -1;
+      return fuB.localeCompare(fuA); // più recente prima
+    }
     return 0;
   });
 
@@ -5044,15 +5064,19 @@ function renderClients(filter = '') {
 
     const nSedute = seduteMap[c.id] || 0;
     const lastDate = lastSessionMap[c.id] ? new Date(lastSessionMap[c.id]).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit'}) : '—';
+    const _fuDocs = JSON.parse(localStorage.getItem('followup_notes_' + c.id) || '[]');
+    const _fuDates = _fuDocs.map(d => d.date || (d.timestamp ? d.timestamp.split('T')[0] : '') || '').filter(Boolean).sort((x,y) => y.localeCompare(x));
+    const lastFollowupDate = _fuDates.length ? new Date(_fuDates[0]).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit'}) : null;
 
     return `<div class="client-card" onclick="openClientDetail(${c.id})" style="${c.exCliente ? 'opacity:0.5;' : ''}">
       <div class="client-avatar">${initials}</div>
       <div class="client-name">${c.nome} ${c.cognome}</div>
       <div class="client-meta">${age !== '—' ? age + ' anni · ' : ''}${c.goal || 'Obiettivo non impostato'}</div>
       <div class="client-tags">${tags.join('')}</div>
-      <div style="display:flex;gap:12px;margin-top:6px;margin-bottom:4px;">
+      <div style="display:flex;gap:12px;margin-top:6px;margin-bottom:4px;flex-wrap:wrap;">
         <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">🏋️ <strong style="color:var(--text1);">${nSedute}</strong> sed.</span>
         <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">📅 <strong style="color:var(--text1);">${lastDate}</strong></span>
+        ${lastFollowupDate ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">📬 <strong style="color:var(--text1);">${lastFollowupDate}</strong></span>` : (c.followUpEnabled ? `<span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">📬 <strong style="color:#aaa;">mai</strong></span>` : '')}
       </div>
       ${renderHealthScoreBlock(c.id)}
       <div style="margin-top:4px;">
