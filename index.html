@@ -15539,18 +15539,28 @@ function normalizeSettimanale(doc) {
 // ══════════════════════════════════════════════════════════════════════
 function calculateHealthScore(clientId) {
   const now = Date.now();
-  const MS_30 = 30 * 24 * 3600 * 1000;
   const MS_14 = 14 * 24 * 3600 * 1000;
+  const MS_30 = 30 * 24 * 3600 * 1000;
 
-  // ── Archivio sessioni (presenze) ──────────────────────────────────
+  // Helper: ricava timestamp da un follow-up (ms unix oppure campo date stringa)
+  function fuTs(fu) {
+    if (!fu) return null;
+    if (fu.timestamp && fu.timestamp > 1000000) return fu.timestamp;
+    const d = fu.date || fu.createdAt;
+    if (d) { try { return new Date(String(d).slice(0,10)).getTime(); } catch(e){} }
+    return null;
+  }
+
+  // ── Archivio sessioni (TUTTE disponibili — no filtro 30gg fisso) ──
+  // Così i clienti con pochi dati iniziali non vengono penalizzati
   const archive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]')
-    .filter(s => s.clientId == clientId && s.date && (now - new Date(s.date).getTime()) <= MS_30);
+    .filter(s => s.clientId == clientId && s.date);
 
   // ── 4A: Aderenza/Presenze — max 35 ───────────────────────────────
-  let adherence = 18; // valore neutro se no dati
-  const done    = archive.filter(s => s.outcome === 'done').length;
-  const client  = archive.filter(s => s.outcome === 'client').length;
-  const denom   = done + client;
+  let adherence = 26; // neutro = nessun dato ancora
+  const done   = archive.filter(s => s.outcome === 'done').length;
+  const client = archive.filter(s => s.outcome === 'client').length;
+  const denom  = done + client;
   if (denom >= 2) {
     const pct = done / denom;
     if      (pct >= 0.95) adherence = 35;
@@ -15559,50 +15569,41 @@ function calculateHealthScore(clientId) {
     else if (pct >= 0.50) adherence = 16;
     else                  adherence = 8;
   } else if (denom === 1) {
-    adherence = done >= 1 ? 28 : 12;
+    adherence = done >= 1 ? 30 : 16;
   }
 
-  // ── Follow-up recenti ─────────────────────────────────────────────
-  const fuAll = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]')
-    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  const fu14  = fuAll.filter(d => (now - (d.timestamp || 0)) <= MS_14);
-  const fu30  = fuAll.filter(d => (now - (d.timestamp || 0)) <= MS_30);
+  // ── Follow-up: supporto sia timestamp ms che campo date string ────
+  const fuAll  = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]');
+  const fu14   = fuAll.filter(d => { const t = fuTs(d); return t != null && (now - t) <= MS_14; });
+  const fu30   = fuAll.filter(d => { const t = fuTs(d); return t != null && (now - t) <= MS_30; });
   const norms14 = fu14.map(normalizeFollowup);
   const norms30 = fu30.map(normalizeFollowup);
 
   // ── 4B: Sintomi/Dolore — max 25 ──────────────────────────────────
-  let pain = 13; // neutro
+  let pain = 18; // neutro = nessun dolore segnalato → buon segno
   if (norms14.length > 0) {
-    // dolore medio recente (intensitaDolore 0–10)
-    const vals = norms14.map(n => n.intensitaDolore ?? 0);
+    const vals      = norms14.map(n => n.intensitaDolore ?? 0);
     const avgDolore = vals.reduce((a, b) => a + b, 0) / vals.length;
-
-    // trend: confronta media 0–14gg vs 14–30gg
-    const oldNorms = norms30.filter(n => (now - n.timestamp) > MS_14);
-    const oldVals  = oldNorms.map(n => n.intensitaDolore ?? 0);
-    const avgOld   = oldVals.length > 0 ? oldVals.reduce((a, b) => a + b, 0) / oldVals.length : avgDolore;
-    const trend    = avgDolore - avgOld; // negativo = miglioramento
-
-    // base da dolore medio
+    const oldNorms  = norms30.filter(n => { const t = fuTs(n._raw); return t && (now - t) > MS_14; });
+    const oldVals   = oldNorms.map(n => n.intensitaDolore ?? 0);
+    const avgOld    = oldVals.length > 0 ? oldVals.reduce((a, b) => a + b, 0) / oldVals.length : avgDolore;
+    const trend     = avgDolore - avgOld;
     let painBase;
     if      (avgDolore <= 1) painBase = 22;
     else if (avgDolore <= 3) painBase = 18;
     else if (avgDolore <= 5) painBase = 13;
     else if (avgDolore <= 7) painBase = 8;
     else                     painBase = 4;
-
-    // bonus/malus trend (smorzato, max ±4)
     const trendBonus = Math.max(-4, Math.min(4, Math.round(-trend * 1.2)));
     pain = Math.max(0, Math.min(25, painBase + trendBonus));
-
-    // bonus painEnd < painStart dai workouts recenti
+    // bonus/malus painStart vs painEnd dai workout recenti
     const recentW = (typeof workouts !== 'undefined' ? workouts : [])
       .filter(w => w.clientId == clientId && w.painStart?.length && w.painEnd?.length
         && w.createdAt && (now - new Date(w.createdAt).getTime()) <= MS_14);
     let painImproved = 0, painWorsened = 0;
     recentW.forEach(w => {
-      const sMap = Object.fromEntries((w.painStart || []).map(p => [p.label, p.intensity]));
-      const eMap = Object.fromEntries((w.painEnd   || []).map(p => [p.label, p.intensity]));
+      const sMap = Object.fromEntries((w.painStart||[]).map(p=>[p.label,p.intensity]));
+      const eMap = Object.fromEntries((w.painEnd||[]).map(p=>[p.label,p.intensity]));
       Object.keys(sMap).forEach(lbl => {
         if (eMap[lbl] != null) {
           if (eMap[lbl] < sMap[lbl]) painImproved++;
@@ -15615,43 +15616,31 @@ function calculateHealthScore(clientId) {
   }
 
   // ── 4C: Recupero percepito — max 20 ──────────────────────────────
-  let recovery = 10; // neutro
+  let recovery = 14; // neutro
   if (norms14.length > 0) {
-    const energiaVals = norms14.map(n => n.energia).filter(v => v != null);
-    const sonnoVals   = norms14.map(n => n.sonno).filter(v => v != null);
-    const stressVals  = norms14.map(n => n.stress).filter(v => v != null);
-
-    const avgE = energiaVals.length ? energiaVals.reduce((a, b) => a + b, 0) / energiaVals.length : null;
-    const avgS = sonnoVals.length   ? sonnoVals.reduce((a, b) => a + b, 0) / sonnoVals.length   : null;
-    const avgSt= stressVals.length  ? stressVals.reduce((a, b) => a + b, 0) / stressVals.length  : null;
-
-    // normalizzazione lineare semplice: 1–10 → 0–1 (stress invertito)
-    const eScore  = avgE  != null ? (avgE - 1) / 9  : 0.5;
-    const sScore  = avgS  != null ? (avgS - 1) / 9  : 0.5;
-    const stScore = avgSt != null ? 1 - (avgSt - 1) / 9 : 0.5;
-    const hasData = (avgE != null ? 1 : 0) + (avgS != null ? 1 : 0) + (avgSt != null ? 1 : 0);
-
-    if (hasData > 0) {
-      // pesi: energia 0.45, sonno 0.35, stress 0.20
-      const wSum = (avgE != null ? 0.45 : 0) + (avgS != null ? 0.35 : 0) + (avgSt != null ? 0.20 : 0);
-      const composite = ((avgE != null ? eScore * 0.45 : 0) + (avgS != null ? sScore * 0.35 : 0) + (avgSt != null ? stScore * 0.20 : 0)) / wSum;
-      recovery = Math.round(composite * 20);
-    }
+    const eVals  = norms14.map(n => n.energia).filter(v => v != null);
+    const sVals  = norms14.map(n => n.sonno).filter(v => v != null);
+    const stVals = norms14.map(n => n.stress).filter(v => v != null);
+    const avgE   = eVals.length  ? eVals.reduce((a,b)=>a+b,0)/eVals.length   : null;
+    const avgS   = sVals.length  ? sVals.reduce((a,b)=>a+b,0)/sVals.length   : null;
+    const avgSt  = stVals.length ? stVals.reduce((a,b)=>a+b,0)/stVals.length : null;
+    const eScore  = avgE  != null ? (avgE-1)/9       : 0.5;
+    const sScore  = avgS  != null ? (avgS-1)/9       : 0.5;
+    const stScore = avgSt != null ? 1-(avgSt-1)/9    : 0.5;
+    const wE = avgE != null ? 0.45 : 0, wS = avgS != null ? 0.35 : 0, wSt = avgSt != null ? 0.20 : 0;
+    const wSum = (wE + wS + wSt) || 1;
+    recovery = Math.round((eScore*wE + sScore*wS + stScore*wSt) / wSum * 20);
   }
 
-  // ── 4D: Continuità attiva (esercizi a casa) — max 20 ─────────────
-  let continuity = 10; // neutro
+  // ── 4D: Continuità attiva — max 20 ────────────────────────────────
+  // Mappa legacy: 'in_parte' → equivale a 'in_gran_parte' (0.6)
+  const EX_SCORE = { 'tutti':1, 'in_gran_parte':0.7, 'in_parte':0.6, 'solo_qualcuno':0.35, 'no':0 };
+  let continuity = 13; // neutro
   const fuSett30 = norms30.filter(n => n.tipo === 'check_settimanale' && n.esercizi != null);
-  if (fuSett30.length >= 2) {
-    const EX_SCORE = { 'tutti': 1, 'in_gran_parte': 0.7, 'solo_qualcuno': 0.35, 'no': 0 };
-    const avgEx = fuSett30.reduce((sum, n) => sum + (EX_SCORE[n.esercizi] ?? 0.35), 0) / fuSett30.length;
+  if (fuSett30.length >= 1) {
+    const avgEx = fuSett30.reduce((sum,n) => sum + (EX_SCORE[n.esercizi] ?? 0.35), 0) / fuSett30.length;
     continuity = Math.round(avgEx * 18);
-    // piccolo bonus compilazione follow-up (max +2)
-    if (fuSett30.length >= 4) continuity = Math.min(20, continuity + 2);
-    else if (fuSett30.length >= 3) continuity = Math.min(20, continuity + 1);
-  } else if (fuSett30.length === 1) {
-    const EX_SCORE = { 'tutti': 1, 'in_gran_parte': 0.7, 'solo_qualcuno': 0.35, 'no': 0 };
-    continuity = Math.round((EX_SCORE[fuSett30[0].esercizi] ?? 0.35) * 16);
+    if (fuSett30.length >= 3) continuity = Math.min(20, continuity + 1);
   }
 
   // ── Totale e label ────────────────────────────────────────────────
@@ -15664,6 +15653,7 @@ function calculateHealthScore(clientId) {
 
   return { total, color, label, breakdown: { adherence, pain, recovery, continuity } };
 }
+
 
 // ── renderHealthScoreBadge — badge compatto per genera seduta ───────
 function renderHealthScoreBadge(clientId) {
