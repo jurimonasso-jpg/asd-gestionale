@@ -11119,7 +11119,7 @@ function renderDashboard() {
         + '<div style="font-family:Outfit,sans-serif;font-size:17px;font-weight:800;color:var(--text);min-width:48px;line-height:1;">' + orario + '</div>'
         + '<div style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';flex-shrink:0;"></div>'
         + '<div style="flex:1;min-width:0;">'
-        + '<div style="font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">' + c.nome + ' ' + c.cognome + ' ' + renderHealthScoreBadge(c.id) + '</div>'
+        + '<div style="font-size:14px;font-weight:700;color:var(--text);">' + c.nome + ' ' + c.cognome + '</div>'
         + '<div style="font-size:11px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (c.goal || 'Benessere generale') + (painActive.length > 0 ? ' &nbsp;<span style=\"color:var(--red)\">💢' + painActive.length + '</span>' : '') + '</div>'
         + (prossimaNote ? '<div style="font-size:11px;font-weight:600;color:var(--accent);margin-top:2px;">⚠ ' + prossimaNote + '</div>' : '')
         + '</div>'
@@ -15539,10 +15539,9 @@ function normalizeSettimanale(doc) {
 // ══════════════════════════════════════════════════════════════════════
 function calculateHealthScore(clientId) {
   const now = Date.now();
-  const MS_14 = 14 * 24 * 3600 * 1000;
   const MS_30 = 30 * 24 * 3600 * 1000;
 
-  // Helper: ricava timestamp da un follow-up (ms unix oppure campo date stringa)
+  // Helper: timestamp da FU (ms unix oppure campo date stringa)
   function fuTs(fu) {
     if (!fu) return null;
     if (fu.timestamp && fu.timestamp > 1000000) return fu.timestamp;
@@ -15551,16 +15550,14 @@ function calculateHealthScore(clientId) {
     return null;
   }
 
-  // ── Archivio sessioni (TUTTE disponibili — no filtro 30gg fisso) ──
-  // Così i clienti con pochi dati iniziali non vengono penalizzati
+  // ── 4A: Aderenza — max 35 ────────────────────────────────────────
+  // Usa TUTTE le sessioni archiviate (non finestra fissa: i clienti nuovi non vengono penalizzati)
   const archive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]')
     .filter(s => s.clientId == clientId && s.date);
-
-  // ── 4A: Aderenza/Presenze — max 35 ───────────────────────────────
   let adherence = 26; // neutro = nessun dato ancora
   const done   = archive.filter(s => s.outcome === 'done').length;
-  const client = archive.filter(s => s.outcome === 'client').length;
-  const denom  = done + client;
+  const skipped = archive.filter(s => s.outcome === 'client').length;
+  const denom  = done + skipped;
   if (denom >= 2) {
     const pct = done / denom;
     if      (pct >= 0.95) adherence = 35;
@@ -15572,152 +15569,190 @@ function calculateHealthScore(clientId) {
     adherence = done >= 1 ? 30 : 16;
   }
 
-  // ── Follow-up: supporto sia timestamp ms che campo date string ────
-  const fuAll  = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]');
-  const fu14   = fuAll.filter(d => { const t = fuTs(d); return t != null && (now - t) <= MS_14; });
-  const fu30   = fuAll.filter(d => { const t = fuTs(d); return t != null && (now - t) <= MS_30; });
-  const norms14 = fu14.map(normalizeFollowup);
-  const norms30 = fu30.map(normalizeFollowup);
+  // ── FU ultimi 30gg ────────────────────────────────────────────────
+  const fuAll = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]');
+  const fu30  = fuAll.filter(f => { const t = fuTs(f); return t != null && (now - t) <= MS_30; });
 
-  // ── 4B: Sintomi/Dolore — max 25 ──────────────────────────────────
-  let pain = 25; // nessun dato = nessun dolore segnalato = punteggio pieno
-  if (norms14.length > 0) {
-    const vals      = norms14.map(n => n.intensitaDolore ?? 0);
-    const avgDolore = vals.reduce((a, b) => a + b, 0) / vals.length;
-    const oldNorms  = norms30.filter(n => { const t = fuTs(n._raw); return t && (now - t) > MS_14; });
-    const oldVals   = oldNorms.map(n => n.intensitaDolore ?? 0);
-    const avgOld    = oldVals.length > 0 ? oldVals.reduce((a, b) => a + b, 0) / oldVals.length : avgDolore;
-    const trend     = avgDolore - avgOld;
-    let painBase;
-    if      (avgDolore <= 1) painBase = 22;
-    else if (avgDolore <= 3) painBase = 18;
-    else if (avgDolore <= 5) painBase = 13;
-    else if (avgDolore <= 7) painBase = 8;
-    else                     painBase = 4;
-    const trendBonus = Math.max(-4, Math.min(4, Math.round(-trend * 1.2)));
-    pain = Math.max(0, Math.min(25, painBase + trendBonus));
-    // bonus/malus painStart vs painEnd dai workout recenti
-    const recentW = (typeof workouts !== 'undefined' ? workouts : [])
-      .filter(w => w.clientId == clientId && w.painStart?.length && w.painEnd?.length
-        && w.createdAt && (now - new Date(w.createdAt).getTime()) <= MS_14);
-    let painImproved = 0, painWorsened = 0;
-    recentW.forEach(w => {
-      const sMap = Object.fromEntries((w.painStart||[]).map(p=>[p.label,p.intensity]));
-      const eMap = Object.fromEntries((w.painEnd||[]).map(p=>[p.label,p.intensity]));
-      Object.keys(sMap).forEach(lbl => {
-        if (eMap[lbl] != null) {
-          if (eMap[lbl] < sMap[lbl]) painImproved++;
-          else if (eMap[lbl] > sMap[lbl]) painWorsened++;
-        }
-      });
-    });
-    if (painImproved > painWorsened) pain = Math.min(25, pain + 2);
-    if (painWorsened > painImproved) pain = Math.max(0, pain - 2);
+  // ── 4B: Dolore — max 25 ──────────────────────────────────────────
+  // Sorgenti in ordine di priorità:
+  //   1. campo 'dolore' numerico nei FU (scala 1–10, sempre presente se dolore riportato)
+  //   2. painStart dei workout recenti
+  //   3. painPoints del profilo cliente (fallback: dolori cronici noti)
+  //   4. nessuna fonte = 25 (nessun dolore noto)
+  let pain = 25;
+
+  const fuDoloreVals = fu30
+    .map(f => f.dolore ?? null)
+    .filter(v => v != null);
+
+  const recentWorkouts = (typeof workouts !== 'undefined' ? workouts : [])
+    .filter(w => w.clientId == clientId && w.painStart?.length
+      && w.createdAt && (now - new Date(w.createdAt).getTime()) <= MS_30);
+  const wPainVals = recentWorkouts.flatMap(w =>
+    (w.painStart || []).map(p => p.intensity).filter(v => v != null)
+  );
+
+  const allPainVals = [...fuDoloreVals, ...wPainVals];
+
+  if (allPainVals.length > 0) {
+    const avg = allPainVals.reduce((a, b) => a + b, 0) / allPainVals.length;
+    if      (avg <= 2) pain = 22;
+    else if (avg <= 4) pain = 16;
+    else if (avg <= 6) pain = 10;
+    else               pain = 5;
+  } else {
+    // Nessun FU e nessun workout con dolore — guarda painPoints del profilo
+    const client = (typeof clients !== 'undefined' ? clients : []).find(c => c.id == clientId);
+    const activePP = (client?.painPoints || []).filter(p => p.stato !== 'risolto');
+    if (activePP.length > 0) {
+      const avgPP = activePP.reduce((s, p) => s + (p.intensity || 5), 0) / activePP.length;
+      if      (avgPP <= 3) pain = 20;
+      else if (avgPP <= 5) pain = 15;
+      else if (avgPP <= 7) pain = 10;
+      else                 pain = 5;
+    }
+    // altrimenti rimane 25
   }
 
-  // ── 4C: Recupero percepito — max 20 ──────────────────────────────
-  let recovery = 20; // nessun dato = non risultano problemi di recupero = punteggio pieno
-  if (norms14.length > 0) {
-    const eVals  = norms14.map(n => n.energia).filter(v => v != null);
-    const sVals  = norms14.map(n => n.sonno).filter(v => v != null);
-    const stVals = norms14.map(n => n.stress).filter(v => v != null);
-    const avgE   = eVals.length  ? eVals.reduce((a,b)=>a+b,0)/eVals.length   : null;
-    const avgS   = sVals.length  ? sVals.reduce((a,b)=>a+b,0)/sVals.length   : null;
-    const avgSt  = stVals.length ? stVals.reduce((a,b)=>a+b,0)/stVals.length : null;
+  // ── 4C: Recupero — max 20 ────────────────────────────────────────
+  // Legge energia + sonno + stress dai FU degli ultimi 30gg
+  // Fallback = 20 solo se davvero nessun FU disponibile
+  let recovery = 20;
+  const eVals  = fu30.map(f => f.energia).filter(v => v != null);
+  const sVals  = fu30.map(f => f.sonno).filter(v => v != null);
+  const stVals = fu30.map(f => f.stress).filter(v => v != null);
+
+  if (eVals.length > 0 || sVals.length > 0 || stVals.length > 0) {
+    const avgE  = eVals.length  ? eVals.reduce((a,b)=>a+b,0)/eVals.length   : null;
+    const avgS  = sVals.length  ? sVals.reduce((a,b)=>a+b,0)/sVals.length   : null;
+    const avgSt = stVals.length ? stVals.reduce((a,b)=>a+b,0)/stVals.length : null;
+    // normalizzazione 1–10 → 0–1 (stress: invertito)
     const eScore  = avgE  != null ? (avgE-1)/9       : 0.5;
     const sScore  = avgS  != null ? (avgS-1)/9       : 0.5;
     const stScore = avgSt != null ? 1-(avgSt-1)/9    : 0.5;
-    const wE = avgE != null ? 0.45 : 0, wS = avgS != null ? 0.35 : 0, wSt = avgSt != null ? 0.20 : 0;
+    const wE = avgE != null ? 0.45 : 0;
+    const wS = avgS != null ? 0.35 : 0;
+    const wSt= avgSt!= null ? 0.20 : 0;
     const wSum = (wE + wS + wSt) || 1;
     recovery = Math.round((eScore*wE + sScore*wS + stScore*wSt) / wSum * 20);
   }
 
-  // ── 4D: Continuità attiva — max 20 ────────────────────────────────
-  // Mappa legacy: 'in_parte' → equivale a 'in_gran_parte' (0.6)
+  // ── 4D: Continuità — max 20 ──────────────────────────────────────
+  // Legge campo 'esercizi' dai check_settimanale degli ultimi 30gg
+  // Fallback = 20 solo se nessun check_settimanale disponibile
   const EX_SCORE = { 'tutti':1, 'in_gran_parte':0.7, 'in_parte':0.6, 'solo_qualcuno':0.35, 'no':0 };
-  let continuity = 20; // nessun dato = non risultano salti degli esercizi = punteggio pieno
-  const fuSett30 = norms30.filter(n => n.tipo === 'check_settimanale' && n.esercizi != null);
-  if (fuSett30.length >= 1) {
-    const avgEx = fuSett30.reduce((sum,n) => sum + (EX_SCORE[n.esercizi] ?? 0.35), 0) / fuSett30.length;
-    continuity = Math.round(avgEx * 18);
-    if (fuSett30.length >= 3) continuity = Math.min(20, continuity + 1);
+  let continuity = 20;
+  const fuSett = fu30.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
+  if (fuSett.length > 0) {
+    const avgEx = fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length;
+    continuity = Math.round(avgEx * 20);
   }
 
   // ── Totale e label ────────────────────────────────────────────────
   const total = Math.max(0, Math.min(100, adherence + pain + recovery + continuity));
   let color, label;
-  if      (total >= 85) { color = '#2e9e4f'; label = 'Ottimo'; }        // verde
-  else if (total >= 70) { color = '#f5a623'; label = 'Buono'; }         // giallo/ambra
-  else if (total >= 55) { color = '#e8820c'; label = 'Da monitorare'; } // arancione
-  else                  { color = '#d63b3b'; label = 'Critico'; }        // rosso
+  if      (total >= 85) { color = '#2e9e4f'; label = 'Ottimo'; }
+  else if (total >= 70) { color = '#f5a623'; label = 'Buono'; }
+  else if (total >= 55) { color = '#e8820c'; label = 'Da monitorare'; }
+  else                  { color = '#d63b3b'; label = 'Critico'; }
 
   return { total, color, label, breakdown: { adherence, pain, recovery, continuity } };
 }
 
+// ── healthScoreSummary — frase riassuntiva leggibile ─────────────────
+function healthScoreSummary(hs) {
+  const b = hs.breakdown;
+  const adhPct  = b.adherence / 35;
+  const painPct = b.pain / 25;
+  const recPct  = b.recovery / 20;
+  const cntPct  = b.continuity / 20;
 
-// ── renderHealthScoreBadge — badge compatto per genera seduta ───────
-function renderHealthScoreBadge(clientId) {
-  const hs = calculateHealthScore(clientId);
-  return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;background:${hs.color}18;border:1px solid ${hs.color}44;font-family:'DM Mono',monospace;font-size:11px;">
-    <span style="font-weight:700;color:${hs.color};">♥ ${hs.total}</span><span style="color:var(--text3);">/100</span>
-  </span>`;
+  const parts = [];
+
+  // Aderenza
+  if (adhPct >= 0.95)      parts.push('presenza eccellente');
+  else if (adhPct >= 0.80) parts.push('buona presenza');
+  else if (adhPct >= 0.60) parts.push('qualche assenza');
+  else                     parts.push('spesso assente');
+
+  // Dolore
+  if (painPct >= 0.92)     parts.push('nessun dolore');
+  else if (painPct >= 0.70) parts.push('dolore lieve');
+  else if (painPct >= 0.45) parts.push('attenzione ai dolori');
+  else                      parts.push('dolori significativi');
+
+  // Recupero
+  if (recPct >= 0.85)      parts.push('recupero ottimo');
+  else if (recPct >= 0.60) parts.push('recupero nella norma');
+  else if (recPct >= 0.35) parts.push('recupero basso');
+  else                     parts.push('recupero critico');
+
+  // Continuità esercizi — solo se il dato è significativo (non fallback pieno)
+  if (cntPct < 0.99) {
+    if (cntPct >= 0.85)      parts.push('esercizi costanti');
+    else if (cntPct >= 0.55) parts.push('esercizi parziali');
+    else if (cntPct >= 0.20) parts.push('pochi esercizi a casa');
+    else                     parts.push('nessun esercizio a casa');
+  }
+
+  // Capitalizza prima lettera e unisci con separatori
+  const [first, ...rest] = parts;
+  return (first ? first.charAt(0).toUpperCase() + first.slice(1) : '')
+    + (rest.length ? ' · ' + rest.join(' · ') : '');
 }
 
 // ── showHealthScoreBreakdown — popup con dettaglio punteggi ──────────
 function showHealthScoreBreakdown(clientId, triggerEl) {
-  // Rimuovi popup esistenti
   document.querySelectorAll('.hs-popup').forEach(el => el.remove());
 
-  const hs = calculateHealthScore(clientId);
-  const b  = hs.breakdown;
+  const hs      = calculateHealthScore(clientId);
+  const b       = hs.breakdown;
+  const summary = healthScoreSummary(hs);
 
   const items = [
-    { label: 'Aderenza',          val: b.adherence, max: 35, icon: '🏋️' },
-    { label: 'Dolore',            val: b.pain,       max: 25, icon: '💢' },
-    { label: 'Recupero',          val: b.recovery,   max: 20, icon: '⚡' },
-    { label: 'Continuità',        val: b.continuity, max: 20, icon: '🔄' },
+    { label: 'Aderenza',   val: b.adherence,  max: 35, icon: '🏋️' },
+    { label: 'Dolore',     val: b.pain,        max: 25, icon: '💢' },
+    { label: 'Recupero',   val: b.recovery,    max: 20, icon: '⚡' },
+    { label: 'Continuità', val: b.continuity,  max: 20, icon: '🔄' },
   ];
 
   const rows = items.map(it => {
-    const pct  = Math.round(it.val / it.max * 100);
+    const pct      = Math.round(it.val / it.max * 100);
     const barColor = pct >= 80 ? '#2e9e4f' : pct >= 55 ? '#f5a623' : '#d63b3b';
-    return `<div style="margin-bottom:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-        <span style="font-size:11px;color:var(--text2);">${it.icon} ${it.label}</span>
-        <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--text1);">${it.val}<span style="font-weight:400;color:var(--text3);">/${it.max}</span></span>
-      </div>
-      <div style="height:4px;background:var(--border);border-radius:3px;overflow:hidden;">
-        <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;"></div>
-      </div>
-    </div>`;
+    return '<div style="margin-bottom:8px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">'
+      + '<span style="font-size:11px;color:var(--text2);">' + it.icon + ' ' + it.label + '</span>'
+      + '<span style="font-family:\'DM Mono\',monospace;font-size:10px;font-weight:700;color:var(--text1);">' + it.val + '<span style="font-weight:400;color:var(--text3);">/' + it.max + '</span></span>'
+      + '</div>'
+      + '<div style="height:4px;background:var(--border);border-radius:3px;overflow:hidden;">'
+      + '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:3px;"></div>'
+      + '</div></div>';
   }).join('');
 
   const popup = document.createElement('div');
   popup.className = 'hs-popup';
-  popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,0.18);';
+  popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;min-width:230px;box-shadow:0 8px 32px rgba(0,0,0,0.18);';
 
-  popup.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${hs.color};">Health Score ${hs.total}/100</span>
-      <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${hs.color}20;color:${hs.color};">${hs.label}</span>
-    </div>
-    ${rows}
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-align:center;">Tocca fuori per chiudere</div>
-  `;
+  popup.innerHTML = ''
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+    +   '<span style="font-family:\'DM Mono\',monospace;font-size:11px;font-weight:700;color:' + hs.color + ';">Health Score ' + hs.total + '/100</span>'
+    +   '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:' + hs.color + '20;color:' + hs.color + ';">' + hs.label + '</span>'
+    + '</div>'
+    + '<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-bottom:12px;line-height:1.4;">' + summary + '</div>'
+    + rows
+    + '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;text-align:center;">Tocca fuori per chiudere</div>';
 
   document.body.appendChild(popup);
 
-  // Posiziona vicino al trigger
   const rect = triggerEl.getBoundingClientRect();
-  const popW = 236, popH = 200;
+  const popW = 246, popH = 260;
   let top  = rect.bottom + 6;
   let left = rect.left;
   if (left + popW > window.innerWidth - 8)  left = window.innerWidth - popW - 8;
-  if (top + popH > window.innerHeight - 8)  top  = rect.top - popH - 6;
+  if (top  + popH > window.innerHeight - 8) top  = rect.top - popH - 6;
   popup.style.top  = top + 'px';
   popup.style.left = left + 'px';
 
-  // Chiudi cliccando fuori
   setTimeout(() => {
     document.addEventListener('click', function closeHs(e) {
       if (!popup.contains(e.target)) {
@@ -15730,22 +15765,28 @@ function showHealthScoreBreakdown(clientId, triggerEl) {
 
 // ── renderHealthScoreBlock — blocco per card cliente ─────────────────
 function renderHealthScoreBlock(clientId) {
-  const hs = calculateHealthScore(clientId);
-  return `<div style="margin:6px 0 5px;">
-    <div style="background:${hs.color}18;border:1px solid ${hs.color}44;border-radius:10px;padding:6px 10px;cursor:pointer;" onclick="event.stopPropagation();showHealthScoreBreakdown(${clientId},this)">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-        <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${hs.color};">Health Score</span>
-        <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${hs.color};">${hs.total}<span style="font-weight:400;color:var(--text3);font-size:10px;">/100</span></span>
-        <span style="margin-left:auto;font-size:9px;color:${hs.color};opacity:0.6;">▼</span>
-      </div>
-      <div style="height:6px;background:${hs.color}30;border-radius:4px;overflow:hidden;">
-        <div style="height:100%;width:${hs.total}%;background:${hs.color};border-radius:4px;"></div>
-      </div>
-    </div>
-  </div>`;
+  const hs      = calculateHealthScore(clientId);
+  const summary = healthScoreSummary(hs);
+  return '<div style="margin:6px 0 5px;">'
+    + '<div style="background:' + hs.color + '18;border:1px solid ' + hs.color + '44;border-radius:10px;padding:6px 10px;cursor:pointer;" onclick="event.stopPropagation();showHealthScoreBreakdown(' + clientId + ',this)">'
+    +   '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+    +     '<span style="font-family:\'DM Mono\',monospace;font-size:11px;font-weight:700;color:' + hs.color + ';">Health Score</span>'
+    +     '<span style="font-family:\'DM Mono\',monospace;font-size:11px;font-weight:700;color:' + hs.color + ';">' + hs.total + '<span style="font-weight:400;color:var(--text3);font-size:10px;">/100</span></span>'
+    +     '<span style="margin-left:auto;font-size:9px;color:' + hs.color + ';opacity:0.6;">▼</span>'
+    +   '</div>'
+    +   '<div style="height:6px;background:' + hs.color + '30;border-radius:4px;overflow:hidden;margin-bottom:4px;">'
+    +     '<div style="height:100%;width:' + hs.total + '%;background:' + hs.color + ';border-radius:4px;"></div>'
+    +   '</div>'
+    +   '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;line-height:1.3;">' + summary + '</div>'
+    + '</div>'
+    + '</div>';
 }
 
-// ── normalizeFollowup (dispatcher) ─────────────────────────────────
+// ── renderHealthScoreBadge — badge compatto per genera seduta ─────────
+function renderHealthScoreBadge(clientId) {
+  const hs = calculateHealthScore(clientId);
+  return '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;background:' + hs.color + '18;border:1px solid ' + hs.color + '44;font-family:\'DM Mono\',monospace;font-size:11px;"><span style="font-weight:700;color:' + hs.color + ';">&#9829; ' + hs.total + '</span><span style="color:var(--text3);">/100</span></span>';
+}
 function normalizeFollowup(doc) {
   if (doc.tipo === 'post_seduta') return normalizePostSeduta(doc);
   if (doc.tipo === 'check_settimanale') return normalizeSettimanale(doc);
