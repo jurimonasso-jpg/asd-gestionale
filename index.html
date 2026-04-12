@@ -11119,7 +11119,7 @@ function renderDashboard() {
         + '<div style="font-family:Outfit,sans-serif;font-size:17px;font-weight:800;color:var(--text);min-width:48px;line-height:1;">' + orario + '</div>'
         + '<div style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';flex-shrink:0;"></div>'
         + '<div style="flex:1;min-width:0;">'
-        + '<div style="font-size:14px;font-weight:700;color:var(--text);">' + c.nome + ' ' + c.cognome + '</div>'
+        + '<div style="font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">' + c.nome + ' ' + c.cognome + ' ' + renderHealthScoreBadge(c.id) + '</div>'
         + '<div style="font-size:11px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (c.goal || 'Benessere generale') + (painActive.length > 0 ? ' &nbsp;<span style=\"color:var(--red)\">💢' + painActive.length + '</span>' : '') + '</div>'
         + (prossimaNote ? '<div style="font-size:11px;font-weight:600;color:var(--accent);margin-top:2px;">⚠ ' + prossimaNote + '</div>' : '')
         + '</div>'
@@ -15663,14 +15663,80 @@ function renderHealthScoreBadge(clientId) {
   </span>`;
 }
 
+// ── showHealthScoreBreakdown — popup con dettaglio punteggi ──────────
+function showHealthScoreBreakdown(clientId, triggerEl) {
+  // Rimuovi popup esistenti
+  document.querySelectorAll('.hs-popup').forEach(el => el.remove());
+
+  const hs = calculateHealthScore(clientId);
+  const b  = hs.breakdown;
+
+  const items = [
+    { label: 'Aderenza',          val: b.adherence, max: 35, icon: '🏋️' },
+    { label: 'Dolore',            val: b.pain,       max: 25, icon: '💢' },
+    { label: 'Recupero',          val: b.recovery,   max: 20, icon: '⚡' },
+    { label: 'Continuità',        val: b.continuity, max: 20, icon: '🔄' },
+  ];
+
+  const rows = items.map(it => {
+    const pct  = Math.round(it.val / it.max * 100);
+    const barColor = pct >= 80 ? '#2e9e4f' : pct >= 55 ? '#f5a623' : '#d63b3b';
+    return `<div style="margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+        <span style="font-size:11px;color:var(--text2);">${it.icon} ${it.label}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--text1);">${it.val}<span style="font-weight:400;color:var(--text3);">/${it.max}</span></span>
+      </div>
+      <div style="height:4px;background:var(--border);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const popup = document.createElement('div');
+  popup.className = 'hs-popup';
+  popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,0.18);';
+
+  popup.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${hs.color};">Health Score ${hs.total}/100</span>
+      <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${hs.color}20;color:${hs.color};">${hs.label}</span>
+    </div>
+    ${rows}
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;text-align:center;">Tocca fuori per chiudere</div>
+  `;
+
+  document.body.appendChild(popup);
+
+  // Posiziona vicino al trigger
+  const rect = triggerEl.getBoundingClientRect();
+  const popW = 236, popH = 200;
+  let top  = rect.bottom + 6;
+  let left = rect.left;
+  if (left + popW > window.innerWidth - 8)  left = window.innerWidth - popW - 8;
+  if (top + popH > window.innerHeight - 8)  top  = rect.top - popH - 6;
+  popup.style.top  = top + 'px';
+  popup.style.left = left + 'px';
+
+  // Chiudi cliccando fuori
+  setTimeout(() => {
+    document.addEventListener('click', function closeHs(e) {
+      if (!popup.contains(e.target)) {
+        popup.remove();
+        document.removeEventListener('click', closeHs);
+      }
+    });
+  }, 10);
+}
+
 // ── renderHealthScoreBlock — blocco per card cliente ─────────────────
 function renderHealthScoreBlock(clientId) {
   const hs = calculateHealthScore(clientId);
   return `<div style="margin:6px 0 5px;">
-    <div style="background:${hs.color}18;border:1px solid ${hs.color}44;border-radius:10px;padding:6px 10px;">
+    <div style="background:${hs.color}18;border:1px solid ${hs.color}44;border-radius:10px;padding:6px 10px;cursor:pointer;" onclick="event.stopPropagation();showHealthScoreBreakdown(${clientId},this)">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
         <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${hs.color};">Health Score</span>
         <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${hs.color};">${hs.total}<span style="font-weight:400;color:var(--text3);font-size:10px;">/100</span></span>
+        <span style="margin-left:auto;font-size:9px;color:${hs.color};opacity:0.6;">▼</span>
       </div>
       <div style="height:6px;background:${hs.color}30;border-radius:4px;overflow:hidden;">
         <div style="height:100%;width:${hs.total}%;background:${hs.color};border-radius:4px;"></div>
