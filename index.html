@@ -15666,13 +15666,15 @@ function renderHealthScoreBadge(clientId) {
 // ── renderHealthScoreBlock — blocco per card cliente ─────────────────
 function renderHealthScoreBlock(clientId) {
   const hs = calculateHealthScore(clientId);
-  return `<div style="margin:5px 0 4px;padding:5px 0 0;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-      <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text3);letter-spacing:.3px;">Health Score</span>
-      <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:${hs.color};">${hs.total}<span style="font-weight:400;color:var(--text3);">/100</span></span>
-    </div>
-    <div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;">
-      <div style="height:100%;width:${hs.total}%;background:${hs.color};border-radius:2px;transition:width .4s;"></div>
+  return `<div style="margin:6px 0 5px;">
+    <div style="background:${hs.color}18;border:1px solid ${hs.color}44;border-radius:10px;padding:6px 10px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${hs.color};">Health Score</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${hs.color};">${hs.total}<span style="font-weight:400;color:var(--text3);font-size:10px;">/100</span></span>
+      </div>
+      <div style="height:6px;background:${hs.color}30;border-radius:4px;overflow:hidden;">
+        <div style="height:100%;width:${hs.total}%;background:${hs.color};border-radius:4px;"></div>
+      </div>
     </div>
   </div>`;
 }
