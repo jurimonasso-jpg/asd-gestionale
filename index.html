@@ -15646,10 +15646,10 @@ function calculateHealthScore(clientId) {
   // ── Totale e label ────────────────────────────────────────────────
   const total = Math.max(0, Math.min(100, adherence + pain + recovery + continuity));
   let color, label;
-  if      (total >= 85) { color = 'var(--green)';  label = 'Ottimo'; }
-  else if (total >= 70) { color = 'var(--yellow)'; label = 'Buono'; }
-  else if (total >= 55) { color = '#ff9800';        label = 'Da monitorare'; }
-  else                  { color = 'var(--red)';     label = 'Critico'; }
+  if      (total >= 85) { color = '#2e9e4f'; label = 'Ottimo'; }        // verde
+  else if (total >= 70) { color = '#f5a623'; label = 'Buono'; }         // giallo/ambra
+  else if (total >= 55) { color = '#e8820c'; label = 'Da monitorare'; } // arancione
+  else                  { color = '#d63b3b'; label = 'Critico'; }        // rosso
 
   return { total, color, label, breakdown: { adherence, pain, recovery, continuity } };
 }
