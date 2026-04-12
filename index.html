@@ -4913,6 +4913,7 @@ const PERCORSO_CHECKLIST = [
 
 let clientSortMode = 'nome';
 let clientHealthSortDir = 0; // 0=neutro, 1=desc(↓), -1=asc(↑)
+let clientFollowupSortDir = 0; // 0=neutro, 1=desc(↓ più recente), -1=asc(↑ meno recente)
 // Cache ultima data follow-up per cliente { clientId: 'YYYY-MM-DD' | null }
 window._lastFollowupMap = {};
 
@@ -4961,9 +4962,21 @@ function setClientSort(mode) {
       if      (clientHealthSortDir === 1)  clientHealthSortDir = -1;
       else if (clientHealthSortDir === -1) { clientSortMode = 'nome'; clientHealthSortDir = 0; }
     }
+    clientFollowupSortDir = 0;
+  } else if (mode === 'followup') {
+    // ciclo tri-stato: neutro → ↓ (più recente) → ↑ (meno recente) → neutro
+    if (clientSortMode !== 'followup') {
+      clientSortMode = 'followup';
+      clientFollowupSortDir = 1;
+    } else {
+      if      (clientFollowupSortDir === 1)  clientFollowupSortDir = -1;
+      else if (clientFollowupSortDir === -1) { clientSortMode = 'nome'; clientFollowupSortDir = 0; }
+    }
+    clientHealthSortDir = 0;
   } else {
     clientSortMode = mode;
     clientHealthSortDir = 0;
+    clientFollowupSortDir = 0;
   }
   // Update button styles
   ['nome','sedute','recente','percorso','health','followup'].forEach(m => {
@@ -4978,8 +4991,13 @@ function setClientSort(mode) {
       else if (clientSortMode === 'health' && clientHealthSortDir === -1) btn.textContent = '♥ Health ↑';
       else btn.textContent = '♥ Health';
     }
+    if (m === 'followup') {
+      if (clientSortMode === 'followup' && clientFollowupSortDir === 1)  btn.textContent = '📬 Follow-up ↓';
+      else if (clientSortMode === 'followup' && clientFollowupSortDir === -1) btn.textContent = '📬 Follow-up ↑';
+      else btn.textContent = '📬 Follow-up';
+    }
   });
-  if (mode === 'followup') {
+  if (clientSortMode === 'followup') {
     _buildLastFollowupMap().then(() => filterClients());
   } else {
     filterClients();
@@ -5045,11 +5063,12 @@ function renderClients(filter = '') {
       // Usa la map precalcolata (Firebase + localStorage)
       const fuA = window._lastFollowupMap[a.id] || null;
       const fuB = window._lastFollowupMap[b.id] || null;
-      // Chi non ha mai compilato va in fondo
+      // Chi non ha mai compilato va sempre in fondo indipendentemente dalla direzione
       if (!fuA && !fuB) return (a.cognome + a.nome).localeCompare(b.cognome + b.nome);
       if (!fuA) return 1;
       if (!fuB) return -1;
-      return fuB.localeCompare(fuA); // più recente prima
+      // dir 1 = più recente prima (↓), dir -1 = meno recente prima (↑)
+      return clientFollowupSortDir * fuB.localeCompare(fuA);
     }
     return 0;
   });
