@@ -5158,21 +5158,6 @@ function openClientDetail(clientId) {
   const client = clients.find(c => c.id === clientId);
   if (!client) return;
 
-  // Marca come letti tutti gli alert Firebase non letti per questo cliente
-  // (scansiona le chiavi fu_alert_read già note nel DOM dell'alert banner)
-  const alertBanner = document.getElementById('fu-alert-banner');
-  if (alertBanner) {
-    alertBanner.querySelectorAll('.fu-alert-btn-ok').forEach(btn => {
-      const onclickStr = btn.getAttribute('onclick') || '';
-      const match = onclickStr.match(/fuMarkAlertRead\((\d+),'([^']+)'\)/);
-      if (match && String(match[1]) === String(clientId)) {
-        localStorage.setItem(_fuAlertReadKey(clientId, match[2]), '1');
-      }
-    });
-    // Re-render silenzioso dopo aver aperto la scheda
-    setTimeout(() => renderFollowUpAlerts(), 300);
-  }
-
   const clientWorkouts = workouts.filter(w => w.clientId == clientId);
   const initials = (client.nome[0] + client.cognome[0]).toUpperCase();
   const age = client.dob ? Math.floor((Date.now() - new Date(client.dob)) / (365.25*24*3600*1000)) : '—';
