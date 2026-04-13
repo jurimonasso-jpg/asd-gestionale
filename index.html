@@ -15251,7 +15251,23 @@ async function loadFollowupCharts(clientId) {
           const rcLabels = { molto_bene:'Corpo: ottimo', bene:'Corpo: bene', cosi_cosi:'Corpo: così così', con_fatica:'Corpo: fatica', male:'Corpo: male ⚠️' };
           if (rcLabels[d.reazioneCorpo]) extraBits.push(`<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:var(--surface2);color:var(--text3);">${rcLabels[d.reazioneCorpo]}</span>`);
         }
+        if (!isPost && d.esercizi) {
+          const exLabels = { tutti:'🏠 Esercizi: tutti', in_gran_parte:'🏠 Esercizi: in parte', solo_qualcuno:'🏠 Esercizi: pochi', no:'🏠 Esercizi: nessuno' };
+          const exColors = { tutti:'#2e7d32', in_gran_parte:'#1565c0', solo_qualcuno:'#e65100', no:'#c62828' };
+          const exBg = { tutti:'#e8f5e9', in_gran_parte:'#e3f2fd', solo_qualcuno:'#fff3e0', no:'#ffebee' };
+          const exKey = d.esercizi;
+          if (exLabels[exKey]) {
+            let exSpan = `<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:${exBg[exKey]};color:${exColors[exKey]};border:1px solid ${exColors[exKey]}33;">${exLabels[exKey]}</span>`;
+            if ((exKey === 'solo_qualcuno' || exKey === 'no') && d.motivoEsercizi) {
+              const mLabels = { tempo:'(tempo)', dimenticato:'(dimenticato)', dolore:'(dolore)', non_capito:'(non capito)', altro:'(altro)' };
+              const mNote = mLabels[d.motivoEsercizi] || '';
+              if (mNote) exSpan += ` <span style="font-size:10px;color:var(--text3);">${mNote}</span>`;
+            }
+            extraBits.push(exSpan);
+          }
+        }
 
+        const noteText = (d.note || '').trim();
         const cardCls = alert ? 'fu2-checkin-card fu2-alert' : isPost ? 'fu2-checkin-card fu2-post' : 'fu2-checkin-card fu2-sett';
         return `
           <div class="${cardCls}">
@@ -15261,6 +15277,7 @@ async function loadFollowupCharts(clientId) {
             </div>
             <div class="fu2-checkin-metrics">${metricBits || '<span style="font-size:10px;color:var(--text3);">—</span>'}</div>
             ${extraBits.length ? `<div class="fu2-checkin-extra">${extraBits.join('')}</div>` : ''}
+            ${noteText ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-top:5px;padding-top:5px;border-top:1px solid var(--border);line-height:1.45;">💬 ${noteText}</div>` : ''}
           </div>`;
       }).join('');
     }
@@ -16681,7 +16698,7 @@ async function sbLoadFollowupBanner(clientId) {
     return `<span style="color:${col};font-size:12px;">${up?'↑':dn?'↓':'→'}</span>`;
   };
 
-  // ── Ultimo settimanale — recupero + reazione corpo ──────────────
+  // ── Ultimo settimanale — recupero + reazione corpo + esercizi casa ──
   const lastSettNorm = state.lastSett;
   let extraRow = '';
   if (lastSettNorm?.reazioneCorpo) {
@@ -16691,6 +16708,21 @@ async function sbLoadFollowupBanner(clientId) {
     extraRow = `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
       <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">🏃 Corpo</span>
       <span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;background:${rcColor[rc]||'#555'}22;color:${rcColor[rc]||'#555'};">${rcLabel[rc]||rc}</span>
+    </div>`;
+  }
+  let extraExRow = '';
+  if (lastSettNorm?.esercizi) {
+    const exLabel = { tutti:'Tutti', in_gran_parte:'In parte', solo_qualcuno:'Pochi', no:'Nessuno' };
+    const exColor = { tutti:'#2e7d32', in_gran_parte:'#1565c0', solo_qualcuno:'#e65100', no:'#c62828' };
+    const ex = lastSettNorm.esercizi;
+    let motivoStr = '';
+    if ((ex === 'solo_qualcuno' || ex === 'no') && lastSettNorm.motivoEsercizi) {
+      const mLabels = { tempo:'tempo', dimenticato:'dimenticato', dolore:'dolore', non_capito:'non capito', altro:'altro' };
+      motivoStr = mLabels[lastSettNorm.motivoEsercizi] ? ` · <span style="font-size:10px;color:var(--text3);">${mLabels[lastSettNorm.motivoEsercizi]}</span>` : '';
+    }
+    extraExRow = `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+      <span style="font-size:11px;font-weight:600;color:var(--text2);width:54px;">🏠 Casa</span>
+      <span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:10px;background:${exColor[ex]||'#555'}22;color:${exColor[ex]||'#555'};">${exLabel[ex]||ex}</span>${motivoStr}
     </div>`;
   }
 
@@ -16793,7 +16825,7 @@ async function sbLoadFollowupBanner(clientId) {
         ${lastDiffHtml ? `<div style="display:flex;align-items:center;gap:8px;padding-top:8px;margin-top:6px;border-top:1px solid var(--border);"><span style="font-size:11px;color:var(--text3);">Ultima seduta:</span>${lastDiffHtml}</div>` : ''}
         <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;border-left:3px solid #1565c0;font-size:12px;line-height:1.5;margin-top:8px;">${bSugg}</div>
 
-        ${extraRow ? `<div style="margin-top:6px;">${extraRow}</div>` : ''}
+        ${extraRow || extraExRow ? `<div style="margin-top:6px;">${extraRow}${extraExRow}</div>` : ''}
       </div>
     </div>`;
 
