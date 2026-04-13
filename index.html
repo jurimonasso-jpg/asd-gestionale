@@ -8598,6 +8598,93 @@ function confrontaSedute(clientId) {
   container.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+function toggleFollowupPanel(btn, clientId) {
+  const panel = document.getElementById(`fu-builder-panel-${clientId}`);
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    btn.querySelector('span:last-child').textContent = '▸ espandi';
+  } else {
+    panel.style.display = '';
+    btn.querySelector('span:last-child').textContent = '▾ chiudi';
+    if (!panel.dataset.loaded) {
+      panel.dataset.loaded = '1';
+      renderFollowupBuilderPanel(clientId, panel);
+    }
+  }
+}
+
+async function renderFollowupBuilderPanel(clientId, panel) {
+  panel.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;">Caricamento...</div>`;
+
+  // Legge da localStorage + Firebase (stessa logica di sbLoadFollowupBanner)
+  let docs = [];
+  const lsDocs = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]');
+  if (lsDocs.length) docs = lsDocs;
+
+  if (window._db && window._fsQuery) {
+    try {
+      const q = window._fsQuery(
+        window._fsCollection(window._db, 'followups'),
+        window._fsWhere('clientId', '==', String(clientId)),
+        window._fsOrderBy('timestamp', 'asc')
+      );
+      const snap = await window._fsDocs(q);
+      if (snap.docs.length) docs = snap.docs.map(d => d.data());
+    } catch(e) {}
+  }
+
+  if (!docs.length) {
+    panel.innerHTML = `<div style="padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;">📬 Nessun follow-up ricevuto ancora da questo cliente.</div>`;
+    return;
+  }
+
+  // Normalizza tutti i docs
+  const allDocs = docs.map(d => normalizeFollowup(d)).filter(Boolean);
+  const recent6 = docs.slice(-6);
+  const state = deriveFollowupState(recent6);
+
+  const semColors = { 'fu-green':'#2e7d32', 'fu-yellow':'#f9a825', 'fu-red':'#e53935', 'fu-gray':'#9e9e9e' };
+  const semBg    = { 'fu-green':'#f1f8f2', 'fu-yellow':'#fffdf0', 'fu-red':'#fff5f5', 'fu-gray':'var(--surface2)' };
+  const semBdr   = { 'fu-green':'#a5d6a7', 'fu-yellow':'#ffe082', 'fu-red':'#ef9a9a', 'fu-gray':'var(--border)' };
+  const col  = semColors[state.colore] || '#9e9e9e';
+  const bg   = semBg[state.colore]    || 'var(--surface2)';
+  const bdr  = semBdr[state.colore]   || 'var(--border)';
+
+  // Ultima data
+  const lastTs = docs[docs.length-1]?.timestamp || docs[docs.length-1]?.date || null;
+  let lastLbl = '—';
+  if (lastTs) {
+    const d = new Date(typeof lastTs === 'number' ? lastTs : lastTs);
+    if (!isNaN(d)) lastLbl = d.toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
+  }
+
+  const tlHtml = (typeof fu2BuildTimeline === 'function')
+    ? fu2BuildTimeline(allDocs, 'tutti')
+    : '<div style="font-size:12px;color:var(--text3);">Timeline non disponibile.</div>';
+
+  panel.innerHTML = `
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+
+      <!-- Stato semaforo -->
+      <div style="background:${bg};border-bottom:1px solid ${bdr};padding:10px 14px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">${state.emoji}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:800;font-family:'Outfit',sans-serif;color:var(--text);">${state.stato}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px;">${state.spiegazione || ''}</div>
+        </div>
+        <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);white-space:nowrap;">ultimo: ${lastLbl}</div>
+      </div>
+
+      <!-- Timeline compatta -->
+      <div style="padding:10px 14px;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px;">📅 Ultimi check-in</div>
+        ${tlHtml}
+      </div>
+    </div>`;
+}
+
 function toggleStoricoSedute(btn, clientId) {
   const panel = document.getElementById(`storico-sedute-panel-${clientId}`);
   if (!panel) return;
@@ -12143,6 +12230,16 @@ function openExistingSeduta(workout, clientId) {
         <div id="storico-sedute-panel-${clientId}" style="display:none;margin-top:4px;"></div>
       </div>
 
+      <!-- Follow-up check-in -->
+      <div style="margin-bottom:14px;">
+        <button onclick="toggleFollowupPanel(this, ${clientId})"
+          style="display:flex;align-items:center;gap:8px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+          <span>📬 Follow-up check-in</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3);">▸ espandi</span>
+        </button>
+        <div id="fu-builder-panel-${clientId}" style="display:none;margin-top:4px;"></div>
+      </div>
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="_editingSedutaId=null;document.getElementById('seduta-content').innerHTML=''">Annulla</button>
         <button class="btn btn-primary" onclick="saveSedutaBuilder()">✓ Salva modifiche</button>
@@ -12414,6 +12511,16 @@ function newSedutaBuilder(prefillDate) {
           <span style="margin-left:auto;font-size:11px;color:var(--text3);">▸ espandi</span>
         </button>
         <div id="storico-sedute-panel-${clientId}" style="display:none;margin-top:4px;"></div>
+      </div>
+
+      <!-- 5c. Follow-up check-in -->
+      <div style="margin-bottom:14px;">
+        <button onclick="toggleFollowupPanel(this, ${clientId})"
+          style="display:flex;align-items:center;gap:8px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:700;font-size:12px;color:var(--text2);">
+          <span>📬 Follow-up check-in</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text3);">▸ espandi</span>
+        </button>
+        <div id="fu-builder-panel-${clientId}" style="display:none;margin-top:4px;"></div>
       </div>
 
       <!-- 5. Bottoni -->
