@@ -8618,7 +8618,7 @@ function toggleFollowupPanel(btn, clientId) {
 async function renderFollowupBuilderPanel(clientId, panel) {
   panel.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;">Caricamento...</div>`;
 
-  // Legge da localStorage + Firebase (stessa logica di sbLoadFollowupBanner)
+  // Legge da localStorage + Firebase
   let docs = [];
   const lsDocs = JSON.parse(localStorage.getItem('followup_notes_' + clientId) || '[]');
   if (lsDocs.length) docs = lsDocs;
@@ -8640,33 +8640,114 @@ async function renderFollowupBuilderPanel(clientId, panel) {
     return;
   }
 
-  // Normalizza tutti i docs
+  // Normalizza
   const allDocs = docs.map(d => normalizeFollowup(d)).filter(Boolean);
   const recent6 = docs.slice(-6);
   const state = deriveFollowupState(recent6);
 
-  const semColors = { 'fu-green':'#2e7d32', 'fu-yellow':'#f9a825', 'fu-red':'#e53935', 'fu-gray':'#9e9e9e' };
-  const semBg    = { 'fu-green':'#f1f8f2', 'fu-yellow':'#fffdf0', 'fu-red':'#fff5f5', 'fu-gray':'var(--surface2)' };
-  const semBdr   = { 'fu-green':'#a5d6a7', 'fu-yellow':'#ffe082', 'fu-red':'#ef9a9a', 'fu-gray':'var(--border)' };
-  const col  = semColors[state.colore] || '#9e9e9e';
-  const bg   = semBg[state.colore]    || 'var(--surface2)';
-  const bdr  = semBdr[state.colore]   || 'var(--border)';
+  const semBg  = { 'fu-green':'#f1f8f2', 'fu-yellow':'#fffdf0', 'fu-red':'#fff5f5', 'fu-gray':'var(--surface2)' };
+  const semBdr = { 'fu-green':'#a5d6a7', 'fu-yellow':'#ffe082', 'fu-red':'#ef9a9a', 'fu-gray':'var(--border)' };
+  const bg  = semBg[state.colore]  || 'var(--surface2)';
+  const bdr = semBdr[state.colore] || 'var(--border)';
 
   // Ultima data
-  const lastTs = docs[docs.length-1]?.timestamp || docs[docs.length-1]?.date || null;
+  const lastRaw = docs[docs.length - 1];
+  const lastTs  = lastRaw?.timestamp || lastRaw?.date || null;
   let lastLbl = '—';
   if (lastTs) {
-    const d = new Date(typeof lastTs === 'number' ? lastTs : lastTs);
+    const d = new Date(typeof lastTs === 'number' ? lastTs : String(lastTs).slice(0, 10));
     if (!isNaN(d)) lastLbl = d.toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
   }
 
-  const tlHtml = (typeof fu2BuildTimeline === 'function')
-    ? fu2BuildTimeline(allDocs, 'tutti')
-    : '<div style="font-size:12px;color:var(--text3);">Timeline non disponibile.</div>';
+  // ── Build timeline cards (logica identica a fu2BuildTimeline) ───
+  function _isAlert(d) {
+    const dolVal  = d.intensitaDolore != null ? Number(d.intensitaDolore) : 0;
+    const stressV = d.stress  != null ? Number(d.stress)  : 0;
+    const sonnoV  = d.sonno   != null ? Number(d.sonno)   : 10;
+    const enV     = d.energia != null ? Number(d.energia) : 10;
+    return dolVal >= 5 || stressV >= 8 || sonnoV <= 3 || enV <= 3 ||
+           d.percezioneSeduta === 'troppo_dura' ||
+           d.recupero === 'troppo_affaticato' || d.recupero === 'piu_dolorante';
+  }
+
+  const tlCards = [...allDocs].reverse().slice(0, 20).map(d => {
+    const isPost = d.tipo === 'post_seduta';
+    const isSett = d.tipo === 'check_settimanale';
+    const dolVal = d.intensitaDolore != null ? Number(d.intensitaDolore) : 0;
+    const alert  = _isAlert(d);
+
+    // Data
+    let dateStr = d.date || '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) { const p = dateStr.split('-'); dateStr = p[2]+'/'+p[1]; }
+    else if (/^\d{2}\/\d{2}/.test(dateStr)) { dateStr = dateStr.slice(0,5); }
+
+    // Tag tipo
+    const tipoTag = isPost
+      ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;">POST-SED.</span>`
+      : isSett
+      ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:#f3e5f5;color:#6a1b9a;border:1px solid #e1bee7;">SETTIM.</span>`
+      : `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:var(--surface2);color:var(--text3);border:1px solid var(--border);">FOLLOW-UP</span>`;
+
+    const diff = legacyPercezionePill(d);
+    const diffTag = diff ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:${diff.color}18;color:${diff.color};border:1px solid ${diff.color}33;">${diff.label}</span>` : '';
+    const alertBadge = alert ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:10px;background:#ffebee;color:#c62828;border:1px solid #ffcdd2;">⚠️ Alert</span>` : '';
+
+    // Metriche
+    const enV = d.energia != null ? Number(d.energia) : null;
+    const snV = d.sonno   != null ? Number(d.sonno)   : null;
+    const stV = d.stress  != null ? Number(d.stress)  : null;
+    const metricBits = [
+      enV != null ? `<span style="font-size:10px;color:var(--text3);">⚡ <b style="font-family:'DM Mono',monospace;color:${enV>=7?'#2e7d32':enV>=5?'#e65100':'#e53935'};">${enV}</b></span>` : '',
+      snV != null ? `<span style="font-size:10px;color:var(--text3);">😴 <b style="font-family:'DM Mono',monospace;color:${snV>=7?'#2e7d32':snV>=5?'#e65100':'#e53935'};">${snV}</b></span>` : '',
+      stV != null ? `<span style="font-size:10px;color:var(--text3);">😤 <b style="font-family:'DM Mono',monospace;color:${stV<=3?'#2e7d32':stV<=6?'#e65100':'#e53935'};">${stV}</b></span>` : '',
+      dolVal > 0  ? `<span style="font-size:10px;color:var(--text3);">🦴 <b style="font-family:'DM Mono',monospace;color:${dolVal<4?'#e65100':'#e53935'};">${dolVal}</b></span>` : '',
+    ].filter(Boolean).join('');
+
+    // Extra bits
+    const extraBits = [];
+    if (d.recupero) {
+      const recLabels = { meglio:'Recupero ottimo 💪', normale:'Recupero normale', stanco_normale:'Stanco (normale)', troppo_affaticato:'Troppo affaticato ⚠️', piu_dolorante:'Più dolorante ⚠️' };
+      extraBits.push(`<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:var(--surface2);color:var(--text3);">${recLabels[d.recupero] || d.recupero}</span>`);
+    }
+    if (dolVal > 0 && d.zoneDolorose?.length) {
+      d.zoneDolorose.slice(0,2).forEach(z => extraBits.push(`<span style="font-size:9px;padding:1px 6px;border-radius:9px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label||z}</span>`));
+    }
+    if (d.reazioneCorpo) {
+      const rcLabels = { molto_bene:'Corpo: ottimo', bene:'Corpo: bene', cosi_cosi:'Corpo: così così', con_fatica:'Corpo: fatica', male:'Corpo: male ⚠️' };
+      if (rcLabels[d.reazioneCorpo]) extraBits.push(`<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:var(--surface2);color:var(--text3);">${rcLabels[d.reazioneCorpo]}</span>`);
+    }
+    if (!isPost && d.esercizi) {
+      const exLabels = { tutti:'🏠 Esercizi: tutti', in_gran_parte:'🏠 Esercizi: in parte', solo_qualcuno:'🏠 Esercizi: pochi', no:'🏠 Esercizi: nessuno' };
+      const exColors = { tutti:'#2e7d32', in_gran_parte:'#1565c0', solo_qualcuno:'#e65100', no:'#c62828' };
+      const exBg2    = { tutti:'#e8f5e9', in_gran_parte:'#e3f2fd', solo_qualcuno:'#fff3e0', no:'#ffebee' };
+      const exKey = d.esercizi;
+      if (exLabels[exKey]) {
+        let exSpan = `<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:${exBg2[exKey]};color:${exColors[exKey]};border:1px solid ${exColors[exKey]}33;">${exLabels[exKey]}</span>`;
+        if ((exKey === 'solo_qualcuno' || exKey === 'no') && d.motivoEsercizi) {
+          const mLabels = { tempo:'(tempo)', dimenticato:'(dimenticato)', dolore:'(dolore)', non_capito:'(non capito)', altro:'(altro)' };
+          const mNote = mLabels[d.motivoEsercizi] || '';
+          if (mNote) exSpan += ` <span style="font-size:10px;color:var(--text3);">${mNote}</span>`;
+        }
+        extraBits.push(exSpan);
+      }
+    }
+
+    const noteText = (d.note || '').trim();
+    const cardCls = alert ? 'fu2-checkin-card fu2-alert' : isPost ? 'fu2-checkin-card fu2-post' : 'fu2-checkin-card fu2-sett';
+    return `
+      <div class="${cardCls}">
+        <div class="fu2-checkin-top">
+          <span class="fu2-checkin-date">${dateStr || '—'}</span>
+          ${tipoTag}${diffTag}${alertBadge}
+        </div>
+        <div class="fu2-checkin-metrics">${metricBits || '<span style="font-size:10px;color:var(--text3);">—</span>'}</div>
+        ${extraBits.length ? `<div class="fu2-checkin-extra">${extraBits.join('')}</div>` : ''}
+        ${noteText ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-top:5px;padding-top:5px;border-top:1px solid var(--border);line-height:1.45;">💬 ${noteText}</div>` : ''}
+      </div>`;
+  }).join('');
 
   panel.innerHTML = `
     <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;">
-
       <!-- Stato semaforo -->
       <div style="background:${bg};border-bottom:1px solid ${bdr};padding:10px 14px;display:flex;align-items:center;gap:10px;">
         <span style="font-size:18px;">${state.emoji}</span>
@@ -8676,11 +8757,10 @@ async function renderFollowupBuilderPanel(clientId, panel) {
         </div>
         <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);white-space:nowrap;">ultimo: ${lastLbl}</div>
       </div>
-
-      <!-- Timeline compatta -->
+      <!-- Timeline -->
       <div style="padding:10px 14px;">
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px;">📅 Ultimi check-in</div>
-        ${tlHtml}
+        ${tlCards || '<div style="font-size:12px;color:var(--text3);">Nessun check-in trovato.</div>'}
       </div>
     </div>`;
 }
