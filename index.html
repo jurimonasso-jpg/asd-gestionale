@@ -8652,10 +8652,14 @@ async function renderFollowupBuilderPanel(clientId, panel) {
 
   // Ultima data
   const lastRaw = docs[docs.length - 1];
-  const lastTs  = lastRaw?.timestamp || lastRaw?.date || null;
+  const lastTs  = lastRaw?.timestamp || null;
+  const lastDateStr = lastRaw?.date || lastRaw?.createdAt || '';
   let lastLbl = '—';
   if (lastTs) {
-    const d = new Date(typeof lastTs === 'number' ? lastTs : String(lastTs).slice(0, 10));
+    const d = new Date(typeof lastTs === 'number' ? lastTs : lastTs);
+    if (!isNaN(d)) lastLbl = d.toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
+  } else if (lastDateStr) {
+    const d = new Date(String(lastDateStr).slice(0, 10));
     if (!isNaN(d)) lastLbl = d.toLocaleDateString('it-IT', { day:'2-digit', month:'short' });
   }
 
@@ -8676,8 +8680,14 @@ async function renderFollowupBuilderPanel(clientId, panel) {
     const dolVal = d.intensitaDolore != null ? Number(d.intensitaDolore) : 0;
     const alert  = _isAlert(d);
 
-    // Data
-    let dateStr = d.date || '';
+    // Data — legge dal raw o dal timestamp
+    const rawDate = d._raw?.date || d._raw?.createdAt || d.date || '';
+    const rawTs   = d.timestamp || d._raw?.timestamp || null;
+    let dateStr = rawDate;
+    if (!dateStr && rawTs) {
+      const dd = new Date(typeof rawTs === 'number' ? rawTs : String(rawTs).slice(0,10));
+      if (!isNaN(dd)) dateStr = dd.toISOString().split('T')[0];
+    }
     if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) { const p = dateStr.split('-'); dateStr = p[2]+'/'+p[1]; }
     else if (/^\d{2}\/\d{2}/.test(dateStr)) { dateStr = dateStr.slice(0,5); }
 
