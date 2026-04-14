@@ -16000,22 +16000,42 @@ function calculateHealthScore(clientId) {
   const activeWeeks = Object.values(weekMap).filter(w => w.active);
   const fuSett = fuWin.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
 
+  // Compliance follow-up: 1 post + 1 sett per settimana = sufficiente (score 1.0)
+  // Solo 1 dei 2 = parziale (0.6), nessuno = silenzio (0.0)
+  // Il conteggio distingue post-seduta da settimanale per settimana
+  const weekMapPost = {}; // settimane con almeno 1 post-seduta
+  const weekMapSett = {}; // settimane con almeno 1 check settimanale
+  fuWin.forEach(f => {
+    const dateStr = f.date || (f.timestamp && typeof f.timestamp === 'number'
+      ? new Date(f.timestamp).toISOString().slice(0,10) : null);
+    if (!dateStr) return;
+    const wk = isoWeekKey(dateStr);
+    if (!wk) return;
+    if (f.tipo === 'post_seduta')       weekMapPost[wk] = true;
+    if (f.tipo === 'check_settimanale') weekMapSett[wk] = true;
+  });
+
+  let silenceScore = 1.0; // default: nessun dato = non penalizzare
   if (activeWeeks.length > 0) {
-    const weeksMet = activeWeeks.filter(w => w.fuCount >= 2).length;
-    const silencePct = weeksMet / activeWeeks.length;
+    const weekKeys = activeWeeks.map((_, i) => Object.keys(weekMap).filter(k => weekMap[k].active)[i]);
+    const activeKeys = Object.keys(weekMap).filter(k => weekMap[k].active);
+    const weekScores = activeKeys.map(wk => {
+      const hasPost = !!weekMapPost[wk];
+      const hasSett = !!weekMapSett[wk];
+      if (hasPost && hasSett) return 1.0;  // entrambi: perfetto
+      if (hasPost || hasSett) return 0.6;  // uno solo: parziale
+      return 0.0;                          // nessuno: silenzio
+    });
+    silenceScore = weekScores.reduce((a, b) => a + b, 0) / weekScores.length;
+  }
 
-    // Qualità esercizi: null se nessun check settimanale ancora (non penalizzare)
-    const exScore = fuSett.length > 0
-      ? fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length
-      : null;
-
-    // Se nessun check settimanale: valuta solo silenzio con peso pieno
-    const exPart = exScore !== null ? exScore : 0.7;
-    const weights = exScore !== null ? [0.6, 0.4] : [0.0, 1.0];
-    continuity = Math.round((exPart * weights[0] + silencePct * weights[1]) * 20);
-  } else if (fuSett.length > 0) {
-    const avgEx = fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length;
-    continuity = Math.round(avgEx * 20);
+  if (fuSett.length > 0) {
+    // Dati esercizi disponibili: 75% esercizi + 25% compliance FU
+    const exScore = fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length;
+    continuity = Math.round((exScore * 0.75 + silenceScore * 0.25) * 20);
+  } else if (activeWeeks.length > 0) {
+    // Nessun check settimanale ancora: valuta solo compliance FU
+    continuity = Math.round(silenceScore * 20);
   }
   // Se nessuna settimana attiva e nessun FU → rimane 20 (fallback neutro, cliente nuovo)
 
@@ -16027,7 +16047,9 @@ function calculateHealthScore(clientId) {
   else if (total >= 55) { color = '#e8820c'; label = 'Da monitorare'; }
   else                  { color = '#d63b3b'; label = 'Critico'; }
 
-  return { total, color, label, breakdown: { adherence, pain, recovery, continuity } };
+  // Salva silenceScore nel breakdown per uso in summary e popup
+  const silenceRound = Math.round(silenceScore * 100);
+  return { total, color, label, breakdown: { adherence, pain, recovery, continuity, silenceScore, silenceRound } };
 }
 
 // ── healthScoreSummary — frase riassuntiva leggibile ─────────────────
@@ -16058,12 +16080,19 @@ function healthScoreSummary(hs) {
   else if (recPct >= 0.35) parts.push('recupero basso');
   else                     parts.push('recupero critico');
 
-  // Continuità — distingue tra mancanza di follow-up e mancanza di esercizi
+  // Continuità — esercizi (priorità) + compliance follow-up (separati)
   if (cntPct < 0.99) {
-    if (cntPct >= 0.85)      parts.push('follow-up costanti');
-    else if (cntPct >= 0.55) parts.push('follow-up parziali');
-    else if (cntPct >= 0.20) parts.push('pochi follow-up');
-    else                     parts.push('follow-up assenti');
+    const exEstimate = b.continuity / 20 / 0.75;
+    if      (exEstimate >= 0.90) parts.push('esercizi costanti');
+    else if (exEstimate >= 0.65) parts.push('esercizi parziali');
+    else if (exEstimate >= 0.30) parts.push('pochi esercizi a casa');
+    else                         parts.push('esercizi non fatti');
+  }
+  // Follow-up compliance — frase separata solo se sotto soglia
+  if (b.silenceScore != null && b.silenceScore < 0.85) {
+    if      (b.silenceScore >= 0.60) parts.push('risposte incomplete');
+    else if (b.silenceScore >= 0.30) parts.push('pochi check-in inviati');
+    else                             parts.push('nessun check-in');
   }
 
   // Capitalizza prima lettera e unisci con separatori
@@ -16084,8 +16113,21 @@ function showHealthScoreBreakdown(clientId, triggerEl) {
     { label: 'Aderenza',   val: b.adherence,  max: 35, icon: '🏋️' },
     { label: 'Dolore',     val: b.pain,        max: 25, icon: '💢' },
     { label: 'Recupero',   val: b.recovery,    max: 20, icon: '⚡' },
-    { label: 'Continuità', val: b.continuity,  max: 20, icon: '🔄' },
+    { label: 'Esercizi casa', val: b.continuity, max: 20, icon: '🔄' },
   ];
+  // Riga follow-up separata (solo informativa, non contribuisce al totale)
+  const fuCompliancePct = b.silenceScore != null ? Math.round(b.silenceScore * 100) : null;
+  const fuComplianceRow = fuCompliancePct != null
+    ? `<div style="margin-bottom:8px;opacity:0.75;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+          <span style="font-size:11px;color:var(--text3);">📬 Check-in inviati</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);">${fuCompliancePct}%</span>
+        </div>
+        <div style="height:3px;background:var(--border);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${fuCompliancePct}%;background:${fuCompliancePct>=80?'#2e9e4f':fuCompliancePct>=50?'#f5a623':'#d63b3b'};border-radius:3px;"></div>
+        </div>
+      </div>`
+    : '';
 
   const rows = items.map(it => {
     const pct      = Math.round(it.val / it.max * 100);
@@ -16111,6 +16153,7 @@ function showHealthScoreBreakdown(clientId, triggerEl) {
     + '</div>'
     + '<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-bottom:12px;line-height:1.4;">' + summary + '</div>'
     + rows
+    + fuComplianceRow
     + '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;text-align:center;">Tocca fuori per chiudere</div>';
 
   document.body.appendChild(popup);
