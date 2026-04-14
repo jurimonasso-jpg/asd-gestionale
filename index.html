@@ -15852,10 +15852,14 @@ function calculateHealthScore(clientId) {
   const now = Date.now();
   const MS_30 = 30 * 24 * 3600 * 1000;
 
-  // Helper: timestamp da FU (ms unix oppure campo date stringa)
+  // Helper: timestamp ms da FU — gestisce numero, Firestore {seconds}, .toDate()
   function fuTs(fu) {
     if (!fu) return null;
-    if (fu.timestamp && fu.timestamp > 1000000) return fu.timestamp;
+    if (fu.timestamp) {
+      if (typeof fu.timestamp === 'number' && fu.timestamp > 1000000) return fu.timestamp;
+      if (typeof fu.timestamp.seconds === 'number') return fu.timestamp.seconds * 1000;
+      if (typeof fu.timestamp.toDate === 'function') return fu.timestamp.toDate().getTime();
+    }
     const d = fu.date || fu.createdAt;
     if (d) { try { return new Date(String(d).slice(0,10)).getTime(); } catch(e){} }
     return null;
@@ -15979,6 +15983,17 @@ function calculateHealthScore(clientId) {
     return mon.toISOString().slice(0, 10);
   }
 
+  // Helper: estrae dateStr (YYYY-MM-DD) da qualsiasi formato timestamp FU
+  function fuDateStr(f) {
+    if (f.date) return String(f.date).slice(0, 10);
+    if (f.timestamp) {
+      if (f.timestamp.toDate) return f.timestamp.toDate().toISOString().slice(0, 10);
+      if (typeof f.timestamp.seconds === 'number') return new Date(f.timestamp.seconds * 1000).toISOString().slice(0, 10);
+      if (typeof f.timestamp === 'number') return new Date(f.timestamp).toISOString().slice(0, 10);
+    }
+    return null;
+  }
+
   const weekMap = {};
   archiveWin.forEach(s => {
     const wk = isoWeekKey(s.date);
@@ -15988,10 +16003,9 @@ function calculateHealthScore(clientId) {
   });
 
   fuWin.forEach(f => {
-    const dateStr = f.date || (f.timestamp && typeof f.timestamp === 'number'
-      ? new Date(f.timestamp).toISOString().slice(0,10) : null);
-    if (!dateStr) return;
-    const wk = isoWeekKey(dateStr);
+    const ds = fuDateStr(f);
+    if (!ds) return;
+    const wk = isoWeekKey(ds);
     if (!wk) return;
     if (!weekMap[wk]) weekMap[wk] = { active: false, fuCount: 0 };
     weekMap[wk].fuCount++;
@@ -16000,16 +16014,14 @@ function calculateHealthScore(clientId) {
   const activeWeeks = Object.values(weekMap).filter(w => w.active);
   const fuSett = fuWin.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
 
-  // Compliance follow-up: 1 post + 1 sett per settimana = sufficiente (score 1.0)
-  // Solo 1 dei 2 = parziale (0.6), nessuno = silenzio (0.0)
-  // Il conteggio distingue post-seduta da settimanale per settimana
-  const weekMapPost = {}; // settimane con almeno 1 post-seduta
-  const weekMapSett = {}; // settimane con almeno 1 check settimanale
+  // Compliance: 1 post-seduta + 1 settimanale per settimana = pieno (1.0)
+  // Uno solo = parziale (0.6), nessuno = silenzio (0.0)
+  const weekMapPost = {};
+  const weekMapSett = {};
   fuWin.forEach(f => {
-    const dateStr = f.date || (f.timestamp && typeof f.timestamp === 'number'
-      ? new Date(f.timestamp).toISOString().slice(0,10) : null);
-    if (!dateStr) return;
-    const wk = isoWeekKey(dateStr);
+    const ds = fuDateStr(f);
+    if (!ds) return;
+    const wk = isoWeekKey(ds);
     if (!wk) return;
     if (f.tipo === 'post_seduta')       weekMapPost[wk] = true;
     if (f.tipo === 'check_settimanale') weekMapSett[wk] = true;
