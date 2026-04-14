@@ -99,6 +99,16 @@
 
   .pain-detail { margin-top: 18px; display: none; flex-direction: column; gap: 18px; }
   .pain-detail.visible { display: flex; }
+  .doms-block { display: none; margin-top: 14px; background: #f1f8f2; border: 1.5px solid #a5d6a7; border-radius: 10px; padding: 14px; }
+  .doms-block.visible { display: block; }
+  .doms-question { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+  .doms-hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.4; }
+  .doms-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .doms-btn { flex: 1; min-width: 120px; padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--border); background: var(--surface); font-size: 13px; font-weight: 600; font-family: 'Outfit', sans-serif; cursor: pointer; transition: all .18s; }
+  .doms-btn.sel-doms { background: #e8f5e9; border-color: #2e7d32; color: #2e7d32; }
+  .doms-btn.sel-nodoms { background: #ffebee; border-color: #c62828; color: #c62828; }
+  .doms-slider-block { margin-top: 14px; display: none; }
+  .doms-slider-block.visible { display: block; }
 
   .zone-category-label {
     font-family: 'DM Mono', monospace;
@@ -252,6 +262,25 @@
         <button class="chip-option" onclick="selectDolore('forte', this)" type="button">🔴 Più forte del solito</button>
       </div>
       <div class="pain-detail" id="painDetail">
+        <!-- DOMS check -->
+        <div class="doms-block visible" id="domsBlock">
+          <div class="doms-question">💪 È indolenzimento muscolare (DOMS)?</div>
+          <div class="doms-hint">Il classico dolore muscolare che compare 24–48h dopo l'allenamento — sano e normale.</div>
+          <div class="doms-btns">
+            <button class="doms-btn" onclick="selectDoms('solo', this)" type="button">✅ Sì, solo DOMS</button>
+            <button class="doms-btn" onclick="selectDoms('misto', this)" type="button">⚠️ Ho anche altro</button>
+            <button class="doms-btn" onclick="selectDoms('no', this)" type="button">❌ No, è altro</button>
+          </div>
+          <div class="doms-slider-block" id="domsSliderBlock">
+            <div class="section-label" style="margin-bottom:8px">Quanto è intenso l'indolenzimento? (1–10)</div>
+            <div class="zone-pain-val" id="domsVal">5</div>
+            <input type="range" min="1" max="10" value="5" class="pain-range" id="domsSlider"
+              oninput="updateDomsIntensita(this.value)">
+            <div class="slider-labels"><span>1 — Appena percettibile</span><span>10 — Molto intenso</span></div>
+          </div>
+        </div>
+        <!-- Zone body (visibili solo se non solo-DOMS) -->
+        <div id="zoneSection" style="display:none">
         <div>
           <div class="section-label" style="margin-bottom:10px">Dove hai sentito il dolore?</div>
           <div id="zoneContainer">
@@ -325,10 +354,9 @@
           </div>
         </div>
         <div id="painSlidersContainer"></div>
+        </div><!-- /zoneSection -->
       </div>
     </div>
-
-    <!-- Q3: SONNO -->
     <div class="card">
       <div class="section-label">03 — Sonno</div>
       <div class="question">Com'è stata la qualità del sonno questa settimana?</div>
@@ -525,15 +553,19 @@
     zone: {},
     sonno: 5,
     stress: 5,
-    esercizi: null,     // 'tutti'|'in_gran_parte'|'solo_qualcuno'|'no'
+    esercizi: null,
     motivoEsercizi: null,
     reazioneCorpo: null,
-    note: ''
+    note: '',
+    doms: null,         // 'solo'|'misto'|'no'
+    domsIntensita: 5
   };
 
   function updateProgress() {
-    const doloreOk = state.doloreGrado !== null &&
-      (state.doloreGrado === 'assente' || Object.keys(state.zone).length > 0);
+    const hasDolore = state.doloreGrado !== null && state.doloreGrado !== 'assente';
+    const domsOk = !hasDolore || state.doms !== null;
+    const zoneOk = !hasDolore || state.doms === 'solo' || Object.keys(state.zone).length > 0;
+    const doloreOk = state.doloreGrado !== null && domsOk && zoneOk;
     const motivoOk = state.esercizi === null || state.esercizi === 'tutti' || state.motivoEsercizi !== null;
     const allOk = doloreOk && state.esercizi !== null && motivoOk && state.reazioneCorpo !== null;
     document.getElementById('submitBtn').disabled = !allOk;
@@ -588,7 +620,6 @@
     document.querySelectorAll('.chip-list .chip-option').forEach(b => {
       b.classList.remove('sel-green', 'sel-yellow', 'sel-red', 'sel-blue');
     });
-    // Solo i chip del blocco dolore (Q2, primo chip-list nel DOM)
     const allDoloreChips = el.closest('.chip-list').querySelectorAll('.chip-option');
     allDoloreChips.forEach(b => b.classList.remove('sel-green', 'sel-yellow', 'sel-red', 'sel-blue'));
 
@@ -599,12 +630,43 @@
     const detail = document.getElementById('painDetail');
     if (hasDolore) {
       detail.classList.add('visible');
+      // reset doms
+      state.doms = null;
+      state.domsIntensita = 5;
+      document.querySelectorAll('.doms-btn').forEach(b => b.classList.remove('sel-doms','sel-nodoms'));
+      document.getElementById('domsSliderBlock').classList.remove('visible');
+      document.getElementById('zoneSection').style.display = 'none';
     } else {
       detail.classList.remove('visible');
       state.zone = {};
+      state.doms = null;
       document.querySelectorAll('.zone-chip').forEach(c => c.classList.remove('selected'));
       document.getElementById('painSlidersContainer').innerHTML = '';
     }
+    updateProgress();
+  }
+
+  function selectDoms(val, el) {
+    document.querySelectorAll('.doms-btn').forEach(b => b.classList.remove('sel-doms','sel-nodoms'));
+    state.doms = val;
+    if (val === 'solo') {
+      el.classList.add('sel-doms');
+      document.getElementById('domsSliderBlock').classList.add('visible');
+      document.getElementById('zoneSection').style.display = 'none';
+      state.zone = {};
+      document.querySelectorAll('.zone-chip').forEach(c => c.classList.remove('selected'));
+      document.getElementById('painSlidersContainer').innerHTML = '';
+    } else {
+      el.classList.add('sel-nodoms');
+      document.getElementById('domsSliderBlock').classList.remove('visible');
+      document.getElementById('zoneSection').style.display = 'block';
+    }
+    updateProgress();
+  }
+
+  function updateDomsIntensita(val) {
+    state.domsIntensita = parseInt(val);
+    document.getElementById('domsVal').textContent = val;
     updateProgress();
   }
 
@@ -680,20 +742,20 @@
       ? Math.round(zoneDolorose.reduce((s, z) => s + z.intensity, 0) / zoneDolorose.length)
       : null;
     await window._submitToFirebase({
-      // Nuovi campi v2
       doloreGrado: state.doloreGrado,
       motivoEsercizi: state.motivoEsercizi || null,
       reazioneCorpo: state.reazioneCorpo,
-      // Campi invariati
       energia: state.energia,
       sonno: state.sonno,
       stress: state.stress,
       esercizi: state.esercizi,
       note: state.note || null,
-      // Retrocompatibilità con vecchi record/letture nel gestionale
+      doms: hasDolore ? (state.doms === 'solo') : false,
+      domsMisto: hasDolore ? (state.doms === 'misto') : false,
+      domsIntensita: (hasDolore && state.doms === 'solo') ? state.domsIntensita : null,
       dolore: hasDolore,
-      zoneDolorose: hasDolore ? zoneDolorose : [],
-      intensitaDolore: hasDolore ? intensitaMedia : null,
+      zoneDolorose: (hasDolore && state.doms !== 'solo') ? zoneDolorose : [],
+      intensitaDolore: (hasDolore && state.doms !== 'solo') ? intensitaMedia : null,
     });
   }
 
