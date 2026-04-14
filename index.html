@@ -8632,8 +8632,7 @@ async function renderFollowupBuilderPanel(clientId, panel) {
       );
       const snap = await window._fsDocs(q);
       if (snap.docs.length) {
-        docs = snap.docs.map(d => d.data());
-        // Salva in localStorage così calculateHealthScore li trova senza Firebase
+        docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
         try { localStorage.setItem('followup_notes_' + clientId, JSON.stringify(docs)); } catch(_) {}
       }
     } catch(e) {}
@@ -14792,7 +14791,7 @@ async function renderFollowUpAlerts() {
       lsDocs
         .filter(d => (d.date || '') >= cutoffStr)
         .forEach(doc => {
-          const docId = doc.id || ('ls_' + c.id + '_' + (doc.date || ''));
+          const docId = doc._docId || doc.id || ('ls_' + c.id + '_' + (doc.date || ''));
           if (localStorage.getItem(_fuAlertReadKey(c.id, docId))) return;
           const analysis = _analyzeFollowup(doc, lastWorkout);
           if (!analysis) return;
@@ -14994,7 +14993,7 @@ async function loadFollowupCharts(clientId) {
       window._fsOrderBy('timestamp', 'asc')
     );
     const snap = await window._fsDocs(q);
-    const docs = snap.docs.map(d => d.data());
+    const docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
     try { localStorage.setItem('followup_notes_' + clientId, JSON.stringify(docs)); } catch(_) {}
 
     if (docs.length === 0) {
@@ -16984,7 +16983,7 @@ async function sbLoadFollowupBanner(clientId) {
       window._fsOrderBy('timestamp', 'asc')
     );
     const snap = await window._fsDocs(q);
-    docs = snap.docs.map(d => d.data());
+    docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
     try { localStorage.setItem('followup_notes_' + clientId, JSON.stringify(docs)); } catch(_) {}
   } catch(e) { return; }
 
@@ -17287,7 +17286,7 @@ async function wuLoadFollowupBanner(clientId) {
         window._fsOrderBy('timestamp', 'asc')
       );
       const snap = await window._fsDocs(q);
-      docs = snap.docs.map(d => d.data());
+      docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
       try { localStorage.setItem('followup_notes_' + clientId, JSON.stringify(docs)); } catch(_) {}
     }
   } catch(e) { /* silent */ }
@@ -17464,7 +17463,8 @@ renderWorkouts();
         );
         const snap = await window._fsDocs(q);
         if (snap.docs.length) {
-          const docs = snap.docs.map(d => d.data());
+          // Salva _docId con ogni record — serve per la marcatura "letto" degli alert
+          const docs = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
           localStorage.setItem('followup_notes_' + c.id, JSON.stringify(docs));
         }
       } catch(_) {}
