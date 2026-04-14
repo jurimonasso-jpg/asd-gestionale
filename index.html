@@ -15885,17 +15885,23 @@ function calculateHealthScore(clientId) {
   const fu30  = fuAll.filter(f => { const t = fuTs(f); return t != null && (now - t) <= MS_30; });
 
   // ── 4B: Dolore — max 25 ──────────────────────────────────────────
-  // Sorgenti in ordine di priorità:
-  //   1. campo 'dolore' numerico nei FU (scala 1–10, sempre presente se dolore riportato)
-  //   2. painStart dei workout recenti
-  //   3. painPoints del profilo cliente (fallback: dolori cronici noti)
-  //   4. nessuna fonte = 25 (nessun dolore noto)
+  // Fix bug: legge intensitaDolore (numerico 1-10) e doloreGrado (categorico)
+  // invece del vecchio campo 'dolore' che era un booleano
   let pain = 25;
 
-  const fuDoloreVals = fu30
-    .map(f => f.dolore ?? null)
-    .filter(v => v != null);
+  // 1. FU ultimi 30gg — usa intensitaDolore se disponibile, altrimenti mappa doloreGrado
+  const GRADO_TO_INT = { assente: 0, gestibile: 3, fastidioso: 5, spesso: 7, forte: 9 };
+  const fuDoloreVals = fu30.map(f => {
+    // DOMS puro: non conta come dolore problematico
+    if (f.doms === true) return 0;
+    if (f.intensitaDolore != null) return Number(f.intensitaDolore);
+    if (f.doloreGrado && f.doloreGrado !== 'assente') return GRADO_TO_INT[f.doloreGrado] ?? null;
+    if (f.dolore === true) return 5; // vecchi record booleani senza intensità: stima conservativa
+    if (f.dolore === false || f.dolore === 0) return 0;
+    return null;
+  }).filter(v => v !== null);
 
+  // 2. painStart delle sedute recenti (invariato)
   const recentWorkouts = (typeof workouts !== 'undefined' ? workouts : [])
     .filter(w => w.clientId == clientId && w.painStart?.length
       && w.createdAt && (now - new Date(w.createdAt).getTime()) <= MS_30);
@@ -15907,10 +15913,11 @@ function calculateHealthScore(clientId) {
 
   if (allPainVals.length > 0) {
     const avg = allPainVals.reduce((a, b) => a + b, 0) / allPainVals.length;
-    if      (avg <= 2) pain = 22;
-    else if (avg <= 4) pain = 16;
-    else if (avg <= 6) pain = 10;
-    else               pain = 5;
+    if      (avg <= 1) pain = 25;
+    else if (avg <= 3) pain = 20;
+    else if (avg <= 5) pain = 14;
+    else if (avg <= 7) pain = 8;
+    else               pain = 3;
   } else {
     // Nessun FU e nessun workout con dolore — guarda painPoints del profilo
     const client = (typeof clients !== 'undefined' ? clients : []).find(c => c.id == clientId);
@@ -15922,12 +15929,10 @@ function calculateHealthScore(clientId) {
       else if (avgPP <= 7) pain = 10;
       else                 pain = 5;
     }
-    // altrimenti rimane 25
+    // altrimenti rimane 25 — nessun dolore noto
   }
 
   // ── 4C: Recupero — max 20 ────────────────────────────────────────
-  // Legge energia + sonno + stress dai FU degli ultimi 30gg
-  // Fallback = 20 solo se davvero nessun FU disponibile
   let recovery = 20;
   const eVals  = fu30.map(f => f.energia).filter(v => v != null);
   const sVals  = fu30.map(f => f.sonno).filter(v => v != null);
@@ -15937,27 +15942,79 @@ function calculateHealthScore(clientId) {
     const avgE  = eVals.length  ? eVals.reduce((a,b)=>a+b,0)/eVals.length   : null;
     const avgS  = sVals.length  ? sVals.reduce((a,b)=>a+b,0)/sVals.length   : null;
     const avgSt = stVals.length ? stVals.reduce((a,b)=>a+b,0)/stVals.length : null;
-    // normalizzazione 1–10 → 0–1 (stress: invertito)
-    const eScore  = avgE  != null ? (avgE-1)/9       : 0.5;
-    const sScore  = avgS  != null ? (avgS-1)/9       : 0.5;
-    const stScore = avgSt != null ? 1-(avgSt-1)/9    : 0.5;
-    const wE = avgE != null ? 0.45 : 0;
-    const wS = avgS != null ? 0.35 : 0;
-    const wSt= avgSt!= null ? 0.20 : 0;
+    const eScore  = avgE  != null ? (avgE-1)/9    : 0.5;
+    const sScore  = avgS  != null ? (avgS-1)/9    : 0.5;
+    const stScore = avgSt != null ? 1-(avgSt-1)/9 : 0.5;
+    const wE = avgE  != null ? 0.45 : 0;
+    const wS = avgS  != null ? 0.35 : 0;
+    const wSt= avgSt != null ? 0.20 : 0;
     const wSum = (wE + wS + wSt) || 1;
     recovery = Math.round((eScore*wE + sScore*wS + stScore*wSt) / wSum * 20);
   }
 
   // ── 4D: Continuità — max 20 ──────────────────────────────────────
-  // Legge campo 'esercizi' dai check_settimanale degli ultimi 30gg
-  // Fallback = 20 solo se nessun check_settimanale disponibile
+  // Penalità silenzio: ogni settimana attiva (con almeno 1 seduta done/client)
+  // richiede minimo 2 FU. Settimane con sole festività o assenze mie non contano.
   const EX_SCORE = { 'tutti':1, 'in_gran_parte':0.7, 'in_parte':0.6, 'solo_qualcuno':0.35, 'no':0 };
   let continuity = 20;
+
+  // Calcola settimane attive negli ultimi 30gg
+  // Una settimana è "attiva" se ha almeno 1 seduta done o client (non holiday, non me)
+  const MS_WEEK = 7 * 24 * 3600 * 1000;
+  const archive30 = archive.filter(s => {
+    const d = new Date(s.date).getTime();
+    return !isNaN(d) && (now - d) <= MS_30;
+  });
+
+  // Raggruppa sessioni per settimana ISO (lun-dom)
+  function isoWeekKey(dateStr) {
+    const d = new Date(dateStr);
+    if (isNaN(d)) return null;
+    const day = d.getDay() || 7; // 1=lun, 7=dom
+    const mon = new Date(d); mon.setDate(d.getDate() - (day - 1));
+    return mon.toISOString().slice(0, 10);
+  }
+
+  const weekMap = {}; // { 'YYYY-MM-DD': { active: bool, fuCount: 0 } }
+  archive30.forEach(s => {
+    const wk = isoWeekKey(s.date);
+    if (!wk) return;
+    if (!weekMap[wk]) weekMap[wk] = { active: false, fuCount: 0 };
+    if (s.outcome === 'done' || s.outcome === 'client') weekMap[wk].active = true;
+  });
+
+  // Conta FU per settimana
+  fu30.forEach(f => {
+    const dateStr = f.date || (f.timestamp && typeof f.timestamp === 'number'
+      ? new Date(f.timestamp).toISOString().slice(0,10) : null);
+    if (!dateStr) return;
+    const wk = isoWeekKey(dateStr);
+    if (!wk) return;
+    if (!weekMap[wk]) weekMap[wk] = { active: false, fuCount: 0 };
+    weekMap[wk].fuCount++;
+  });
+
+  const activeWeeks = Object.values(weekMap).filter(w => w.active);
   const fuSett = fu30.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
-  if (fuSett.length > 0) {
+
+  if (activeWeeks.length > 0) {
+    // Penalità silenzio: proporzione settimane con >= 2 FU sul totale attive
+    const weeksMet = activeWeeks.filter(w => w.fuCount >= 2).length;
+    const silencePct = weeksMet / activeWeeks.length; // 1.0 = perfetto, 0 = silenzio totale
+
+    // Qualità esercizi dai check settimanali
+    const exScore = fuSett.length > 0
+      ? fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length
+      : 0.5; // neutro se nessun check settimanale ma ci sono altri FU
+
+    // Combina: 60% qualità esercizi, 40% compliance follow-up
+    continuity = Math.round((exScore * 0.6 + silencePct * 0.4) * 20);
+  } else if (fuSett.length > 0) {
+    // Nessuna settimana attiva tracciata ma ci sono FU — usa solo esercizi
     const avgEx = fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length;
     continuity = Math.round(avgEx * 20);
   }
+  // Se nessuna settimana attiva e nessun FU → rimane 20 (fallback neutro, cliente nuovo)
 
   // ── Totale e label ────────────────────────────────────────────────
   const total = Math.max(0, Math.min(100, adherence + pain + recovery + continuity));
