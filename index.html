@@ -8631,7 +8631,11 @@ async function renderFollowupBuilderPanel(clientId, panel) {
         window._fsOrderBy('timestamp', 'asc')
       );
       const snap = await window._fsDocs(q);
-      if (snap.docs.length) docs = snap.docs.map(d => d.data());
+      if (snap.docs.length) {
+        docs = snap.docs.map(d => d.data());
+        // Salva in localStorage così calculateHealthScore li trova senza Firebase
+        try { localStorage.setItem('followup_notes_' + clientId, JSON.stringify(docs)); } catch(_) {}
+      }
     } catch(e) {}
   }
 
@@ -14991,6 +14995,7 @@ async function loadFollowupCharts(clientId) {
     );
     const snap = await window._fsDocs(q);
     const docs = snap.docs.map(d => d.data());
+    try { localStorage.setItem('followup_notes_' + clientId, JSON.stringify(docs)); } catch(_) {}
 
     if (docs.length === 0) {
       container.innerHTML = '<div style="color:var(--text3);font-size:12px;font-family:DM Mono,monospace;padding:8px 0;">Nessun follow-up ricevuto ancora.</div>';
@@ -16978,6 +16983,7 @@ async function sbLoadFollowupBanner(clientId) {
     );
     const snap = await window._fsDocs(q);
     docs = snap.docs.map(d => d.data());
+    try { localStorage.setItem('followup_notes_' + clientId, JSON.stringify(docs)); } catch(_) {}
   } catch(e) { return; }
 
   if (!docs.length) return;
@@ -17280,6 +17286,7 @@ async function wuLoadFollowupBanner(clientId) {
       );
       const snap = await window._fsDocs(q);
       docs = snap.docs.map(d => d.data());
+      try { localStorage.setItem('followup_notes_' + clientId, JSON.stringify(docs)); } catch(_) {}
     }
   } catch(e) { /* silent */ }
 
@@ -17433,6 +17440,30 @@ async function wuLoadFollowupBanner(clientId) {
 renderDashboard();
 renderClients();
 renderWorkouts();
+
+// Pre-fetch FU da Firebase per tutti i clienti all'avvio
+// Così calculateHealthScore trova i dati in localStorage anche prima di aprire le schede
+(async function _prefetchAllFollowups() {
+  if (!window._db || !window._fsQuery || !window._fsCollection || !window._fsDocs || !window._fsWhere || !window._fsOrderBy) return;
+  try {
+    await Promise.all(clients.map(async c => {
+      try {
+        const q = window._fsQuery(
+          window._fsCollection(window._db, 'followups'),
+          window._fsWhere('clientId', '==', String(c.id)),
+          window._fsOrderBy('timestamp', 'asc')
+        );
+        const snap = await window._fsDocs(q);
+        if (snap.docs.length) {
+          const docs = snap.docs.map(d => d.data());
+          localStorage.setItem('followup_notes_' + c.id, JSON.stringify(docs));
+        }
+      } catch(_) {}
+    }));
+    // Ri-renderizza i clienti ora che i dati sono in localStorage
+    renderClients();
+  } catch(_) {}
+})();
 
 </script>
 
