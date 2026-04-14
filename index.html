@@ -15955,36 +15955,39 @@ function calculateHealthScore(clientId) {
   // ── 4D: Continuità — max 20 ──────────────────────────────────────
   // Penalità silenzio: ogni settimana attiva (con almeno 1 seduta done/client)
   // richiede minimo 2 FU. Settimane con sole festività o assenze mie non contano.
+  // Finestra dinamica: dall'inizio del rapporto se < 30gg, altrimenti 30gg.
   const EX_SCORE = { 'tutti':1, 'in_gran_parte':0.7, 'in_parte':0.6, 'solo_qualcuno':0.35, 'no':0 };
   let continuity = 20;
 
-  // Calcola settimane attive negli ultimi 30gg
-  // Una settimana è "attiva" se ha almeno 1 seduta done o client (non holiday, non me)
-  const MS_WEEK = 7 * 24 * 3600 * 1000;
-  const archive30 = archive.filter(s => {
+  // Finestra effettiva: dall'inizio del rapporto se < 30gg
+  const archiveSorted = [...archive].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const firstSessionTs = archiveSorted.length > 0 ? new Date(archiveSorted[0].date).getTime() : null;
+  const windowMs = firstSessionTs ? Math.min(MS_30, now - firstSessionTs + 86400000) : MS_30;
+
+  const archiveWin = archive.filter(s => {
     const d = new Date(s.date).getTime();
-    return !isNaN(d) && (now - d) <= MS_30;
+    return !isNaN(d) && (now - d) <= windowMs;
   });
+  const fuWin = fuAll.filter(f => { const t = fuTs(f); return t != null && (now - t) <= windowMs; });
 
   // Raggruppa sessioni per settimana ISO (lun-dom)
   function isoWeekKey(dateStr) {
     const d = new Date(dateStr);
     if (isNaN(d)) return null;
-    const day = d.getDay() || 7; // 1=lun, 7=dom
+    const day = d.getDay() || 7;
     const mon = new Date(d); mon.setDate(d.getDate() - (day - 1));
     return mon.toISOString().slice(0, 10);
   }
 
-  const weekMap = {}; // { 'YYYY-MM-DD': { active: bool, fuCount: 0 } }
-  archive30.forEach(s => {
+  const weekMap = {};
+  archiveWin.forEach(s => {
     const wk = isoWeekKey(s.date);
     if (!wk) return;
     if (!weekMap[wk]) weekMap[wk] = { active: false, fuCount: 0 };
     if (s.outcome === 'done' || s.outcome === 'client') weekMap[wk].active = true;
   });
 
-  // Conta FU per settimana
-  fu30.forEach(f => {
+  fuWin.forEach(f => {
     const dateStr = f.date || (f.timestamp && typeof f.timestamp === 'number'
       ? new Date(f.timestamp).toISOString().slice(0,10) : null);
     if (!dateStr) return;
@@ -15995,22 +15998,22 @@ function calculateHealthScore(clientId) {
   });
 
   const activeWeeks = Object.values(weekMap).filter(w => w.active);
-  const fuSett = fu30.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
+  const fuSett = fuWin.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
 
   if (activeWeeks.length > 0) {
-    // Penalità silenzio: proporzione settimane con >= 2 FU sul totale attive
     const weeksMet = activeWeeks.filter(w => w.fuCount >= 2).length;
-    const silencePct = weeksMet / activeWeeks.length; // 1.0 = perfetto, 0 = silenzio totale
+    const silencePct = weeksMet / activeWeeks.length;
 
-    // Qualità esercizi dai check settimanali
+    // Qualità esercizi: null se nessun check settimanale ancora (non penalizzare)
     const exScore = fuSett.length > 0
       ? fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length
-      : 0.5; // neutro se nessun check settimanale ma ci sono altri FU
+      : null;
 
-    // Combina: 60% qualità esercizi, 40% compliance follow-up
-    continuity = Math.round((exScore * 0.6 + silencePct * 0.4) * 20);
+    // Se nessun check settimanale: valuta solo silenzio con peso pieno
+    const exPart = exScore !== null ? exScore : 0.7;
+    const weights = exScore !== null ? [0.6, 0.4] : [0.0, 1.0];
+    continuity = Math.round((exPart * weights[0] + silencePct * weights[1]) * 20);
   } else if (fuSett.length > 0) {
-    // Nessuna settimana attiva tracciata ma ci sono FU — usa solo esercizi
     const avgEx = fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length;
     continuity = Math.round(avgEx * 20);
   }
@@ -16055,12 +16058,12 @@ function healthScoreSummary(hs) {
   else if (recPct >= 0.35) parts.push('recupero basso');
   else                     parts.push('recupero critico');
 
-  // Continuità esercizi — solo se il dato è significativo (non fallback pieno)
+  // Continuità — distingue tra mancanza di follow-up e mancanza di esercizi
   if (cntPct < 0.99) {
-    if (cntPct >= 0.85)      parts.push('esercizi costanti');
-    else if (cntPct >= 0.55) parts.push('esercizi parziali');
-    else if (cntPct >= 0.20) parts.push('pochi esercizi a casa');
-    else                     parts.push('nessun esercizio a casa');
+    if (cntPct >= 0.85)      parts.push('follow-up costanti');
+    else if (cntPct >= 0.55) parts.push('follow-up parziali');
+    else if (cntPct >= 0.20) parts.push('pochi follow-up');
+    else                     parts.push('follow-up assenti');
   }
 
   // Capitalizza prima lettera e unisci con separatori
