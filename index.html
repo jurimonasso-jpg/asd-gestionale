@@ -8720,7 +8720,16 @@ async function renderFollowupBuilderPanel(clientId, panel) {
       extraBits.push(`<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:var(--surface2);color:var(--text3);">${recLabels[d.recupero] || d.recupero}</span>`);
     }
     if (dolVal > 0 && d.zoneDolorose?.length) {
-      d.zoneDolorose.slice(0,2).forEach(z => extraBits.push(`<span style="font-size:9px;padding:1px 6px;border-radius:9px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label||z}</span>`));
+      const dgLabels = { gestibile:'gestibile', fastidioso:'fastidioso', spesso:'spesso', forte:'forte' };
+      const dgColors = { gestibile:'#e65100', fastidioso:'#e65100', spesso:'#c62828', forte:'#c62828' };
+      d.zoneDolorose.slice(0,3).forEach(z => {
+        const zLabel = z.label || z;
+        const zInt = z.intensity != null ? ` ${z.intensity}/10` : '';
+        extraBits.push(`<span style="font-size:9px;padding:1px 6px;border-radius:9px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${zLabel}${zInt}</span>`);
+      });
+      if (d.doloreGrado && d.doloreGrado !== 'assente' && dgLabels[d.doloreGrado]) {
+        extraBits.push(`<span style="font-size:9px;padding:1px 6px;border-radius:9px;background:#fff3e0;color:${dgColors[d.doloreGrado]||'#e65100'};border:1px solid ${dgColors[d.doloreGrado]||'#e65100'}33;">⚡ ${dgLabels[d.doloreGrado]}</span>`);
+      }
     }
     if (d.reazioneCorpo) {
       const rcLabels = { molto_bene:'Corpo: ottimo', bene:'Corpo: bene', cosi_cosi:'Corpo: così così', con_fatica:'Corpo: fatica', male:'Corpo: male ⚠️' };
@@ -8733,10 +8742,10 @@ async function renderFollowupBuilderPanel(clientId, panel) {
       const exKey = d.esercizi;
       if (exLabels[exKey]) {
         let exSpan = `<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:${exBg2[exKey]};color:${exColors[exKey]};border:1px solid ${exColors[exKey]}33;">${exLabels[exKey]}</span>`;
-        if ((exKey === 'solo_qualcuno' || exKey === 'no') && d.motivoEsercizi) {
-          const mLabels = { tempo:'(tempo)', dimenticato:'(dimenticato)', dolore:'(dolore)', non_capito:'(non capito)', altro:'(altro)' };
+        if (exKey !== 'tutti' && d.motivoEsercizi) {
+          const mLabels = { tempo:'tempo', dimenticato:'dimenticato', dolore:'dolore', non_capito:'non capito', altro:'altro' };
           const mNote = mLabels[d.motivoEsercizi] || '';
-          if (mNote) exSpan += ` <span style="font-size:10px;color:var(--text3);">${mNote}</span>`;
+          if (mNote) exSpan += ` <span style="font-size:10px;color:var(--text3);">(${mNote})</span>`;
         }
         extraBits.push(exSpan);
       }
@@ -15442,7 +15451,16 @@ async function loadFollowupCharts(clientId) {
           extraBits.push(`<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:var(--surface2);color:var(--text3);">${recLabels[d.recupero] || d.recupero}</span>`);
         }
         if (dolVal > 0 && d.zoneDolorose?.length) {
-          d.zoneDolorose.slice(0,2).forEach(z => extraBits.push(`<span style="font-size:9px;padding:1px 6px;border-radius:9px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${z.label||z}</span>`));
+          const dgLabels = { gestibile:'gestibile', fastidioso:'fastidioso', spesso:'spesso', forte:'forte' };
+          const dgColors = { gestibile:'#e65100', fastidioso:'#e65100', spesso:'#c62828', forte:'#c62828' };
+          d.zoneDolorose.slice(0,3).forEach(z => {
+            const zLabel = z.label || z;
+            const zInt = z.intensity != null ? ` ${z.intensity}/10` : '';
+            extraBits.push(`<span style="font-size:9px;padding:1px 6px;border-radius:9px;background:#fff5f5;color:#c62828;border:1px solid #ffcdd2;">📍 ${zLabel}${zInt}</span>`);
+          });
+          if (d.doloreGrado && d.doloreGrado !== 'assente' && dgLabels[d.doloreGrado]) {
+            extraBits.push(`<span style="font-size:9px;padding:1px 6px;border-radius:9px;background:#fff3e0;color:${dgColors[d.doloreGrado]||'#e65100'};border:1px solid ${dgColors[d.doloreGrado]||'#e65100'}33;">⚡ ${dgLabels[d.doloreGrado]}</span>`);
+          }
         }
         if (d.reazioneCorpo) {
           const rcLabels = { molto_bene:'Corpo: ottimo', bene:'Corpo: bene', cosi_cosi:'Corpo: così così', con_fatica:'Corpo: fatica', male:'Corpo: male ⚠️' };
@@ -15455,10 +15473,10 @@ async function loadFollowupCharts(clientId) {
           const exKey = d.esercizi;
           if (exLabels[exKey]) {
             let exSpan = `<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:${exBg[exKey]};color:${exColors[exKey]};border:1px solid ${exColors[exKey]}33;">${exLabels[exKey]}</span>`;
-            if ((exKey === 'solo_qualcuno' || exKey === 'no') && d.motivoEsercizi) {
-              const mLabels = { tempo:'(tempo)', dimenticato:'(dimenticato)', dolore:'(dolore)', non_capito:'(non capito)', altro:'(altro)' };
+            if (exKey !== 'tutti' && d.motivoEsercizi) {
+              const mLabels = { tempo:'tempo', dimenticato:'dimenticato', dolore:'dolore', non_capito:'non capito', altro:'altro' };
               const mNote = mLabels[d.motivoEsercizi] || '';
-              if (mNote) exSpan += ` <span style="font-size:10px;color:var(--text3);">${mNote}</span>`;
+              if (mNote) exSpan += ` <span style="font-size:10px;color:var(--text3);">(${mNote})</span>`;
             }
             extraBits.push(exSpan);
           }
