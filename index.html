@@ -15999,62 +15999,53 @@ function calculateHealthScore(clientId) {
     return null;
   }
 
-  const weekMap = {};
-  archiveWin.forEach(s => {
-    const wk = isoWeekKey(s.date);
-    if (!wk) return;
-    if (!weekMap[wk]) weekMap[wk] = { active: false, fuCount: 0 };
-    if (s.outcome === 'done' || s.outcome === 'client') weekMap[wk].active = true;
-  });
+  // Logica compliance FU: per ogni seduta attiva cerco se esiste almeno
+  // 1 post-seduta e 1 check-settimanale entro i 9 giorni successivi.
+  // Non si usa la settimana ISO — il FU della domenica copre la seduta del lunedì.
+  const MS_9D = 9 * 24 * 3600 * 1000;
 
-  fuWin.forEach(f => {
+  // Precomputa timestamp di ogni FU
+  const fuTimestamps = fuWin.map(f => {
     const ds = fuDateStr(f);
-    if (!ds) return;
-    const wk = isoWeekKey(ds);
-    if (!wk) return;
-    if (!weekMap[wk]) weekMap[wk] = { active: false, fuCount: 0 };
-    weekMap[wk].fuCount++;
-  });
+    return ds ? { ts: new Date(ds).getTime(), tipo: f.tipo } : null;
+  }).filter(Boolean);
 
-  const activeWeeks = Object.values(weekMap).filter(w => w.active);
-  const fuSett = fuWin.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
-
-  // Compliance: 1 post-seduta + 1 settimanale per settimana = pieno (1.0)
-  // Uno solo = parziale (0.6), nessuno = silenzio (0.0)
-  const weekMapPost = {};
-  const weekMapSett = {};
-  fuWin.forEach(f => {
-    const ds = fuDateStr(f);
-    if (!ds) return;
-    const wk = isoWeekKey(ds);
-    if (!wk) return;
-    if (f.tipo === 'post_seduta')       weekMapPost[wk] = true;
-    if (f.tipo === 'check_settimanale') weekMapSett[wk] = true;
-  });
+  // Sedute attive nella finestra (done o client)
+  const activeSessions = archiveWin.filter(s =>
+    (s.outcome === 'done' || s.outcome === 'client') && s.date
+  );
 
   let silenceScore = 1.0; // default: nessun dato = non penalizzare
-  if (activeWeeks.length > 0) {
-    const weekKeys = activeWeeks.map((_, i) => Object.keys(weekMap).filter(k => weekMap[k].active)[i]);
-    const activeKeys = Object.keys(weekMap).filter(k => weekMap[k].active);
-    const weekScores = activeKeys.map(wk => {
-      const hasPost = !!weekMapPost[wk];
-      const hasSett = !!weekMapSett[wk];
+  if (activeSessions.length > 0) {
+    const sessionScores = activeSessions.map(s => {
+      const sTs = new Date(s.date).getTime();
+      if (isNaN(sTs)) return 1.0; // data invalida, non penalizzare
+      // Finestra: dalla seduta ai 9 giorni successivi
+      const hasPost = fuTimestamps.some(f =>
+        f.tipo === 'post_seduta' && f.ts >= sTs && f.ts <= sTs + MS_9D
+      );
+      const hasSett = fuTimestamps.some(f =>
+        f.tipo === 'check_settimanale' && f.ts >= sTs && f.ts <= sTs + MS_9D
+      );
       if (hasPost && hasSett) return 1.0;  // entrambi: perfetto
-      if (hasPost || hasSett) return 0.6;  // uno solo: parziale
-      return 0.0;                          // nessuno: silenzio
+      if (hasPost || hasSett) return 0.7;  // uno solo: ok ma non completo
+      return 0.0;                          // nessuno: silenzio reale
     });
-    silenceScore = weekScores.reduce((a, b) => a + b, 0) / weekScores.length;
+    silenceScore = sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length;
   }
+
+  const activeWeeks = activeSessions.length; // usato solo per check esistenza dati
+  const fuSett = fuWin.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
 
   if (fuSett.length > 0) {
     // Dati esercizi disponibili: 75% esercizi + 25% compliance FU
     const exScore = fuSett.reduce((sum, f) => sum + (EX_SCORE[f.esercizi] ?? 0.35), 0) / fuSett.length;
     continuity = Math.round((exScore * 0.75 + silenceScore * 0.25) * 20);
-  } else if (activeWeeks.length > 0) {
+  } else if (activeWeeks > 0) {
     // Nessun check settimanale ancora: valuta solo compliance FU
     continuity = Math.round(silenceScore * 20);
   }
-  // Se nessuna settimana attiva e nessun FU → rimane 20 (fallback neutro, cliente nuovo)
+  // Se nessuna seduta attiva e nessun FU → rimane 20 (fallback neutro, cliente nuovo)
 
   // ── Totale e label ────────────────────────────────────────────────
   const total = Math.max(0, Math.min(100, adherence + pain + recovery + continuity));
