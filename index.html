@@ -15973,11 +15973,13 @@ function calculateHealthScore(clientId) {
   const firstSessionTs = archiveSorted.length > 0 ? new Date(archiveSorted[0].date).getTime() : null;
   const windowMs = firstSessionTs ? Math.min(MS_30, now - firstSessionTs + 86400000) : MS_30;
 
+  // archiveWin: sedute nella finestra dinamica (per clienti nuovi)
   const archiveWin = archive.filter(s => {
     const d = new Date(s.date).getTime();
     return !isNaN(d) && (now - d) <= windowMs;
   });
-  const fuWin = fuAll.filter(f => { const t = fuTs(f); return t != null && (now - t) <= windowMs; });
+  // fuWin: sempre ultimi 30gg fissi — i FU non vanno tagliati dalla finestra cliente
+  const fuWin = fuAll.filter(f => { const t = fuTs(f); return t != null && (now - t) <= MS_30; });
 
   // Raggruppa sessioni per settimana ISO (lun-dom)
   function isoWeekKey(dateStr) {
@@ -16005,37 +16007,46 @@ function calculateHealthScore(clientId) {
   const MS_9D = 9 * 24 * 3600 * 1000;
 
   // Precomputa timestamp di ogni FU
+  // Normalizza tipo: gestisce varianti legacy ('post_seduta', 'settimanale', ecc.)
+  function _normTipo(f) {
+    const t = f.tipo || '';
+    if (t === 'post_seduta' || t === 'post' || f.percezioneSeduta != null || f.seduta != null) return 'post_seduta';
+    if (t === 'check_settimanale' || t === 'settimanale' || t === 'weekly' || f.esercizi != null || f.stress != null) return 'check_settimanale';
+    return t;
+  }
   const fuTimestamps = fuWin.map(f => {
     const ds = fuDateStr(f);
-    return ds ? { ts: new Date(ds).getTime(), tipo: f.tipo } : null;
+    return ds ? { ts: new Date(ds).getTime(), tipo: _normTipo(f) } : null;
   }).filter(Boolean);
 
-  // Sedute attive nella finestra (done o client)
-  const activeSessions = archiveWin.filter(s =>
-    (s.outcome === 'done' || s.outcome === 'client') && s.date
-  );
+  // Sedute attive nella finestra (done o client).
+  // Esclude sedute degli ultimi 9 giorni: troppo presto per aspettarsi il FU.
+  const activeSessions = archiveWin.filter(s => {
+    if (!(s.outcome === 'done' || s.outcome === 'client') || !s.date) return false;
+    const sTs = new Date(s.date).getTime();
+    return !isNaN(sTs) && (now - sTs) > MS_9D;
+  });
 
   let silenceScore = 1.0; // default: nessun dato = non penalizzare
   if (activeSessions.length > 0) {
     const sessionScores = activeSessions.map(s => {
       const sTs = new Date(s.date).getTime();
-      if (isNaN(sTs)) return 1.0; // data invalida, non penalizzare
-      // Finestra: dalla seduta ai 9 giorni successivi
+      if (isNaN(sTs)) return 1.0;
       const hasPost = fuTimestamps.some(f =>
         f.tipo === 'post_seduta' && f.ts >= sTs && f.ts <= sTs + MS_9D
       );
       const hasSett = fuTimestamps.some(f =>
         f.tipo === 'check_settimanale' && f.ts >= sTs && f.ts <= sTs + MS_9D
       );
-      if (hasPost && hasSett) return 1.0;  // entrambi: perfetto
-      if (hasPost || hasSett) return 0.7;  // uno solo: ok ma non completo
-      return 0.0;                          // nessuno: silenzio reale
+      if (hasPost && hasSett) return 1.0;
+      if (hasPost || hasSett) return 0.7;
+      return 0.0;
     });
     silenceScore = sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length;
   }
 
   const activeWeeks = activeSessions.length; // usato solo per check esistenza dati
-  const fuSett = fuWin.filter(f => f.tipo === 'check_settimanale' && f.esercizi != null);
+  const fuSett = fuWin.filter(f => _normTipo(f) === 'check_settimanale' && f.esercizi != null);
 
   if (fuSett.length > 0) {
     // Dati esercizi disponibili: 75% esercizi + 25% compliance FU
@@ -17432,10 +17443,17 @@ renderDashboard();
 renderClients();
 renderWorkouts();
 
-// Pre-fetch FU da Firebase per tutti i clienti all'avvio
-// Così calculateHealthScore trova i dati in localStorage anche prima di aprire le schede
+// Pre-fetch FU da Firebase per tutti i clienti all'avvio.
+// Firebase è un modulo ES (asincrono) — aspetta che window._db sia pronto con retry.
 (async function _prefetchAllFollowups() {
+  // Attendi fino a 5 secondi che Firebase sia inizializzato
+  let waited = 0;
+  while ((!window._db || !window._fsDocs) && waited < 50) {
+    await new Promise(r => setTimeout(r, 100));
+    waited++;
+  }
   if (!window._db || !window._fsQuery || !window._fsCollection || !window._fsDocs || !window._fsWhere || !window._fsOrderBy) return;
+
   try {
     await Promise.all(clients.map(async c => {
       try {
@@ -17451,7 +17469,7 @@ renderWorkouts();
         }
       } catch(_) {}
     }));
-    // Ri-renderizza i clienti ora che i dati sono in localStorage
+    // Ri-renderizza ora che i dati sono in localStorage
     renderClients();
   } catch(_) {}
 })();
