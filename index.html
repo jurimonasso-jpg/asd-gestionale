@@ -8743,7 +8743,7 @@ async function renderFollowupBuilderPanel(clientId, panel) {
       if (exLabels[exKey]) {
         let exSpan = `<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:${exBg2[exKey]};color:${exColors[exKey]};border:1px solid ${exColors[exKey]}33;">${exLabels[exKey]}</span>`;
         if (exKey !== 'tutti' && d.motivoEsercizi) {
-          const mLabels = { tempo:'tempo', dimenticato:'dimenticato', dolore:'dolore', non_capito:'non capito', altro:'altro' };
+          const mLabels = { poco_tempo:'poco tempo', dimenticati:'dimenticato', stanchezza:'stanchezza', dolore:'dolore', non_sicuro:'non sicuro', no_voglia:'no voglia', tempo:'poco tempo', dimenticato:'dimenticato', non_capito:'non capito', altro:'altro' };
           const mNote = mLabels[d.motivoEsercizi] || '';
           if (mNote) exSpan += ` <span style="font-size:10px;color:var(--text3);">(${mNote})</span>`;
         }
@@ -15474,7 +15474,7 @@ async function loadFollowupCharts(clientId) {
           if (exLabels[exKey]) {
             let exSpan = `<span style="font-size:10px;padding:2px 7px;border-radius:9px;background:${exBg[exKey]};color:${exColors[exKey]};border:1px solid ${exColors[exKey]}33;">${exLabels[exKey]}</span>`;
             if (exKey !== 'tutti' && d.motivoEsercizi) {
-              const mLabels = { tempo:'tempo', dimenticato:'dimenticato', dolore:'dolore', non_capito:'non capito', altro:'altro' };
+              const mLabels = { poco_tempo:'poco tempo', dimenticati:'dimenticato', stanchezza:'stanchezza', dolore:'dolore', non_sicuro:'non sicuro', no_voglia:'no voglia', tempo:'poco tempo', dimenticato:'dimenticato', non_capito:'non capito', altro:'altro' };
               const mNote = mLabels[d.motivoEsercizi] || '';
               if (mNote) exSpan += ` <span style="font-size:10px;color:var(--text3);">(${mNote})</span>`;
             }
@@ -16932,7 +16932,7 @@ async function sbLoadFollowupBanner(clientId) {
     const ex = lastSettNorm.esercizi;
     let motivoStr = '';
     if ((ex === 'solo_qualcuno' || ex === 'no') && lastSettNorm.motivoEsercizi) {
-      const mLabels = { tempo:'tempo', dimenticato:'dimenticato', dolore:'dolore', non_capito:'non capito', altro:'altro' };
+      const mLabels = { poco_tempo:'poco tempo', dimenticati:'dimenticato', stanchezza:'stanchezza', dolore:'dolore', non_sicuro:'non sicuro', no_voglia:'no voglia', tempo:'poco tempo', dimenticato:'dimenticato', non_capito:'non capito', altro:'altro' };
       motivoStr = mLabels[lastSettNorm.motivoEsercizi] ? ` · <span style="font-size:10px;color:var(--text3);">${mLabels[lastSettNorm.motivoEsercizi]}</span>` : '';
     }
     extraExRow = `<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
