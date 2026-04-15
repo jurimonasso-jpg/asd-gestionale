@@ -12909,7 +12909,7 @@ function _aiGenerateProposta(clientId, client) {
   if (prudenzeExtra >= 1)
     avvisiCoach.push('ℹ️ Suggerimento precedente segnalato come sottostimato — sono stato più conservativo');
 
-  if (isSedutaDolori || (painAnalysis.hasPain && (fuDolore !== null && fuDolore >= 5))) {
+  if (isSedutaDolori) {
     return {
       tipo: 'dolori',
       client, painAnalysis, lastNote, fuTesto, fuDolore,
@@ -13183,48 +13183,58 @@ function _aiGenerateProposta(clientId, client) {
     return true;
   }
 
-  // Esercizi usati nelle ultime 4 sedute → evita ripetizioni, varia espressione del pattern
-  // Fonte: recentSedute (workouts salvati) — fonte reale usata dal PT, non exHistory
-  const recentExNames = new Set();
-  recentSedute.slice(0, 4).forEach(sed => {
-    (sed.blocchi || []).forEach(b => {
-      (b.esercizi || []).forEach(ex => {
-        if (ex.nome) recentExNames.add(ex.nome.trim().toLowerCase());
-      });
-    });
-  });
+  // ── Tecnica ok per seduta specifica ─────────────────────────────────
+  // Legge sia campo libero che guidato della nota — cerca segnali negativi in tutto il testo
+  function _notaHaProblemi(notaText) {
+    if (!notaText) return false;
+    const t = notaText.toLowerCase();
+    return /⚠️|compensaz|tecnica\s*da\s*lav|#compensazione|#tecnica-da-lavorare|#regressione|dolore|male|fastidio|problema/.test(t);
+  }
 
-  const usedInSession = new Set();
+  // Esercizi con tecnica ok nelle sedute recenti: assenti nelle ultime 2 → priorità A
+  // Presenti nella seduta 3 fa → priorità B (normale)
+  // Presenti nell'ultima seduta → fallback (rotazione)
+  const exInUlt1 = new Set(); // ultima seduta
+  const exInUlt2 = new Set(); // ultime 2 sedute
+  const exInUlt3 = new Set(); // ultime 3 sedute
+  recentSedute.slice(0, 1).forEach(sed => (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => { if (ex.nome) exInUlt1.add(ex.nome.trim().toLowerCase()); })));
+  recentSedute.slice(0, 2).forEach(sed => (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => { if (ex.nome) exInUlt2.add(ex.nome.trim().toLowerCase()); })));
+  recentSedute.slice(0, 3).forEach(sed => (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => { if (ex.nome) exInUlt3.add(ex.nome.trim().toLowerCase()); })));
 
-  // Esercizi TOLLERATI BENE di recente (sedute 5-8, fuori dalla finestra di rotazione)
-  // Priorità alta in pickEx: esercizi "rodati" ma non fatti nelle ultime 4 sedute
-  const tolleratiStoric = new Set();
-  recentSedute.slice(4, 8).forEach(sed => {
-    const n = sessionNotes.find(n => n.date === sed.createdAt?.split('T')[0]);
-    const hasProblem = (n?.text || '').match(/⚠️[^|]*(?:compensaz|ginocch|spalla|schiena|dolore)/i);
+  // Esercizi con tecnica ok: usati nelle ultime 8 sedute senza note problematiche
+  const tecnicaOkSet = new Set();
+  recentSedute.slice(0, 8).forEach(sed => {
+    const nota = sessionNotes.find(n => n.date === (sed.createdAt || '').split('T')[0]);
+    const hasProblem = _notaHaProblemi(nota?.text);
     if (!hasProblem) {
       (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => {
-        if (ex.nome) tolleratiStoric.add(ex.nome.trim().toLowerCase());
+        if (ex.nome) tecnicaOkSet.add(ex.nome.trim().toLowerCase());
       }));
     }
   });
 
+  const usedInSession = new Set();
+
+  // pickEx — priorità:
+  // A: tecnica ok + assente ultime 2 sedute (esercizi chiave pronti per riproposta)
+  // B: freschi (mai visti di recente) o in seduta 3 fa
+  // C: fallback (presenti nell'ultima seduta)
   function pickEx(pool, n) {
-    // Priorità: tollerati bene > freschi > già usati di recente
-    const tolleratiPool = [], freshPool = [], fallback = [];
+    const priA = [], priB = [], priC = [];
     const seen = new Set();
     pool.forEach(e => {
       if (!e || seen.has(e)) return;
       seen.add(e);
       const key = e.trim().toLowerCase();
-      if (usedInSession.has(key)) return; // mai ripetere nella stessa seduta
-      const isTollerato = tolleratiStoric.has(key);
-      const isFresh     = !recentExNames.has(key);
-      if (isTollerato && isFresh) tolleratiPool.push(e);
-      else if (isFresh)           freshPool.push(e);
-      else                        fallback.push(e);
+      if (usedInSession.has(key)) return;
+      const isChiave = tecnicaOkSet.has(key);
+      const inUlt2   = exInUlt2.has(key);
+      const inUlt1   = exInUlt1.has(key);
+      if (isChiave && !inUlt2) priA.push(e);       // chiave + fuori rotazione → priorità massima
+      else if (inUlt1)         priC.push(e);        // nell'ultima seduta → fallback
+      else                     priB.push(e);        // tutto il resto → normale
     });
-    const result = [...tolleratiPool, ...freshPool, ...fallback].filter(Boolean).slice(0, n);
+    const result = [...priA, ...priB, ...priC].filter(Boolean).slice(0, n);
     result.forEach(e => usedInSession.add(e.trim().toLowerCase()));
     return result;
   }
@@ -13331,24 +13341,15 @@ function _aiGenerateProposta(clientId, client) {
   // ══════════════════════════════════════════════════════════════
   const blocchi = [];
 
-  // ── MOBILITÀ — sempre presente ──────────────────────────────────────
-  const mobPool = [];
-  if (painZones.has('colonna')) mobPool.push('Cat Cow', 'Hip Hinge', 'T-Spine Rotation', 'Respirazione Diaframmatica');
-  if (painZones.has('spalla'))  mobPool.push('Attivazione Scapole', 'T-Spine Rotation', 'Pendolo Spalla', 'Wall Shrug');
-  if (painZones.has('anca'))    mobPool.push('Hip Hinge', 'Clam Shell', 'Piriforme Stretch', 'Bird Dog');
-  if (painZones.has('knee'))    mobPool.push('Ciclista', 'Foam Roll Quadricipiti', 'Leg Swing');
-  if (painZones.has('piede'))   mobPool.push('Tripod Foot', 'Short Foot', 'Ciclista');
-  if (mobPool.length < 3)      mobPool.push('Respirazione Diaframmatica','Cat Cow','Hip Hinge','T-Spine Rotation','Attivazione Scapole','Clam Shell','Bird Dog');
-  const mobExs = pickEx(mobPool, 3);
-
+  // ── MOBILITÀ — sempre "Mobilità e Attivazione Generale" ────────────
   blocchi.push({
     tipo: 'mobilita', rounds: '', pausaMode: 'no_pausa_fine',
     intervalOn: '40', intervalOff: '20',
-    note: mobPool.length > 3 ? 'Mobilità mirata su zone critiche' : 'Mobilità e attivazione',
-    esercizi: mobExs.map(nome => ({
-      nome, categoria: _getCatForEx(nome), stimolo: '', serie: '1', reps: '8-10',
-      kg: '', pausa: '', noteEx: '', prog: [{},{},{},{}]
-    }))
+    note: 'Mobilità e attivazione',
+    esercizi: [{
+      nome: 'Mobilità e Attivazione Generale', categoria: _getCatForEx('Mobilità e Attivazione Generale'),
+      stimolo: '', serie: '1', reps: '8-10', kg: '', pausa: '', noteEx: '', prog: [{},{},{},{}]
+    }]
   });
 
   // ── FASE 1 ───────────────────────────────────────────────────────────
@@ -13495,10 +13496,7 @@ function _aiGenerateProposta(clientId, client) {
 
   const fase2Exs = [...gambeEx, ...altoEx].filter(Boolean);
 
-  // Nota F2 con info pattern se bilanciamento attivo
-  const noteF2 = bilanciaPattern && patternMancante1 && altoPatternKeys.includes(patternMancante1.key)
-    ? `Schema motorio principale — priorità ${patternMancante1.label} (carente)`
-    : 'Schema motorio principale — controllo tecnico prima del carico';
+  const noteF2 = 'Schema motorio principale — controllo tecnico prima del carico';
 
   if (fase2Exs.length > 0) {
     blocchi.push({
@@ -13559,7 +13557,7 @@ function _aiGenerateProposta(clientId, client) {
     blocchi.push({
       tipo: 'fase3', rounds: roundsF3, pausaMode: 'no_pausa_fine',
       intervalOn: '40', intervalOff: '20',
-      note: 'Circuito finale — alterna pattern rispetto Fase 2' + (bilanciaPattern && patternMancante2 ? ` — priorità ${patternMancante2.label}` : recuperaTrascurato ? ` — recupera ${trascurato.label}` : ''),
+      note: 'Circuito finale — alterna pattern rispetto Fase 2',
       esercizi: fase3Exs.map(nome => {
         const { kg, noteEx } = suggestKgAndNote(nome);
         return { nome, categoria: _getCatForEx(nome), stimolo: '', serie: '', reps: repsF3, kg, pausa: '', noteEx, prog: [{},{},{},{}] };
