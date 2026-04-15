@@ -2288,6 +2288,22 @@ textarea.form-input {
 }
 .rep-pr-reps { opacity: .7; }
 .rep-pr-kg   { font-weight: 700; }
+
+/* ── Tecnica pill row ── */
+.tecnica-pill-row {
+  display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap;
+}
+.tecnica-pill {
+  flex: 1; min-width: 0;
+  font-family: 'Outfit', sans-serif; font-size: 10px; font-weight: 700;
+  padding: 5px 6px; border-radius: 8px; border: 1.5px solid var(--border);
+  background: transparent; color: var(--text3); cursor: pointer;
+  text-align: center; transition: all .15s; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.tecnica-pill.tp-ok.active    { background: var(--green-bg); border-color: #a5d6a7; color: var(--green); }
+.tecnica-pill.tp-wip.active   { background: var(--yellow-bg); border-color: #ffcc80; color: var(--yellow); }
+.tecnica-pill.tp-hard.active  { background: var(--red-bg); border-color: #ef9a9a; color: var(--red); }
 .rep-pr-new {
   font-family: 'DM Mono', monospace;
   font-size: 10px;
@@ -7748,7 +7764,12 @@ function renderEsercizioEditor(ex, bi, ei) {
       <input class="param-input" type="text" value="${ex.pausa||''}" placeholder="1'" oninput="updateEsercizio(${bi},${ei},'pausa',this.value)">
     </div>
   </div>
-  ${prHTML ? `<div id="rep-pr-${bi}-${ei}">${prHTML}</div>` : `<div id="rep-pr-${bi}-${ei}"></div>`}`;
+  ${prHTML ? `<div id="rep-pr-${bi}-${ei}">${prHTML}</div>` : `<div id="rep-pr-${bi}-${ei}"></div>`}
+  <div class="tecnica-pill-row">
+    <button class="tecnica-pill tp-ok${ex.tecnica==='ok'?' active':''}"  onclick="setTecnica(${bi},${ei},'ok')">✓ Tecnica ok</button>
+    <button class="tecnica-pill tp-wip${ex.tecnica==='wip'?' active':''}" onclick="setTecnica(${bi},${ei},'wip')">⚠ Da lavorare</button>
+    <button class="tecnica-pill tp-hard${ex.tecnica==='hard'?' active':''}" onclick="setTecnica(${bi},${ei},'hard')">✕ Troppo difficile</button>
+  </div>`;
 
   return `<div class="fase-ex-row" id="ex-${bi}-${ei}"
     ondragover="_sbExDragOver(event,${bi},${ei})"
@@ -7772,6 +7793,21 @@ function renderEsercizioEditor(ex, bi, ei) {
 function updateEsercizio(bi, ei, field, val) {
   if (schedaBlocchi[bi] && schedaBlocchi[bi].esercizi[ei]) {
     schedaBlocchi[bi].esercizi[ei][field] = val;
+  }
+}
+
+function setTecnica(bi, ei, val) {
+  const ex = schedaBlocchi[bi]?.esercizi[ei];
+  if (!ex) return;
+  // Toggle: se già selezionato, deseleziona
+  ex.tecnica = ex.tecnica === val ? '' : val;
+  // Aggiorna solo le pill senza re-render completo
+  const row = document.querySelector(`#ex-${bi}-${ei} .tecnica-pill-row`);
+  if (row) {
+    row.querySelectorAll('.tecnica-pill').forEach(btn => {
+      const t = btn.classList.contains('tp-ok') ? 'ok' : btn.classList.contains('tp-wip') ? 'wip' : 'hard';
+      btn.classList.toggle('active', ex.tecnica === t);
+    });
   }
 }
 
@@ -13191,34 +13227,55 @@ function _aiGenerateProposta(clientId, client) {
     return /⚠️|compensaz|tecnica\s*da\s*lav|#compensazione|#tecnica-da-lavorare|#regressione|dolore|male|fastidio|problema/.test(t);
   }
 
-  // Esercizi con tecnica ok nelle sedute recenti: assenti nelle ultime 2 → priorità A
-  // Presenti nella seduta 3 fa → priorità B (normale)
-  // Presenti nell'ultima seduta → fallback (rotazione)
-  const exInUlt1 = new Set(); // ultima seduta
-  const exInUlt2 = new Set(); // ultime 2 sedute
-  const exInUlt3 = new Set(); // ultime 3 sedute
+  // ── Set finestre rotazione ────────────────────────────────────────────
+  const exInUlt1 = new Set();
+  const exInUlt2 = new Set();
   recentSedute.slice(0, 1).forEach(sed => (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => { if (ex.nome) exInUlt1.add(ex.nome.trim().toLowerCase()); })));
   recentSedute.slice(0, 2).forEach(sed => (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => { if (ex.nome) exInUlt2.add(ex.nome.trim().toLowerCase()); })));
-  recentSedute.slice(0, 3).forEach(sed => (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => { if (ex.nome) exInUlt3.add(ex.nome.trim().toLowerCase()); })));
 
-  // Esercizi con tecnica ok: usati nelle ultime 8 sedute senza note problematiche
-  const tecnicaOkSet = new Set();
-  recentSedute.slice(0, 8).forEach(sed => {
+  // ── Mappe tecnica per-esercizio dalle ultime 8 sedute ───────────────
+  // Fonte primaria: campo ex.tecnica ('ok' / 'wip' / 'hard')
+  // Fallback (campo vuoto): lettura nota seduta — se nota pulita → ok
+  const tecnicaOkSet   = new Set(); // priorità A in pickEx
+  const tecnicaWipSet  = new Set(); // priorità B, blocca progressione carico
+  const tecnicaHardSet = new Set(); // escluso se < 3 sedute fa
+  const hardSedutaIdx  = {};        // key → indice prima occorrenza hard
+
+  recentSedute.slice(0, 8).forEach((sed, sedIdx) => {
     const nota = sessionNotes.find(n => n.date === (sed.createdAt || '').split('T')[0]);
-    const hasProblem = _notaHaProblemi(nota?.text);
-    if (!hasProblem) {
-      (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => {
-        if (ex.nome) tecnicaOkSet.add(ex.nome.trim().toLowerCase());
-      }));
-    }
+    const notaProblemi = _notaHaProblemi(nota?.text);
+    (sed.blocchi || []).forEach(b => (b.esercizi || []).forEach(ex => {
+      if (!ex.nome) return;
+      const key = ex.nome.trim().toLowerCase();
+      const t   = ex.tecnica || '';
+      if (t === 'ok') {
+        tecnicaOkSet.add(key);
+      } else if (t === 'hard') {
+        if (hardSedutaIdx[key] === undefined) hardSedutaIdx[key] = sedIdx;
+        tecnicaHardSet.add(key);
+      } else if (t === 'wip') {
+        tecnicaWipSet.add(key);
+      } else {
+        // Nessun campo compilato → fallback nota
+        if (!notaProblemi) tecnicaOkSet.add(key);
+      }
+    }));
   });
+
+  // Hard scade dopo 3 sedute
+  Object.entries(hardSedutaIdx).forEach(([key, idx]) => {
+    if (idx >= 3) tecnicaHardSet.delete(key);
+  });
+  // ok ha precedenza su wip
+  tecnicaOkSet.forEach(k => tecnicaWipSet.delete(k));
 
   const usedInSession = new Set();
 
   // pickEx — priorità:
-  // A: tecnica ok + assente ultime 2 sedute (esercizi chiave pronti per riproposta)
-  // B: freschi (mai visti di recente) o in seduta 3 fa
-  // C: fallback (presenti nell'ultima seduta)
+  // A: tecnica ok + assente ultime 2 sedute
+  // B: tutto il resto (fresco o in seduta 3+fa)
+  // C: presente nell'ultima seduta
+  // Esclusi: hard (< 3 sedute fa) e già usati in questa seduta
   function pickEx(pool, n) {
     const priA = [], priB = [], priC = [];
     const seen = new Set();
@@ -13227,12 +13284,13 @@ function _aiGenerateProposta(clientId, client) {
       seen.add(e);
       const key = e.trim().toLowerCase();
       if (usedInSession.has(key)) return;
-      const isChiave = tecnicaOkSet.has(key);
-      const inUlt2   = exInUlt2.has(key);
-      const inUlt1   = exInUlt1.has(key);
-      if (isChiave && !inUlt2) priA.push(e);       // chiave + fuori rotazione → priorità massima
-      else if (inUlt1)         priC.push(e);        // nell'ultima seduta → fallback
-      else                     priB.push(e);        // tutto il resto → normale
+      if (tecnicaHardSet.has(key)) return; // escluso
+      const isOk   = tecnicaOkSet.has(key);
+      const inUlt2 = exInUlt2.has(key);
+      const inUlt1 = exInUlt1.has(key);
+      if (isOk && !inUlt2) priA.push(e);
+      else if (inUlt1)     priC.push(e);
+      else                 priB.push(e);
     });
     const result = [...priA, ...priB, ...priC].filter(Boolean).slice(0, n);
     result.forEach(e => usedInSession.add(e.trim().toLowerCase()));
@@ -13245,7 +13303,10 @@ function _aiGenerateProposta(clientId, client) {
   function suggestKgAndNote(exName) {
     const h   = exHistory[exName.trim().toLowerCase()];
     const pr  = repPR[exName.trim().toLowerCase()];
-    const tec = isTecnicaOkPerEx(exName); // true / false / null
+    // Usa campo tecnica per-esercizio se disponibile, altrimenti fallback su isTecnicaOkPerEx
+    const key = exName.trim().toLowerCase();
+    const isWip  = tecnicaWipSet.has(key);
+    const tec = isWip ? false : isTecnicaOkPerEx(exName); // false blocca progressione carico
 
     if (!h) return { kg: '', noteEx: 'Prima volta — partiamo leggeri' };
 
