@@ -3636,7 +3636,7 @@ window.fbLoadFromCloud = async function() {
       </div>
       <div style="margin-top:10px;">
         <label class="form-label">Dolore Cronico (PRT)?</label>
-        <select class="form-input" id="c-prt" onchange="(function(v){['prt-traits-group','traumi-group'].forEach(id=>document.getElementById(id).style.display=v==='no'?'none':'block');})(this.value)">
+        <select class="form-input" id="c-prt" onchange="(function(v){['prt-traits-group','stress-group','traumi-group'].forEach(id=>document.getElementById(id).style.display=v==='no'?'none':'block');})(this.value)">
           <option value="no">No</option>
           <option value="sospetto">Sospetto</option>
           <option value="confermato">Confermato</option>
@@ -3692,7 +3692,11 @@ window.fbLoadFromCloud = async function() {
           </label>
         </div>
       </div>
-
+      <div class="form-group" id="stress-group" style="display:none;">
+        <label class="form-label">Stress attuale (1-10)</label>
+        <input class="form-input" type="range" id="c-stress" min="1" max="10" value="5" oninput="document.getElementById('stress-val').textContent = this.value">
+        <span id="stress-val" style="font-family:'DM Mono';font-size:12px;color:var(--accent);margin-left:8px;">5</span>
+      </div>
       <div class="form-group" id="traumi-group" style="display:none;">
         <label class="form-label">Traumi/eventi significativi</label>
         <textarea class="form-input" id="c-traumi" placeholder="Traumi emotivi, eventi stressanti della vita..."></textarea>
@@ -4718,7 +4722,9 @@ function openNewClientModal() {
   document.getElementById('pain-int-val').textContent = '5';
   document.getElementById('c-pain-when').value = 'movimento';
   document.getElementById('c-prt').value = 'no';
-  ['prt-traits-group','traumi-group'].forEach(id=>document.getElementById(id).style.display='none');
+  ['prt-traits-group','stress-group','traumi-group'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('c-stress').value = '5';
+  document.getElementById('stress-val').textContent = '5';
   document.querySelectorAll('#personality-traits input').forEach(cb => cb.checked = false);
   // Reset abbonamento
   const noneRadio = document.querySelector('input[name="abb-tipo"][value="none"]');
@@ -4759,6 +4765,7 @@ function saveClient() {
     activityPrev: document.getElementById('c-activity-prev').value,
     sports: document.getElementById('c-sports').value,
     traits,
+    stress: document.getElementById('c-stress').value,
     traumi: document.getElementById('c-traumi').value,
     // Abbonamento
     abbTipo: document.querySelector('input[name="abb-tipo"]:checked')?.value || 'none',
@@ -5467,12 +5474,14 @@ function editClient(id) {
   document.getElementById('c-pain-when').value = c.painWhen || 'movimento';
   document.getElementById('c-prt').value = c.prt || 'no';
   const isPrt = (c.prt === 'sospetto' || c.prt === 'confermato');
-  ['prt-traits-group','traumi-group'].forEach(id=>document.getElementById(id).style.display=isPrt?'block':'none');
+  ['prt-traits-group','stress-group','traumi-group'].forEach(id=>document.getElementById(id).style.display=isPrt?'block':'none');
   document.getElementById('c-ex-cliente').checked = c.exCliente || false;
   document.getElementById('c-sono-io').checked = c.sonoIo || false;
   document.getElementById('c-patologie').value = c.patologie || '';
   document.getElementById('c-farmaci').value = c.farmaci || '';
   document.getElementById('c-sports').value = c.sports || '';
+  document.getElementById('c-stress').value = c.stress || 5;
+  document.getElementById('stress-val').textContent = c.stress || 5;
   document.getElementById('c-traumi').value = c.traumi || '';
   document.querySelectorAll('#personality-traits input').forEach(cb => {
     cb.checked = c.traits?.includes(cb.value);
@@ -8182,6 +8191,7 @@ function setPainStato(clientId, label, stato) {
     p.dataRisoluzione = null;
   }
   save();
+  renderPainUpdateAlert();
   openClientDetail(clientId);
 }
 
@@ -8204,7 +8214,7 @@ function _syncStatoToProfile(clientId, statoMap) {
       changed = true;
     }
   }
-  if (changed) save();
+  if (changed) { save(); renderPainUpdateAlert(); }
 }
 
 // Write painStart to today's note (create if missing, update if exists)
