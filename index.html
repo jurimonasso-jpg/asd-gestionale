@@ -4014,8 +4014,6 @@ window.fbLoadFromCloud = async function() {
     <!-- Add block buttons -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
       <button class="btn btn-secondary" onclick="addBlocco('mobilita')">+ Mobilità</button>
-      <button class="btn btn-secondary" onclick="addBlocco('warmup')">+ Warm Up</button>
-      <button class="btn btn-secondary" onclick="addBlocco('core')">+ Core</button>
       <button class="btn btn-secondary" onclick="addBlocco('fase1')">+ Fase 1</button>
       <button class="btn btn-secondary" onclick="addBlocco('fase2')">+ Fase 2</button>
       <button class="btn btn-secondary" onclick="addBlocco('fase3')">+ Fase 3</button>
@@ -12288,8 +12286,6 @@ function openExistingSeduta(workout, clientId) {
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <button class="btn btn-secondary" onclick="addSedutaBlocco('mobilita')">+ Mobilità</button>
-        <button class="btn btn-secondary" onclick="addSedutaBlocco('warmup')">+ Warm Up</button>
-        <button class="btn btn-secondary" onclick="addSedutaBlocco('core')">+ Core</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase1')">+ Fase 1</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase2')">+ Fase 2</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase3')">+ Fase 3</button>
@@ -12570,8 +12566,6 @@ function newSedutaBuilder(prefillDate) {
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <button class="btn btn-secondary" onclick="addSedutaBlocco('mobilita')">+ Mobilità</button>
-        <button class="btn btn-secondary" onclick="addSedutaBlocco('warmup')">+ Warm Up</button>
-        <button class="btn btn-secondary" onclick="addSedutaBlocco('core')">+ Core</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase1')">+ Fase 1</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase2')">+ Fase 2</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase3')">+ Fase 3</button>
@@ -13688,7 +13682,8 @@ function _getCatForEx(nome) {
 // Restituisce: { tipiPrincipali, nEserciziTarget, nExPerBlocco, bloccoTarget, haMobilita }
 function _aiAnalizzaStruttura(clientId) {
   const sedute = workouts
-    .filter(w => w.clientId == clientId && w.categoria === 'seduta')
+    .filter(w => w.clientId == clientId && w.categoria === 'seduta'
+      && (w.blocchi || []).some(b => (b.esercizi || []).length > 0))
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     .slice(0, 8);
 
