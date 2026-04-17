@@ -4014,8 +4014,6 @@ window.fbLoadFromCloud = async function() {
     <!-- Add block buttons -->
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
       <button class="btn btn-secondary" onclick="addBlocco('mobilita')">+ Mobilità</button>
-      <button class="btn btn-secondary" onclick="addBlocco('warmup')">+ Warm Up</button>
-      <button class="btn btn-secondary" onclick="addBlocco('core')">+ Core</button>
       <button class="btn btn-secondary" onclick="addBlocco('fase1')">+ Fase 1</button>
       <button class="btn btn-secondary" onclick="addBlocco('fase2')">+ Fase 2</button>
       <button class="btn btn-secondary" onclick="addBlocco('fase3')">+ Fase 3</button>
@@ -7422,7 +7420,7 @@ function renderBloccoEditor(b, i) {
           <option value="triset" ${b.pausaMode==='triset'?'selected':''}>Triset</option>
         </select>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex:1;">
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
         <span class="round-config-label">Note</span>
         <input class="round-config-input" style="width:100%;flex:1;" type="text" value="${b.note}" placeholder="Es. no pausa tra esercizi" oninput="schedaBlocchi[${i}].note=this.value">
       </div>
@@ -12289,8 +12287,6 @@ function openExistingSeduta(workout, clientId) {
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <button class="btn btn-secondary" onclick="addSedutaBlocco('mobilita')">+ Mobilità</button>
-        <button class="btn btn-secondary" onclick="addSedutaBlocco('warmup')">+ Warm Up</button>
-        <button class="btn btn-secondary" onclick="addSedutaBlocco('core')">+ Core</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase1')">+ Fase 1</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase2')">+ Fase 2</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase3')">+ Fase 3</button>
@@ -12571,8 +12567,6 @@ function newSedutaBuilder(prefillDate) {
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <button class="btn btn-secondary" onclick="addSedutaBlocco('mobilita')">+ Mobilità</button>
-        <button class="btn btn-secondary" onclick="addSedutaBlocco('warmup')">+ Warm Up</button>
-        <button class="btn btn-secondary" onclick="addSedutaBlocco('core')">+ Core</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase1')">+ Fase 1</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase2')">+ Fase 2</button>
         <button class="btn btn-secondary" onclick="addSedutaBlocco('fase3')">+ Fase 3</button>
@@ -14170,6 +14164,13 @@ function _parseKgField(kgStr) {
     if (!isNaN(secs) && secs > 0) return { tipo: 'tempo', val: secs };
   }
 
+  // Formato bilaterale: "4+4", "10+10" — usa il primo valore per il PR
+  const bilateralKgMatch = s.match(/^(\d+(?:[.,]\d+)?)\+(\d+(?:[.,]\d+)?)$/);
+  if (bilateralKgMatch) {
+    const v = parseFloat(bilateralKgMatch[1].replace(',', '.'));
+    if (!isNaN(v) && v > 0) return { tipo: 'kg', val: v, isBilateral: true };
+  }
+
   // Carichi di avvicinamento / ramping: "20-24-32", "24-32-32" ecc.
   // Prende il valore MASSIMO tra tutti i segmenti numerici separati da trattino
   if (/^[\d.,]+(-[\d.,]+)+$/.test(s)) {
@@ -14197,6 +14198,12 @@ function _parseKgValue(kgStr) {
 function _parseRepsValue(repsStr) {
   if (!repsStr) return [];
   const s = String(repsStr).trim();
+  // Formato bilaterale: "10+10" → prende il primo valore
+  const bilateralMatch = s.match(/^(\d+)\+(\d+)$/);
+  if (bilateralMatch) {
+    const v = parseInt(bilateralMatch[1]);
+    return v > 0 ? [v] : [];
+  }
   const rangeMatch = s.match(/^(\d+)[-\/](\d+)$/);
   if (rangeMatch) {
     const lo = parseInt(rangeMatch[1]);
@@ -14357,6 +14364,12 @@ function buildRepPRBadgeHTML(clientId, exName, currentReps, currentKg) {
   const parsedReps = _parseRepsValue(currentReps || '');
   const unit       = (prs[0]?.tipo === 'trecce' || parsed.tipo === 'trecce') ? 't' : 'kg';
 
+  // Determina se reps e kg sono in formato bilaterale per il display
+  const repsStr = String(currentReps || '');
+  const kgStr   = String(currentKg || '');
+  const isBilReps = /^\d+\+\d+$/.test(repsStr.trim());
+  const isBilKg   = /^\d+(\.\d+)?\+\d+(\.\d+)?$/.test(kgStr.trim());
+
   const isNewPR = parsedReps.length && parsed.val !== null && parsedReps.some(r => {
     const existing = prs.find(p => p.reps === r);
     return !existing || parsed.val > existing.val;
@@ -14382,8 +14395,11 @@ function buildRepPRBadgeHTML(clientId, exName, currentReps, currentKg) {
   const pills = shown.map(p => {
     const isActive = parsedReps.includes(p.reps);
     const isBeat   = isActive && parsed.val !== null && parsed.val > p.val;
+    // Se sia reps che kg sono bilaterali, mostra "10+10×4+4kg"
+    const repsLabel = (isActive && isBilReps) ? repsStr.trim() : `${p.reps}`;
+    const kgLabel   = (isActive && isBilKg)   ? `${kgStr.trim()}${unit}` : `${p.val}${unit}`;
     return `<span class="rep-pr-pill${isBeat ? ' rep-pr-beat' : isActive ? ' rep-pr-active' : ''}">
-      <span style="display:flex;align-items:center;gap:2px;"><span class="rep-pr-reps">${p.reps}×</span><span class="rep-pr-kg">${p.val}${unit}</span></span>
+      <span style="display:flex;align-items:center;gap:2px;"><span class="rep-pr-reps">${repsLabel}×</span><span class="rep-pr-kg">${kgLabel}</span></span>
       ${p.date ? `<span style="font-size:8px;color:var(--text3);line-height:1;">${p.date}</span>` : ''}
     </span>`;
   }).join('');
