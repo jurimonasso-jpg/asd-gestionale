@@ -10628,6 +10628,27 @@ function _statsGetClientExpected(client, bounds, skippedByClient) {
   return Math.max(Math.round(weeklyFreq * weeksActive) - notClientFault, 0);
 }
 
+// Calcola lezioni perse nette: attese − fatte, per cliente e totale.
+// "Perse" = slot erogabili non coperti da una seduta effettuata.
+// Colpa cliente conta come persa; colpa mia e festività NON contano (già escluse da _statsGetClientExpected).
+function _statsNetLost(curSedute, bounds, skippedCur, allFilteredClients) {
+  let totalExpected = 0, totalDone = 0;
+  const byClient = [];
+  allFilteredClients.filter(c => !c.sonoIo).forEach(c => {
+    const weeksActive = _statsWeeksActive(c, bounds.start, bounds.end);
+    if (weeksActive === 0) return;
+    const expected = _statsGetClientExpected(c, bounds, skippedCur.byClient);
+    if (expected === 0) return;
+    const done = curSedute.filter(w => w.clientId === c.id).length;
+    const lost = Math.max(expected - done, 0);
+    totalExpected += expected;
+    totalDone += done;
+    byClient.push({ id: c.id, name: `${c.nome} ${c.cognome}`, expected, done, lost });
+  });
+  const totalLost = Math.max(totalExpected - totalDone, 0);
+  return { totalExpected, totalDone, totalLost, byClient };
+}
+
 function _statsGetPainZones(sedute) {
   const zoneFreq = {};
   sedute.filter(w => w.painStart?.length).forEach(w => {
@@ -10801,6 +10822,13 @@ function renderStats() {
   const allFilteredClients = clients.filter(c => !c.sonoIo && (!clientId || c.id == clientId));
   const alerts = _statsGenerateAlerts(curSedute, prevSedute, bounds, allFilteredClients, skippedCur);
 
+  // KPI: lezioni perse nette
+  const netLost = _statsNetLost(curSedute, bounds, skippedCur, allFilteredClients);
+  const prevNetLost = _statsNetLost(prevSedute, { start: bounds.prevStart, end: bounds.prevEnd }, skippedPrev, allFilteredClients);
+  const netLostDiff = prevNetLost.totalLost > 0 || netLost.totalLost > 0 ? netLost.totalLost - prevNetLost.totalLost : null;
+  const netLostDiffColor = netLostDiff === null ? 'var(--text3)' : netLostDiff <= 0 ? 'var(--green)' : 'var(--red)';
+  const netLostColor = netLost.totalLost === 0 ? 'var(--green)' : netLost.totalLost <= 3 ? 'var(--yellow)' : 'var(--accent)';
+
   // Frequenza per cliente — solo clienti attivi nel periodo (sessionStart <= bounds.end)
   const byClientMap = {};
   allFilteredClients.forEach(c => {
@@ -10910,6 +10938,25 @@ function renderStats() {
     </div>
   </div>`;
 
+  // Card 5: Lezioni perse nette (full width)
+  html += `<div style="${cardStyle};grid-column:1/-1;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+      <div>
+        <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Lezioni perse nette</div>
+        <div style="font-size:36px;font-weight:800;color:${netLostColor};line-height:1;">${netLost.totalLost}</div>
+        <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">
+          <div style="${mono};font-size:10px;color:var(--text3);">${netLost.totalDone} fatte su ${netLost.totalExpected} attese</div>
+          ${netLostDiff !== null ? `<div style="${mono};font-size:10px;color:${netLostDiffColor};">${netLostDiff >= 0 ? '+' : ''}${netLostDiff} vs prec. (${prevNetLost.totalLost})</div>` : ''}
+        </div>
+      </div>
+      ${netLost.byClient.filter(r => r.lost > 0).length > 0 ? `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;max-width:60%;">
+        ${netLost.byClient.filter(r => r.lost > 0).sort((a,b) => b.lost - a.lost).map(r =>
+          `<span style="${mono};font-size:9px;padding:2px 7px;border-radius:10px;background:var(--red-bg);color:var(--red);border:1px solid rgba(229,57,53,0.2);" title="${r.done}/${r.expected} fatte">${r.name.split(' ')[0]} −${r.lost}</span>`
+        ).join('')}
+      </div>` : `<div style="${mono};font-size:11px;color:var(--green);font-weight:700;">✓ Nessuna lezione persa</div>`}
+    </div>
+  </div>`;
+
   html += `</div>`;
 
   // ── GRAFICO + ALERT ──
@@ -10999,6 +11046,12 @@ function renderStats() {
               ${sk.fest > 0   ? `<span style="color:var(--accent2);">🎉 fest.: ${sk.fest}</span>` : ''}
              </div>` : '';
 
+        // Lezioni perse nette per questo cliente
+        const clientNetRow = netLost.byClient.find(r => r.id === data.id);
+        const lostPill = clientNetRow && clientNetRow.lost > 0
+          ? `<span style="${mono};font-size:9px;padding:2px 6px;border-radius:4px;background:var(--red-bg);color:var(--red);border:1px solid rgba(229,57,53,0.2);" title="Lezioni attese non effettuate">−${clientNetRow.lost}</span>`
+          : '';
+
         return `<div style="margin-bottom:14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
             <div style="display:flex;align-items:center;gap:6px;">
@@ -11009,6 +11062,7 @@ function renderStats() {
             </div>
             <div style="display:flex;align-items:center;gap:6px;">
               ${hasExpected ? `<span style="${mono};font-size:10px;color:var(--text3);">${data.sedute}/${data.expected}</span>` : `<span style="${mono};font-size:10px;color:var(--text3);">${data.sedute} sed.</span>`}
+              ${lostPill}
               ${badge ? `<span style="${mono};font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;${badgeStyle}">${badge}</span>` : ''}
             </div>
           </div>
@@ -11021,6 +11075,64 @@ function renderStats() {
     </div>`;
   } else {
     html += `<div style="${cardStyle};text-align:center;padding:32px;color:var(--text3);">Nessuna seduta nel periodo selezionato</div>`;
+  }
+
+  // ── TABELLA ANNUALE PER CLIENTE (solo vista 1 anno) ──
+  if (_statsView === '1y' && netLost.byClient.length > 0) {
+    const annRows = netLost.byClient
+      .filter(r => r.expected > 0)
+      .sort((a, b) => b.lost - a.lost);
+
+    const rowsHtml = annRows.map(r => {
+      const pct = Math.min(Math.round(r.done / r.expected * 100), 100);
+      const pctColor = pct >= 90 ? 'var(--green)' : pct >= 70 ? '#e65100' : 'var(--accent)';
+      const lostColor = r.lost === 0 ? 'var(--green)' : r.lost <= 3 ? '#e65100' : 'var(--accent)';
+      const sk = skippedCur.byClient[r.id] || {};
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px 6px;font-size:12px;font-weight:700;">${r.name}</td>
+        <td style="${mono};font-size:11px;text-align:center;padding:8px 6px;">${r.expected}</td>
+        <td style="${mono};font-size:11px;text-align:center;padding:8px 6px;color:var(--green);font-weight:700;">${r.done}</td>
+        <td style="${mono};font-size:11px;text-align:center;padding:8px 6px;color:${lostColor};font-weight:700;">${r.lost > 0 ? '−' + r.lost : '✓'}</td>
+        <td style="${mono};font-size:11px;text-align:center;padding:8px 6px;">
+          <span style="color:${pctColor};font-weight:700;">${pct}%</span>
+        </td>
+        <td style="${mono};font-size:10px;padding:8px 6px;color:var(--text3);">
+          ${sk.client > 0 ? `<span style="color:var(--accent);">✕${sk.client}</span> ` : ''}${sk.me > 0 ? `<span style="color:var(--yellow);">○${sk.me}</span> ` : ''}${sk.fest > 0 ? `<span>🎉${sk.fest}</span>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+
+    const totalPct = netLost.totalExpected > 0 ? Math.min(Math.round(netLost.totalDone / netLost.totalExpected * 100), 100) : 0;
+    const totalPctColor = totalPct >= 90 ? 'var(--green)' : totalPct >= 70 ? '#e65100' : 'var(--accent)';
+
+    html += `<div style="${cardStyle};margin-bottom:16px;">
+      <div style="${mono};font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">📋 Report annuale per cliente</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);">
+              <th style="text-align:left;padding:6px 6px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Cliente</th>
+              <th style="text-align:center;padding:6px 6px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Attese</th>
+              <th style="text-align:center;padding:6px 6px;font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Fatte</th>
+              <th style="text-align:center;padding:6px 6px;font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Perse</th>
+              <th style="text-align:center;padding:6px 6px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Aderenza</th>
+              <th style="text-align:left;padding:6px 6px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Cancellaz.</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot>
+            <tr style="border-top:2px solid var(--border);background:var(--surface2);">
+              <td style="padding:8px 6px;font-size:12px;font-weight:800;">TOTALE</td>
+              <td style="${mono};font-size:11px;text-align:center;padding:8px 6px;font-weight:800;">${netLost.totalExpected}</td>
+              <td style="${mono};font-size:11px;text-align:center;padding:8px 6px;color:var(--green);font-weight:800;">${netLost.totalDone}</td>
+              <td style="${mono};font-size:11px;text-align:center;padding:8px 6px;color:${netLost.totalLost === 0 ? 'var(--green)' : 'var(--accent)'};font-weight:800;">${netLost.totalLost > 0 ? '−' + netLost.totalLost : '✓'}</td>
+              <td style="${mono};font-size:11px;text-align:center;padding:8px 6px;color:${totalPctColor};font-weight:800;">${totalPct}%</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>`;
   }
 
   container.innerHTML = html;
