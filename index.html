@@ -371,6 +371,10 @@ body {
 /* Tasto "Altro" nascosto su desktop, visibile solo su mobile via media query */
 .nav-item-altro { display: none; }
 
+/* Drawer "Altro" e overlay: nascosti di default, visibili solo su mobile */
+#altro-drawer { display: none; }
+#altro-drawer-overlay { display: none; }
+
 .sidebar-footer {
   margin-top: auto;
   padding: 16px;
@@ -2416,7 +2420,7 @@ textarea.form-input {
   .sidebar-logo { display: none; }
   .sidebar-footer { display: none; }
   /* Le sezioni spariscono come box — i tasti si distribuiscono direttamente nella sidebar */
-  .nav-section {
+  .sidebar > .nav-section {
     display: contents;
   }
   .nav-label { display: none; }
