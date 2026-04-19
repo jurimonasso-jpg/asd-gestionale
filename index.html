@@ -2415,25 +2415,19 @@ textarea.form-input {
   }
   .sidebar-logo { display: none; }
   .sidebar-footer { display: none; }
+  /* Le sezioni spariscono come box — i tasti si distribuiscono direttamente nella sidebar */
   .nav-section {
-    display: flex;
-    flex-direction: row;
-    flex: 1;
-    padding: 0;
-    gap: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
+    display: contents;
   }
-  .nav-section::-webkit-scrollbar { display: none; }
   .nav-label { display: none; }
   .nav-item {
+    flex: 1;
     flex-direction: column;
     gap: 4px;
-    padding: 10px 4px 12px;
+    padding: 10px 2px 12px;
     font-size: 10px;
     font-weight: 600;
     min-width: 0;
-    flex: 1;
     justify-content: center;
     align-items: center;
     text-align: center;
