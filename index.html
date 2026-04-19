@@ -228,7 +228,11 @@
 .fu-alert-row {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.04);
+  border-radius: 6px; margin: 0 -6px; padding-left: 6px; padding-right: 6px;
+  transition: background 0.15s;
 }
+.fu-alert-row:hover { background: rgba(0,0,0,0.04); }
+.fu-alert-row:active { background: rgba(0,0,0,0.08); }
 .fu-alert-row:last-child { border-bottom: none; }
 .fu-alert-avatar {
   width: 28px; height: 28px; border-radius: 50%;
@@ -15133,7 +15137,7 @@ async function renderFollowUpAlerts() {
         const waUrl = (telClean ? 'https://wa.me/' + telClean : 'https://wa.me/') + '?text=' + encodeURIComponent(waMsg);
         const pillsHTML = signals.map(s => `<span class="fu-alert-pill ${s.pill}">${s.label}</span>`).join('');
         return `
-          <div class="fu-alert-row">
+          <div class="fu-alert-row" style="cursor:pointer;" onclick="showPage('clients');openClientDetail(${c.id})">
             <div class="fu-alert-avatar">${initials.toUpperCase()}</div>
             <div class="fu-alert-info">
               <div class="fu-alert-name">${c.nome} ${c.cognome} <span style="font-family:'DM Mono';font-size:9px;color:var(--text3);font-weight:400;">${tipoLabel} · ${dateLabel}</span></div>
