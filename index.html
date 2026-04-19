@@ -368,6 +368,9 @@ body {
 .nav-item.active { background: #fff0f0; color: var(--accent); border-left: 3px solid var(--accent); font-weight: 700; }
 .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
 
+/* Tasto "Altro" nascosto su desktop, visibile solo su mobile via media query */
+.nav-item-altro { display: none; }
+
 .sidebar-footer {
   margin-top: auto;
   padding: 16px;
@@ -2425,33 +2428,97 @@ textarea.form-input {
   .nav-label { display: none; }
   .nav-item {
     flex-direction: column;
-    gap: 3px;
-    padding: 8px 6px 10px;
+    gap: 4px;
+    padding: 10px 4px 12px;
     font-size: 10px;
     font-weight: 600;
-    min-width: 56px;
+    min-width: 0;
     flex: 1;
     justify-content: center;
     align-items: center;
     text-align: center;
     border-left: none !important;
     border-radius: 0;
-    border-top: 2px solid transparent;
+    border-top: 3px solid transparent;
   }
   .nav-item.active {
     border-left: none !important;
-    border-top: 2px solid var(--accent);
+    border-top: 3px solid var(--accent);
     color: var(--accent);
     background: transparent;
   }
-  .nav-item .icon { font-size: 20px; width: auto; }
-  .nav-item span:not(.icon) { font-size: 9px; letter-spacing: 0; }
+  .nav-item .icon { font-size: 22px; width: auto; }
+  .nav-item span:not(.icon) { font-size: 10px; letter-spacing: 0; font-weight: 700; }
+
+  /* Nasconde le voci che vanno in "Altro" nella bottom bar mobile */
+  .sidebar .nav-item.mobile-hidden { display: none; }
+
+  /* Drawer "Altro" */
+  #altro-drawer {
+    display: none;
+    position: fixed;
+    bottom: 64px;
+    left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.13);
+    z-index: 400;
+    padding: 12px 8px 20px;
+    flex-direction: column;
+    gap: 4px;
+  }
+  #altro-drawer.open { display: flex; }
+  #altro-drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.18);
+    z-index: 399;
+  }
+  #altro-drawer-overlay.open { display: block; }
+  .altro-drawer-handle {
+    width: 36px; height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    margin: 0 auto 14px;
+  }
+  .altro-drawer-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--text3);
+    text-transform: uppercase;
+    padding: 0 8px;
+    margin-bottom: 6px;
+  }
+  .altro-drawer-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text2);
+    transition: background 0.15s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: 'Outfit', sans-serif;
+  }
+  .altro-drawer-item:active { background: var(--surface2); }
+  .altro-drawer-item .icon { font-size: 22px; width: 28px; text-align: center; }
+  /* Tasto Altro visibile solo su mobile (già dentro @media 640px) */
+  .nav-item-altro { display: flex; }
 
   /* Sync popup mobile */
   #sync-popup {
     display: none;
     position: fixed;
-    bottom: 64px;
+    bottom: 76px;
     right: 8px;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -3075,11 +3142,11 @@ window.fbLoadFromCloud = async function() {
       <span class="icon">👤</span>
       <span>Clienti</span>
     </button>
-    <button class="nav-item" onclick="showPage('workouts')">
+    <button class="nav-item mobile-hidden" onclick="showPage('workouts')">
       <span class="icon">🏋️</span>
       <span>Allenamenti</span>
     </button>
-    <button class="nav-item" onclick="showPage('catalog')">
+    <button class="nav-item mobile-hidden" onclick="showPage('catalog')">
       <span class="icon">📚</span>
       <span>Catalogo</span>
     </button>
@@ -3089,13 +3156,13 @@ window.fbLoadFromCloud = async function() {
     <div class="nav-label">Strumenti</div>
     <button class="nav-item" onclick="showPage('agenda')">
       <span class="icon">🗓</span>
-      <span>Agenda Oggi</span>
+      <span>Agenda</span>
     </button>
-    <button class="nav-item" onclick="showPage('tests')">
+    <button class="nav-item mobile-hidden" onclick="showPage('tests')">
       <span class="icon">🔬</span>
       <span>Test & Valutazione</span>
     </button>
-    <button class="nav-item" onclick="showPage('percorso')">
+    <button class="nav-item mobile-hidden" onclick="showPage('percorso')">
       <span class="icon">🗺️</span>
       <span>Percorso Fit</span>
     </button>
@@ -3107,6 +3174,11 @@ window.fbLoadFromCloud = async function() {
       <span class="icon">💾</span>
       <span>Dati</span>
     </button>
+    <!-- Tasto "Altro" visibile solo su mobile -->
+    <button class="nav-item nav-item-altro" onclick="toggleAltroDrawer(event)" id="altro-nav-btn">
+      <span class="icon">⋯</span>
+      <span>Altro</span>
+    </button>
   </div>
 
   <div class="sidebar-footer">
@@ -3117,6 +3189,29 @@ window.fbLoadFromCloud = async function() {
 
   </div>
 </nav>
+
+<!-- DRAWER "ALTRO" (mobile only) -->
+<div id="altro-drawer-overlay" onclick="closeAltroDrawer()"></div>
+<div id="altro-drawer" role="dialog" aria-modal="true">
+  <div class="altro-drawer-handle"></div>
+  <div class="altro-drawer-title">Sezioni aggiuntive</div>
+  <button class="altro-drawer-item" onclick="closeAltroDrawer(); showPage('workouts')">
+    <span class="icon">🏋️</span>
+    <span>Allenamenti</span>
+  </button>
+  <button class="altro-drawer-item" onclick="closeAltroDrawer(); showPage('catalog')">
+    <span class="icon">📚</span>
+    <span>Catalogo Esercizi</span>
+  </button>
+  <button class="altro-drawer-item" onclick="closeAltroDrawer(); showPage('tests')">
+    <span class="icon">🔬</span>
+    <span>Test & Valutazione</span>
+  </button>
+  <button class="altro-drawer-item" onclick="closeAltroDrawer(); showPage('percorso')">
+    <span class="icon">🗺️</span>
+    <span>Percorso Fit</span>
+  </button>
+</div>
 
 <!-- MAIN -->
 <main class="main">
@@ -4673,7 +4768,9 @@ function showPage(pageId) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pg = document.getElementById('page-' + pageId);
   if (pg) pg.classList.add('active');
-  const navMap = { dashboard: 0, clients: 1, workouts: 2, catalog: 3, agenda: 4, tests: 5, percorso: 6, seduta: 7, stats: 8 };
+  // Mobile nav order: dashboard(0), clients(1), [workouts(2) hidden], [catalog(3) hidden], agenda(4), [tests(5) hidden], [percorso(6) hidden], stats(7), sync(8), altro(9)
+  // Desktop nav order is the same as before for sidebar; active highlight uses querySelectorAll index
+  const navMap = { dashboard: 0, clients: 1, workouts: 2, catalog: 3, agenda: 4, tests: 5, percorso: 6, seduta: 7, stats: 7, dati: 8 };
   const navItems = document.querySelectorAll('.nav-item');
   if (navMap[pageId] !== undefined && navItems[navMap[pageId]]) navItems[navMap[pageId]].classList.add('active');
   if (pageId === 'dashboard') renderDashboard();
@@ -4685,6 +4782,25 @@ function showPage(pageId) {
   if (pageId === 'percorso') { populatePercorsoSelect && populatePercorsoSelect(); renderPercorso && renderPercorso(); }
   if (pageId === 'seduta') { populateSedutaSelect && populateSedutaSelect(); renderSedutaSetup && renderSedutaSetup(); }
   if (pageId === 'stats') { populateStatsFilter(); renderStats(); }
+}
+
+function toggleAltroDrawer(e) {
+  if (e) e.stopPropagation();
+  const drawer = document.getElementById('altro-drawer');
+  const overlay = document.getElementById('altro-drawer-overlay');
+  const isOpen = drawer.classList.contains('open');
+  if (isOpen) {
+    drawer.classList.remove('open');
+    overlay.classList.remove('open');
+  } else {
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+  }
+}
+
+function closeAltroDrawer() {
+  document.getElementById('altro-drawer').classList.remove('open');
+  document.getElementById('altro-drawer-overlay').classList.remove('open');
 }
 
 // ===================================================
