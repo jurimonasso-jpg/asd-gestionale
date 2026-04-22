@@ -3336,6 +3336,9 @@ window.fbLoadFromCloud = async function() {
     <!-- DOLORI CRONICI DA AGGIORNARE -->
     <div id="pain-update-alert-banner" style="display:none;margin-bottom:12px;"></div>
 
+    <!-- COMPLEANNI IMMINENTI -->
+    <div id="bday-alert-banner" style="display:none;margin-bottom:12px;"></div>
+
     <!-- AGENDA OGGI + DOMANI -->
     <div style="margin-bottom:20px;">
       <div class="dash-section-header">
@@ -11398,6 +11401,29 @@ function renderDashboard() {
   if (bdayNamesEl) bdayNamesEl.innerHTML = bdayList.length
     ? bdayList.map(({c,days}) => `<span style="display:block;margin-top:2px;">${c.nome} ${c.cognome} ${days===0?'— oggi! 🎉':'— tra '+days+'gg'}</span>`).join('')
     : '';
+  // Banner compleanni dashboard
+  const bdayBanner = document.getElementById('bday-alert-banner');
+  if (bdayBanner) {
+    if (bdayList.length > 0) {
+      bdayBanner.style.display = 'block';
+      bdayBanner.innerHTML = `<div style="background:rgba(255,212,71,0.08);border:1.5px solid rgba(255,212,71,0.35);border-radius:var(--radius);padding:12px 16px;">
+        <div style="font-family:'DM Mono';font-size:10px;color:var(--yellow);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">🎂 Compleanni imminenti</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${bdayList.map(({c, days}) => {
+            const dob = new Date(c.dob);
+            const eta = new Date().getFullYear() - dob.getFullYear();
+            const label = days === 0 ? `🎉 oggi! ${eta} anni` : days === 1 ? `domani · ${eta} anni` : `${days}gg · ${eta} anni`;
+            return `<div onclick="openClientDetail(${c.id})" style="cursor:pointer;background:var(--surface);border:1px solid rgba(255,212,71,0.35);border-radius:8px;padding:5px 12px;font-size:12px;">
+              <b>${c.nome} ${c.cognome}</b>
+              <span style="font-family:'DM Mono';font-size:10px;color:var(--yellow);margin-left:8px;">${label}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    } else {
+      bdayBanner.style.display = 'none';
+    }
+  }
 
   // ── 4. ZONE DOLORE PIÙ FREQUENTI ─────────────────────────────────────────
   const zoneFreq = {};
