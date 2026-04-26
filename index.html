@@ -9662,7 +9662,7 @@ function renderAgendaDay() {
 
   // Collect all sessions for this day
   const fixedClients = clients
-    .filter(c => c.schedule?.some(s => s.giorno === dayName))
+    .filter(c => !c.sonoIo && !c.exCliente && c.schedule?.some(s => s.giorno === dayName))
     .map(c => ({ client: c, orario: c.schedule.find(s => s.giorno === dayName)?.orario || '00:00', manual: false, session: null }));
 
   const manualSessions = getManualSessions().filter(s => s.date === dayStr);
@@ -9838,6 +9838,7 @@ function renderAgenda() {
 
   // Scadenze urgenti (always shown at top)
   const urgenti = clients.filter(c => {
+    if (c.sonoIo || c.exCliente) return false;
     const d = abbDaysLeft(c);
     return d !== null && d >= 0 && d <= 7;
   }).sort((a,b) => abbDaysLeft(a) - abbDaysLeft(b));
@@ -9861,6 +9862,7 @@ function renderAgenda() {
 
   // Compleanni imminenti (entro 7 giorni)
   const compleanni = clients
+    .filter(c => !c.sonoIo && !c.exCliente)
     .map(c => ({ c, days: birthdayDaysLeft(c) }))
     .filter(({ days }) => days !== null && days >= 0 && days <= 7)
     .sort((a,b) => a.days - b.days);
@@ -9892,7 +9894,7 @@ function renderAgenda() {
 
     // Clients scheduled this day (fixed schedule)
     const dayClients = clients
-      .filter(c => c.schedule?.some(s => s.giorno === dayName))
+      .filter(c => !c.sonoIo && !c.exCliente && c.schedule?.some(s => s.giorno === dayName))
       .map(c => ({ client: c, orario: c.schedule.find(s => s.giorno === dayName)?.orario || '00:00', manual: false }))
 
     // Manual sessions this day
@@ -11612,13 +11614,13 @@ function renderDashboard() {
     const tomorrowName = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][tomorrowD.getDay()];
 
     function buildDayClients(dayName, dateStr) {
-      const fixed = clients.filter(c => !c.sonoIo && c.schedule?.some(s => s.giorno === dayName)).map(c => {
+      const fixed = clients.filter(c => !c.sonoIo && !c.exCliente && c.schedule?.some(s => s.giorno === dayName)).map(c => {
         const slot = c.schedule.find(s => s.giorno === dayName);
         return { client: c, orario: slot?.orario || '00:00' };
       });
       const manual = getManualSessions().filter(s => s.date === dateStr).map(s => {
         const c = clients.find(cl => cl.id == s.clientId);
-        return (c && !c.sonoIo) ? { client: c, orario: s.orario || '00:00' } : null;
+        return (c && !c.sonoIo && !c.exCliente) ? { client: c, orario: s.orario || '00:00' } : null;
       }).filter(Boolean);
       return [...fixed, ...manual].sort((a, b) => a.orario.localeCompare(b.orario));
     }
