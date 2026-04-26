@@ -7109,7 +7109,7 @@ function renderPainHistory(clientId) {
 
 
 function updateClientCount() {
-  const countable = clients.filter(c => !c.sonoIo);
+  const countable = clients.filter(c => !c.sonoIo && !c.exCliente);
   document.getElementById('totalClients').textContent = countable.length;
   document.getElementById('dash-clients').textContent = countable.length;
 }
