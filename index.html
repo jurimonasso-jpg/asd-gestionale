@@ -17986,7 +17986,16 @@ document.addEventListener('click', function(e) {
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for (var reg of registrations) { reg.unregister(); }
+    var hadActive = registrations.length > 0;
+    var unregPromises = registrations.map(function(reg) { return reg.unregister(); });
+    if (hadActive) {
+      Promise.all(unregPromises).then(function() {
+        // SW era attivo: ricarica per assicurarsi che non intercetti più nulla
+        if (navigator.serviceWorker.controller) {
+          window.location.reload();
+        }
+      });
+    }
   });
 }
 </script>
