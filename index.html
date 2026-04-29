@@ -9662,7 +9662,7 @@ function renderAgendaDay() {
 
   // Collect all sessions for this day
   const fixedClients = clients
-    .filter(c => !c.sonoIo && !c.exCliente && c.schedule?.some(s => s.giorno === dayName))
+    .filter(c => !c.exCliente && c.schedule?.some(s => s.giorno === dayName))
     .map(c => ({ client: c, orario: c.schedule.find(s => s.giorno === dayName)?.orario || '00:00', manual: false, session: null }));
 
   const manualSessions = getManualSessions().filter(s => s.date === dayStr);
@@ -9894,7 +9894,7 @@ function renderAgenda() {
 
     // Clients scheduled this day (fixed schedule)
     const dayClients = clients
-      .filter(c => !c.sonoIo && !c.exCliente && c.schedule?.some(s => s.giorno === dayName))
+      .filter(c => !c.exCliente && c.schedule?.some(s => s.giorno === dayName))
       .map(c => ({ client: c, orario: c.schedule.find(s => s.giorno === dayName)?.orario || '00:00', manual: false }))
 
     // Manual sessions this day
@@ -9976,7 +9976,7 @@ function renderAgenda() {
   // Today detail strip below grid
   const todayName = DAY_NAMES[now.getDay()];
   const todayFixed = clients
-    .filter(c => c.schedule?.some(s => s.giorno === todayName))
+    .filter(c => !c.exCliente && c.schedule?.some(s => s.giorno === todayName))
     .map(c => ({ client: c, orario: c.schedule.find(s => s.giorno === todayName)?.orario || '00:00', manual: false }));
   const todayManual = getManualSessions().filter(s => s.date === todayStr).map(s => {
     const c = clients.find(cl => cl.id == s.clientId);
