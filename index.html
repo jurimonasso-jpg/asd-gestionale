@@ -10942,7 +10942,7 @@ function renderStats() {
   const periodData = _buildPeriodBars(curSedute, bounds);
 
   // Alert
-  const allFilteredClients = clients.filter(c => !c.sonoIo && (!clientId || c.id == clientId));
+  const allFilteredClients = clients.filter(c => !c.sonoIo && !c.exCliente && (!clientId || c.id == clientId));
   const alerts = _statsGenerateAlerts(curSedute, prevSedute, bounds, allFilteredClients, skippedCur);
 
   // KPI: lezioni perse nette
