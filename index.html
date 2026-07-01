@@ -5693,10 +5693,7 @@ function updateAbbonamentoPreview() {
   `;
   preview.style.display = 'block';
   proSection.style.display = 'block';
-  renderProrogheForm(proroghe);
-  // Update add button visibility
-  const btnAdd = document.getElementById('btn-add-proroga');
-  if (btnAdd) btnAdd.style.display = proroghe.length >= 2 ? 'none' : '';
+  renderProrogheForm(proroghe); // gestisce anche la visibilità del bottone add in base al totale giorni (max 30)
 }
 
 let _prorogheTemp = [];
@@ -5762,27 +5759,34 @@ function loadProrogheToForm(arr) {
 function renderProrogheForm(proroghe) {
   const list = document.getElementById('proroghe-list');
   if (!list) return;
-  list.innerHTML = proroghe.map((p, i) => `
+  const LIMITE_TOT = 30;
+  list.innerHTML = proroghe.map((p, i) => {
+    const altreGiorni = proroghe.reduce((s, pp, j) => j === i ? s : s + parseInt(pp.giorni || 0), 0);
+    const maxDisponibile = Math.max(1, LIMITE_TOT - altreGiorni);
+    return `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">
       <span style="font-family:'DM Mono';font-size:10px;color:var(--text3);">Proroga ${i+1}</span>
-      <input type="number" min="14" max="30" value="${p.giorni}" 
+      <input type="number" min="1" max="${maxDisponibile}" value="${p.giorni}" 
         style="width:70px;padding:5px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono';font-size:12px;"
-        onchange="_prorogheTemp[${i}].giorni=Math.min(30,Math.max(14,parseInt(this.value)||14));updateAbbonamentoPreview()">
-      <span style="font-size:12px;color:var(--text3);">giorni (14-30)</span>
+        onchange="_prorogheTemp[${i}].giorni=Math.min(${maxDisponibile},Math.max(1,parseInt(this.value)||1));updateAbbonamentoPreview()">
+      <span style="font-size:12px;color:var(--text3);">giorni (max ${maxDisponibile} disp.)</span>
       <input type="date" value="${p.data || ''}" 
         style="padding:5px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono';font-size:11px;"
         onchange="_prorogheTemp[${i}].data=this.value">
       <button onclick="_prorogheTemp.splice(${i},1);updateAbbonamentoPreview();" 
         style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 4px;">×</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
+  const totaleGiorni = proroghe.reduce((s, p) => s + parseInt(p.giorni || 0), 0);
   const btnAdd = document.getElementById('btn-add-proroga');
-  if (btnAdd) btnAdd.style.display = proroghe.length >= 2 ? 'none' : '';
+  if (btnAdd) btnAdd.style.display = totaleGiorni >= LIMITE_TOT ? 'none' : '';
 }
 
 function addProroga() {
-  if (_prorogheTemp.length >= 2) return;
-  _prorogheTemp.push({ giorni: 14, data: '' });
+  const totaleGiorni = _prorogheTemp.reduce((s, p) => s + parseInt(p.giorni || 0), 0);
+  if (totaleGiorni >= 30) return;
+  _prorogheTemp.push({ giorni: Math.min(1, 30 - totaleGiorni), data: '' });
   updateAbbonamentoPreview();
 }
 
@@ -5858,7 +5862,7 @@ function renderAbbonamentoDetail(client) {
       </div>
     </div>
     <div class="card" style="margin-bottom:14px;">
-      <div class="section-title" style="margin-bottom:10px;">Proroghe (${proroghe.length}/2 usate)</div>
+      <div class="section-title" style="margin-bottom:10px;">Proroghe (${proroghe.reduce((s,p)=>s+parseInt(p.giorni||0),0)}/30gg usati)</div>
       ${prorogheHtml}
     </div>
     ${rinnoviHtml}
