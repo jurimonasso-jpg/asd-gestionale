@@ -3034,13 +3034,25 @@ window._fsDocs = getDocs;
 
 const SYNC_KEYS_FIXED = [
   'asd_clients','asd_workouts','asd_custom_exercises',
-  'asd_manual_sessions','asd_sessions_archive',
   'asd_notes','asd_tests',
 ];
+// Chiavi che crescono senza limite (una seduta in più ad ogni allenamento):
+// tenute separate dal doc 'main' per non farlo sforare il limite Firestore di 1MB.
+const SYNC_KEYS_ARCHIVE = [
+  'asd_manual_sessions','asd_sessions_archive',
+];
+
+function byteSize(str) {
+  return new TextEncoder().encode(str || '').length;
+}
 
 function getAllLocalData() {
   const payload = { _savedAt: new Date().toISOString() };
   SYNC_KEYS_FIXED.forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v) payload[k] = v;
+  });
+  SYNC_KEYS_ARCHIVE.forEach(k => {
     const v = localStorage.getItem(k);
     if (v) payload[k] = v;
   });
@@ -3064,11 +3076,15 @@ window.fbSaveToCloud = async function() {
   status.textContent = '⏳ Salvataggio in corso...';
   try {
     const payload = getAllLocalData();
-    // Firestore ha limite 1MB per documento — splittiamo i dati dinamici
+    // Firestore ha limite 1MB per documento — splittiamo su 3 bucket
     const staticData = {};
+    const archiveData = {};
     const dynamicData = {};
     Object.entries(payload).forEach(([k, v]) => {
-      if (k === '_savedAt' ||
+      if (k === '_savedAt') return;
+      if (SYNC_KEYS_ARCHIVE.includes(k)) {
+        archiveData[k] = v;
+      } else if (
           k.startsWith('asd_ex_history_') ||
           k.startsWith('asd_rep_pr_') ||
           k.startsWith('percorso_check_') ||
@@ -3080,8 +3096,24 @@ window.fbSaveToCloud = async function() {
       }
     });
     staticData._savedAt = payload._savedAt;
+    archiveData._savedAt = payload._savedAt;
     dynamicData._savedAt = payload._savedAt;
+
+    // Diagnostica: dimensioni per chiave/bucket in console, utile se in futuro
+    // ci si riavvicina di nuovo al limite di 1MB su uno dei 3 documenti.
+    try {
+      const sizes = Object.entries(payload)
+        .filter(([k]) => k !== '_savedAt')
+        .map(([k, v]) => [k, byteSize(v)])
+        .sort((a, b) => b[1] - a[1]);
+      console.log('[fbSaveToCloud] dimensioni chiavi (byte):', sizes);
+      console.log('[fbSaveToCloud] bucket totali (byte) — main:', byteSize(JSON.stringify(staticData)),
+        '| archive:', byteSize(JSON.stringify(archiveData)),
+        '| dynamic:', byteSize(JSON.stringify(dynamicData)));
+    } catch(_) {}
+
     await setDoc(doc(db, 'gestionale', 'main'), staticData);
+    await setDoc(doc(db, 'gestionale', 'archive'), archiveData);
     await setDoc(doc(db, 'gestionale', 'dynamic'), dynamicData);
     const ora = new Date().toLocaleTimeString('it-IT');
     status.textContent = '☁️ Cloud · salvato alle ' + ora;
@@ -3099,6 +3131,7 @@ window.fbLoadFromCloud = async function() {
   status.textContent = '⏳ Caricamento in corso...';
   try {
     const snapMain = await getDoc(doc(db, 'gestionale', 'main'));
+    const snapArc  = await getDoc(doc(db, 'gestionale', 'archive'));
     const snapDyn  = await getDoc(doc(db, 'gestionale', 'dynamic'));
     if (!snapMain.exists()) {
       status.textContent = '⚠️ Nessun dato trovato nel cloud';
@@ -3106,13 +3139,14 @@ window.fbLoadFromCloud = async function() {
       return;
     }
     const mainData = snapMain.data();
+    const arcData  = snapArc.exists() ? snapArc.data() : {};
     const dynData  = snapDyn.exists() ? snapDyn.data() : {};
     const savedAt  = mainData._savedAt
       ? new Date(mainData._savedAt).toLocaleString('it-IT')
       : 'data sconosciuta';
     const ok = confirm('Caricare i dati dal cloud?\nUltimo salvataggio: ' + savedAt + '\n\nI dati locali attuali verranno sovrascritti.');
     if (!ok) { status.textContent = '💾 Dati salvati localmente'; btn.disabled = false; return; }
-    [...Object.entries(mainData), ...Object.entries(dynData)].forEach(([k, v]) => {
+    [...Object.entries(mainData), ...Object.entries(arcData), ...Object.entries(dynData)].forEach(([k, v]) => {
       if (k !== '_savedAt' && v) localStorage.setItem(k, v);
     });
     status.textContent = '✓ Caricato dal cloud · ' + savedAt;
