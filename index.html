@@ -10775,7 +10775,7 @@ function _statsGetClientExpected(client, bounds, skippedByClient) {
   }
 
   const sk = skippedByClient[client.id] || {};
-  const notClientFault = (sk.me || 0) + (sk.fest || 0);
+  const notClientFault = (sk.fest || 0); // Solo le festività sono escluse dalle lezioni dovute
 
   // Clienti con slot fissi: conta le occorrenze esatte dei giorni fissi nel range
   if (client.schedule && client.schedule.length > 0) {
@@ -10814,7 +10814,7 @@ function _statsNetLost(curSedute, bounds, skippedCur, allFilteredClients) {
     totalDone += done;
     byClient.push({ id: c.id, name: `${c.nome} ${c.cognome}`, expected, done, lost });
   });
-  const totalLost = Math.max(totalExpected - totalDone, 0);
+  const totalLost = byClient.reduce((sum, c) => sum + c.lost, 0);
   return { totalExpected, totalDone, totalLost, byClient };
 }
 
@@ -10924,43 +10924,43 @@ function renderStats() {
     return true;
   };
 
-  // Sessioni manuali archiviate come "done"
-  const archivedManual = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]')
-    .filter(s => s.outcome === 'done' && s.id && String(s.id).startsWith('ms_'))
-    .map(s => {
-      const wClient = clients.find(c => c.id === s.clientId);
-      if (wClient?.sonoIo) return null;
-      if (clientId && s.clientId != clientId) return null;
-      return {
-        _isManual: true,
-        clientId: s.clientId,
-        createdAt: s.archivedAt || (s.date + 'T12:00:00'),
-        date: s.date,
-        name: 'Lezione manuale',
-        categoria: 'seduta',
-        tipoSeduta: null,
-        painStart: [],
-        blocchi: []
-      };
-    }).filter(Boolean);
-
-  // Recuperi/lezioni manuali: valgono come svolte alla data della lezione,
-  // anche se non hanno una scheda workout. Evita il doppio conteggio se archiviate.
-  const manualArchive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]');
-  const manualAlreadyCounted = new Set(archivedManual.map(s => String(s._sourceId || '')));
-  const manualDone = JSON.parse(localStorage.getItem('asd_manual_sessions') || '[]')
-    .filter(s => {
-      if (!s.date || !s.clientId) return false;
-      const c = clients.find(c => c.id == s.clientId);
-      if (!c || c.sonoIo || (clientId && s.clientId != clientId)) return false;
-      const archived = manualArchive.find(a => String(a.id) === String(s.id));
-      return !archived || archived.outcome === 'done';
-    })
-    .filter(s => !manualArchive.some(a => String(a.id) === String(s.id) && a.outcome === 'done'))
-    .map(s => ({ _isManual:true, clientId:s.clientId, date:s.date,
-      createdAt:s.date+'T12:00:00', name:'Recupero / lezione manuale',
-      categoria:'seduta', tipoSeduta:null, painStart:[], blocchi:[] }));
-  const allSedute = [...workouts.filter(filterW), ...archivedManual, ...manualDone];
+  // Una seduta svolta vale UNA sola volta, anche quando è presente
+  // contemporaneamente in workouts, archivio e recuperi manuali.
+  // I workout hanno priorità perché contengono i dettagli clinici.
+  const archiveStats = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]');
+  const manualStats = JSON.parse(localStorage.getItem('asd_manual_sessions') || '[]');
+  const rawSedute = workouts.filter(filterW).map(w => ({
+    ...w, _statsDate: (w.date || w.createdAt?.split('T')[0])
+  }));
+  const allowedClient = id => {
+    const c = clients.find(c => c.id == id);
+    return c && !c.sonoIo && (!clientId || id == clientId);
+  };
+  // Prima i recuperi registrati: se manca il workout, contano comunque.
+  manualStats.forEach(m => {
+    if (!m.date || !allowedClient(m.clientId)) return;
+    const archived = archiveStats.find(a => String(a.id) === String(m.id));
+    if (archived && archived.outcome !== 'done') return;
+    rawSedute.push({
+      _isManual:true, _statsDate:m.date, date:m.date,
+      createdAt:m.date+'T12:00:00', clientId:m.clientId,
+      categoria:'seduta', name:'Recupero', painStart:[]
+    });
+  });
+  // Anche una seduta marcata come svolta in archivio vale se non ha scheda workout.
+  archiveStats.filter(a => a.outcome === 'done' && a.date && allowedClient(a.clientId))
+    .forEach(a => rawSedute.push({
+      _isArchive:true, _statsDate:a.date, date:a.date,
+      createdAt:a.date+'T12:00:00', clientId:a.clientId,
+      categoria:'seduta', name:'Seduta archiviata', painStart:[]
+    }));
+  const uniqueSedute = new Map();
+  rawSedute.forEach(w => {
+    if (!w._statsDate) return;
+    const key = String(w.clientId)+'|'+w._statsDate;
+    if (!uniqueSedute.has(key)) uniqueSedute.set(key,w);
+  });
+  const allSedute = [...uniqueSedute.values()];
   const curSedute = allSedute.filter(w => {
     const d = w.date ? new Date(w.date + 'T12:00:00') : new Date(w.createdAt);
     return d >= bounds.start && d <= bounds.end;
@@ -11143,6 +11143,48 @@ function renderStats() {
   </div>`;
 
   html += `</div>`;
+
+  // ── SALDO ABBONAMENTO ──
+  // Indipendente dai filtri temporali: dall'inizio del contratto a oggi.
+  // La data di fine viene limitata alla scadenza del contratto.
+  const contractToday = new Date(); contractToday.setHours(23,59,59,999);
+  const fmtContract = d => d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const contractClients = allFilteredClients.filter(c => c.abbStart && c.abbTipo && c.abbTipo !== 'none');
+  const contractRows = contractClients.map(c => {
+    const start = new Date(c.abbStart + 'T00:00:00');
+    const expiry = abbScadenza(c);
+    const end = expiry ? new Date(Math.min(contractToday.getTime(), expiry.getTime() - 1)) : contractToday;
+    if (end < start) return null;
+    const range = {start, end};
+    const skips = _countSkipped(start, end, String(c.id));
+    // I giorni festivi sono esclusi, i recuperi sono sedute effettive.
+    const expected = _statsGetClientExpected({...c, sessionStart:c.abbStart}, range, skips.byClient);
+    const done = allSedute.filter(w => String(w.clientId) === String(c.id) &&
+      new Date((w._statsDate || w.createdAt?.split('T')[0]) + 'T12:00:00') >= start &&
+      new Date((w._statsDate || w.createdAt?.split('T')[0]) + 'T12:00:00') <= end).length;
+    const recoveries = allSedute.filter(w => String(w.clientId) === String(c.id) && w._isManual &&
+      new Date(w._statsDate + 'T12:00:00') >= start && new Date(w._statsDate + 'T12:00:00') <= end).length;
+    return {c, start, end, expected, done, recoveries, fest:skips.fest,
+      balance: expected - done};
+  }).filter(Boolean).sort((a,b) => b.balance-a.balance);
+  html += `<section style="${cardStyle};margin-bottom:16px;border-left:4px solid var(--accent2);">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+      <div style="font-size:17px;font-weight:800;">📋 Saldo abbonamento</div>
+      <span style="${mono};font-size:10px;color:var(--text3);">Dall'inizio del contratto · fino a oggi</span>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Indipendente dal periodo delle statistiche. Festività escluse; recuperi inclusi nelle svolte. Valori negativi = lezioni in anticipo.</div>
+    ${contractRows.length ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:470px;">
+      <thead><tr style="${mono};font-size:10px;color:var(--text3);text-align:left;border-bottom:1px solid var(--border);">
+        <th style="padding:8px 5px;">Cliente / contratto</th><th style="padding:8px 5px;text-align:center;">Dovute</th>
+        <th style="padding:8px 5px;text-align:center;">Svolte</th><th style="padding:8px 5px;text-align:center;">Saldo</th>
+      </tr></thead><tbody>${contractRows.map(r => `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:10px 5px;"><div style="font-size:12px;font-weight:700;">${r.c.nome} ${r.c.cognome || ''}</div>
+          <div style="${mono};font-size:9px;color:var(--text3);">${fmtContract(r.start)} – ${fmtContract(r.end)} · ${r.fest} festività escluse</div></td>
+        <td style="${mono};text-align:center;font-weight:700;">${r.expected}</td>
+        <td style="${mono};text-align:center;font-weight:700;">${r.done}</td>
+        <td style="${mono};text-align:center;font-size:12px;font-weight:800;color:${r.balance > 0 ? 'var(--red)' : 'var(--green)'};">${r.balance > 0 ? r.balance + ' da recuperare' : r.balance < 0 ? Math.abs(r.balance) + ' in anticipo' : '✓ In pari'}</td>
+      </tr>`).join('')}</tbody></table></div>` : `<div style="font-size:12px;color:var(--text3);">Nessun abbonamento attivo con data di inizio registrata per il filtro selezionato.</div>`}
+  </section>`;
 
   // ── GRAFICO + ALERT ──
   html += `<div style="display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:16px;">`;
@@ -11359,7 +11401,7 @@ function _buildPeriodBars(sedute, bounds) {
     const bars = days.map((label, i) => {
       const d = new Date(bounds.start); d.setDate(bounds.start.getDate()+i);
       const dayStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      const val = sedute.filter(w=>w.createdAt?.split('T')[0]===dayStr).length;
+      const val = sedute.filter(w=>(w._statsDate || w.createdAt?.split('T')[0])===dayStr).length;
       const isCurrent = d.getTime()===today.getTime();
       return { label, val, isCurrent };
     });
@@ -11372,7 +11414,7 @@ function _buildPeriodBars(sedute, bounds) {
     while (d <= bounds.end) {
       const wkStart = new Date(d);
       const wkEnd   = new Date(d); wkEnd.setDate(d.getDate()+6); if (wkEnd > bounds.end) wkEnd.setTime(bounds.end.getTime());
-      const val = sedute.filter(w => { const wd=new Date(w.createdAt); return wd>=wkStart&&wd<=wkEnd; }).length;
+      const val = sedute.filter(w => { const wd=new Date((w._statsDate || w.createdAt?.split('T')[0])+'T12:00:00'); return wd>=wkStart&&wd<=wkEnd; }).length;
       const today = new Date(); today.setHours(0,0,0,0);
       const isCurrent = today>=wkStart && today<=wkEnd;
       bars.push({ label: `Sett ${wk}`, val, isCurrent });
@@ -11385,7 +11427,7 @@ function _buildPeriodBars(sedute, bounds) {
     for (let i=0; i<3; i++) {
       const ms = new Date(bounds.start.getFullYear(), bounds.start.getMonth()+i, 1);
       const me = new Date(bounds.start.getFullYear(), bounds.start.getMonth()+i+1, 0, 23,59,59,999);
-      const val = sedute.filter(w=>{ const wd=new Date(w.createdAt); return wd>=ms&&wd<=me; }).length;
+      const val = sedute.filter(w=>{ const wd=new Date((w._statsDate || w.createdAt?.split('T')[0])+'T12:00:00'); return wd>=ms&&wd<=me; }).length;
       const today = new Date();
       const isCurrent = today.getFullYear()===ms.getFullYear() && today.getMonth()===ms.getMonth();
       const label = ms.toLocaleDateString('it-IT',{month:'short'});
