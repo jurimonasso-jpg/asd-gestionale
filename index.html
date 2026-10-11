@@ -10640,6 +10640,14 @@ function statsNav(dir) {
   renderStats();
 }
 
+// Le statistiche consuntive non possono estendersi oltre la giornata odierna.
+// Il limite vale anche quando si naviga accidentalmente verso periodi futuri.
+function _statsCapBounds(bounds) {
+  const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+  const clamp = d => new Date(Math.min(d.getTime(), todayEnd.getTime()));
+  return { ...bounds, end: clamp(bounds.end), prevEnd: clamp(bounds.prevEnd) };
+}
+
 function _statsPeriodBounds() {
   const now = new Date();
   if (_statsView === 'week') {
@@ -10756,7 +10764,7 @@ function _statsGetClientExpected(client, bounds, skippedByClient) {
 
   const startDateStr = _statsClientStartDate(client);
   // Se la sessionStart è oltre la fine del periodo, cliente non ancora attivo
-  if (startDateStr && startDateStr > bounds.end.toISOString().split('T')[0]) return 0;
+  if (startDateStr && new Date(startDateStr + 'T00:00:00') > bounds.end) return 0;
 
   // Data effettiva di inizio nel periodo (max tra sessionStart e bounds.start)
   let effectiveStart = new Date(bounds.start);
@@ -10893,9 +10901,9 @@ function renderStats() {
   const container = document.getElementById('stats-content');
   if (!container) return;
   const clientId = document.getElementById('stats-client-filter')?.value || '';
-  const bounds = _statsPeriodBounds();
+  const bounds = _statsCapBounds(_statsPeriodBounds());
   const labelEl = document.getElementById('stats-period-label');
-  if (labelEl) labelEl.textContent = _statsPeriodLabel(bounds);
+  if (labelEl) labelEl.textContent = _statsPeriodLabel(bounds) + ' · consuntivo fino a oggi';
 
   // Update active button style
   ['week','month','3m','6m','1y'].forEach(v => {
@@ -10936,14 +10944,30 @@ function renderStats() {
       };
     }).filter(Boolean);
 
-  const allSedute = [...workouts.filter(filterW), ...archivedManual];
+  // Recuperi/lezioni manuali: valgono come svolte alla data della lezione,
+  // anche se non hanno una scheda workout. Evita il doppio conteggio se archiviate.
+  const manualArchive = JSON.parse(localStorage.getItem('asd_sessions_archive') || '[]');
+  const manualAlreadyCounted = new Set(archivedManual.map(s => String(s._sourceId || '')));
+  const manualDone = JSON.parse(localStorage.getItem('asd_manual_sessions') || '[]')
+    .filter(s => {
+      if (!s.date || !s.clientId) return false;
+      const c = clients.find(c => c.id == s.clientId);
+      if (!c || c.sonoIo || (clientId && s.clientId != clientId)) return false;
+      const archived = manualArchive.find(a => String(a.id) === String(s.id));
+      return !archived || archived.outcome === 'done';
+    })
+    .filter(s => !manualArchive.some(a => String(a.id) === String(s.id) && a.outcome === 'done'))
+    .map(s => ({ _isManual:true, clientId:s.clientId, date:s.date,
+      createdAt:s.date+'T12:00:00', name:'Recupero / lezione manuale',
+      categoria:'seduta', tipoSeduta:null, painStart:[], blocchi:[] }));
+  const allSedute = [...workouts.filter(filterW), ...archivedManual, ...manualDone];
   const curSedute = allSedute.filter(w => {
-    const d = new Date(w.createdAt);
+    const d = w.date ? new Date(w.date + 'T12:00:00') : new Date(w.createdAt);
     return d >= bounds.start && d <= bounds.end;
   });
   const prevSedute = allSedute.filter(w => {
-    const d = new Date(w.createdAt);
-    return d >= bounds.prevStart && d < bounds.prevEnd;
+    const d = w.date ? new Date(w.date + 'T12:00:00') : new Date(w.createdAt);
+    return d >= bounds.prevStart && d <= bounds.prevEnd;
   });
 
   // Sedute saltate
