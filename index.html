@@ -3285,6 +3285,10 @@ window.fbLoadFromCloud = async function() {
     </div>
     <!-- Filtro cliente + navigazione periodo -->
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:24px;">
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;background:var(--surface);border:1px solid var(--border);padding:10px 12px;border-radius:8px;cursor:pointer;">
+        <input type="checkbox" id="stats-include-former" onchange="populateStatsFilter();renderStats()" style="accent-color:var(--accent);width:16px;height:16px;">
+        Includi ex clienti
+      </label>
       <select id="stats-client-filter" class="form-input" style="width:220px;margin:0;" onchange="renderStats()">
         <option value="">Tutti i clienti</option>
       </select>
@@ -10624,8 +10628,11 @@ function populateStatsFilter() {
   const sel = document.getElementById('stats-client-filter');
   if (!sel) return;
   const cur = sel.value;
+  const includeFormer = !!document.getElementById('stats-include-former')?.checked;
   sel.innerHTML = '<option value="">Tutti i clienti</option>' +
-    clients.filter(c => !c.sonoIo).map(c => `<option value="${c.id}" ${c.id==cur?'selected':''}>${c.nome} ${c.cognome}</option>`).join('');
+    clients.filter(c => !c.sonoIo && (includeFormer || !c.exCliente))
+      .map(c => `<option value="${c.id}" ${c.id==cur?'selected':''}>${c.nome} ${c.cognome}${c.exCliente?' (ex cliente)':''}</option>`).join('');
+  if (cur && ![...sel.options].some(o => o.value === cur)) sel.value = '';
 }
 
 function setStatsView(v) {
@@ -10898,10 +10905,26 @@ function _statsSetFreqSort(v) {
   renderStats();
 }
 
+// Conferme manuali locali: mai trasformare automaticamente un fixed_auto in presenza certa.
+const STATS_CONFIRM_KEY = 'asd_stats_confirmed_archive_v1';
+function _statsArchiveConfirmations() {
+  try { return JSON.parse(localStorage.getItem(STATS_CONFIRM_KEY) || '{}'); } catch(e) { return {}; }
+}
+function statsSetArchiveConfirmation(clientId, day, confirm) {
+  const data = _statsArchiveConfirmations();
+  const key = String(clientId) + '|' + day;
+  data[key] = confirm ? 'yes' : 'no';
+  localStorage.setItem(STATS_CONFIRM_KEY, JSON.stringify(data));
+  renderStats();
+}
+function _statsLocalDay(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _statsEscape(s) { return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
 function renderStats() {
   const container = document.getElementById('stats-content');
   if (!container) return;
   const clientId = document.getElementById('stats-client-filter')?.value || '';
+  const includeFormer = !!document.getElementById('stats-include-former')?.checked;
   const bounds = _statsCapBounds(_statsPeriodBounds());
   const labelEl = document.getElementById('stats-period-label');
   if (labelEl) labelEl.textContent = _statsPeriodLabel(bounds) + ' · consuntivo fino a oggi';
@@ -10920,7 +10943,7 @@ function renderStats() {
   const filterW = w => {
     if (w.categoria !== 'seduta') return false;
     const wClient = clients.find(c => c.id === w.clientId);
-    if (wClient?.sonoIo) return false;
+    if (wClient?.sonoIo || (!includeFormer && wClient?.exCliente)) return false;
     if (clientId && w.clientId != clientId) return false;
     return true;
   };
@@ -10935,7 +10958,7 @@ function renderStats() {
   }));
   const allowedClient = id => {
     const c = clients.find(c => c.id == id);
-    return c && !c.sonoIo && (!clientId || id == clientId);
+    return c && !c.sonoIo && (includeFormer || !c.exCliente) && (!clientId || id == clientId);
   };
   // Prima i recuperi registrati: se manca il workout, contano comunque.
   manualStats.forEach(m => {
@@ -10948,8 +10971,24 @@ function renderStats() {
       categoria:'seduta', name:'Recupero', painStart:[]
     });
   });
-  // Non usare l'archivio degli slot per inferire presenze: "done" può
-  // essere un esito automatico. Solo schede svolte e recuperi registrati.
+  // Presenze solo da archivio: NON certificate. Richiedono conferma esplicita.
+  const confirmedArchive = _statsArchiveConfirmations();
+  const knownDays = new Set(rawSedute.filter(w=>w._statsDate).map(w=>String(w.clientId)+'|'+w._statsDate));
+  const pendingArchive = [];
+  archiveStats.filter(a=>a.outcome==='done' && a.date && allowedClient(a.clientId))
+    .forEach(a=>{
+      const key=String(a.clientId)+'|'+a.date;
+      if(knownDays.has(key)) return;
+      if(confirmedArchive[key] === 'no') return;
+      if(confirmedArchive[key] === 'yes') {
+        rawSedute.push({_isArchiveConfirmed:true,_statsDate:a.date,date:a.date,
+          createdAt:a.date+'T12:00:00',clientId:a.clientId,categoria:'seduta',name:'Presenza verificata',painStart:[]});
+        knownDays.add(key);
+      } else if(a.date <= _statsLocalDay(new Date())) {
+        pendingArchive.push(a);
+        knownDays.add(key);
+      }
+    });
   const uniqueSedute = new Map();
   rawSedute.forEach(w => {
     if (!w._statsDate) return;
@@ -11002,7 +11041,7 @@ function renderStats() {
   const periodData = _buildPeriodBars(curSedute, bounds);
 
   // Alert
-  const allFilteredClients = clients.filter(c => !c.sonoIo && !c.exCliente && (!clientId || c.id == clientId));
+  const allFilteredClients = clients.filter(c => !c.sonoIo && (includeFormer || !c.exCliente) && (!clientId || c.id == clientId));
   const alerts = _statsGenerateAlerts(curSedute, prevSedute, bounds, allFilteredClients, skippedCur);
 
   // KPI: lezioni perse nette
@@ -11125,7 +11164,7 @@ function renderStats() {
   html += `<div style="${cardStyle};grid-column:1/-1;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
       <div>
-        <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Lezioni perse nette</div>
+        <div style="${mono};font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px;">Scostamento presenze del periodo</div>
         <div style="font-size:36px;font-weight:800;color:${netLostColor};line-height:1;">${netLost.totalLost}</div>
         <div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">
           <div style="${mono};font-size:10px;color:var(--text3);">${netLost.totalDone} fatte su ${netLost.totalExpected} attese</div>
@@ -11147,16 +11186,29 @@ function renderStats() {
   // La data di fine viene limitata alla scadenza del contratto.
   const contractToday = new Date(); contractToday.setHours(23,59,59,999);
   const fmtContract = d => d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const contractClients = allFilteredClients.filter(c => c.abbStart && c.abbTipo && c.abbTipo !== 'none');
+  const contractClients = allFilteredClients.filter(c =>
+    (c.abbStart && c.abbTipo && c.abbTipo !== 'none') ||
+    (includeFormer && c.exCliente && Array.isArray(c.abbRinnovi) && c.abbRinnovi.length));
   const contractRows = contractClients.map(c => {
-    const start = new Date(c.abbStart + 'T00:00:00');
-    const expiry = abbScadenza(c);
-    const end = expiry ? new Date(Math.min(contractToday.getTime(), expiry.getTime() - 1)) : contractToday;
+    const archivedContracts = (c.abbRinnovi || []).filter(r => r.start && r.tipo && r.tipo !== 'none');
+    const lastArchived = archivedContracts.sort((a,b)=>b.start.localeCompare(a.start))[0];
+    const useArchive = (!c.abbTipo || c.abbTipo === 'none' || !c.abbStart) && !!lastArchived;
+    const contractStart = useArchive ? lastArchived.start : c.abbStart;
+    const start = new Date(contractStart + 'T00:00:00');
+    const expiry = useArchive ? new Date((lastArchived.scad || lastArchived.archivedAt || contractStart)+'T23:59:59') : abbScadenza(c);
+    let end = expiry ? new Date(Math.min(contractToday.getTime(), expiry.getTime() - 1)) : contractToday;
+    // Gli ex clienti non maturano lezioni dopo l'uscita registrata.
+    if (c.exCliente) {
+      const endOfRelationship = (useArchive && lastArchived.archivedAt) ||
+        (c.abbRinnovi || []).map(r=>r.archivedAt).filter(Boolean).sort().pop() ||
+        allSedute.filter(w=>String(w.clientId)===String(c.id)).map(w=>w._statsDate).filter(Boolean).sort().pop();
+      if (endOfRelationship) end = new Date(Math.min(end.getTime(),new Date(endOfRelationship+'T23:59:59').getTime()));
+    }
     if (end < start) return null;
     const range = {start, end};
     const skips = _countSkipped(start, end, String(c.id));
     // I giorni festivi sono esclusi, i recuperi sono sedute effettive.
-    const expected = _statsGetClientExpected({...c, sessionStart:c.abbStart}, range, skips.byClient);
+    const expected = _statsGetClientExpected({...c, sessionStart:contractStart}, range, skips.byClient);
     const done = allSedute.filter(w => String(w.clientId) === String(c.id) &&
       new Date((w._statsDate || w.createdAt?.split('T')[0]) + 'T12:00:00') >= start &&
       new Date((w._statsDate || w.createdAt?.split('T')[0]) + 'T12:00:00') <= end).length;
@@ -11164,9 +11216,14 @@ function renderStats() {
       new Date(w._statsDate + 'T12:00:00') >= start && new Date(w._statsDate + 'T12:00:00') <= end).length;
     const proroghe = Array.isArray(c.abbProroghe) ? c.abbProroghe : [];
     const prorogaDays = proroghe.reduce((n,p) => n + (parseInt(p.giorni,10) || 0), 0);
-    return {c, start, end, expected, done, recoveries, fest:skips.fest,
+    const pending = pendingArchive.filter(a=>String(a.clientId)===String(c.id) &&
+      new Date(a.date+'T12:00:00')>=start && new Date(a.date+'T12:00:00')<=end);
+    const conflicts = archiveStats.filter(a=>String(a.clientId)===String(c.id) &&
+      a.outcome !== 'done' && allSedute.some(w=>String(w.clientId)===String(c.id) && w._statsDate===a.date));
+    return {c, start, end, expected, done, pending, conflicts, recoveries, fest:skips.fest,
       prorogaDays, prorogaCount:proroghe.length, balance: expected - done};
   }).filter(Boolean).sort((a,b) => b.balance-a.balance);
+  const pendingTotal = contractRows.reduce((n,r)=>n+r.pending.length,0);
   html += `<section style="${cardStyle};margin-bottom:16px;border-left:4px solid var(--accent2);">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
       <div style="font-size:17px;font-weight:800;">📋 Saldo abbonamento</div>
@@ -11174,13 +11231,17 @@ function renderStats() {
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Indipendente dal periodo delle statistiche. Festività escluse; recuperi inclusi nelle svolte. Valori negativi = lezioni in anticipo.</div>
     ${contractRows.some(r=>r.prorogaCount) ? `<div style="background:var(--blue-bg);border:1px solid var(--accent2);border-radius:8px;padding:9px 11px;margin-bottom:12px;font-size:11px;line-height:1.5;">⏸ <b>Promemoria sospensioni:</b> ${contractRows.filter(r=>r.prorogaCount).map(r=>`${r.c.nome} ${r.c.cognome || ''} (+${r.prorogaDays} gg)`).join(' · ')}</div>` : ''}
+    ${contractRows.some(r=>r.c.nome==='Carlo' && r.c.cognome==='Delpiccolo') ? `<div style="font-size:10px;color:var(--text3);margin-bottom:8px;">ℹ Le presenze archiviate senza scheda di allenamento sono incluse se segnate come svolte. Verifica nell'agenda eventuali esiti automatici.</div>` : ''}
+    ${pendingTotal ? `<div style="padding:10px;margin-bottom:12px;border-radius:8px;background:var(--yellow-bg);color:var(--yellow);font-size:11px;"><b>⚠ ${pendingTotal} presenze da verificare:</b> l'archivio automatico non dimostra da solo che la lezione sia stata svolta. I saldi qui sotto sono calcolati sulle sole presenze documentate o confermate. Conferma o escludi ogni presenza dubbia.</div>` : ''}
     ${contractRows.length ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:470px;">
       <thead><tr style="${mono};font-size:10px;color:var(--text3);text-align:left;border-bottom:1px solid var(--border);">
         <th style="padding:8px 5px;">Cliente / contratto</th><th style="padding:8px 5px;text-align:center;">Dovute</th>
         <th style="padding:8px 5px;text-align:center;">Svolte</th><th style="padding:8px 5px;text-align:center;">Saldo</th>
       </tr></thead><tbody>${contractRows.map(r => `<tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:10px 5px;"><div style="font-size:12px;font-weight:700;">${r.c.nome} ${r.c.cognome || ''}</div>
+        <td style="padding:10px 5px;"><div style="font-size:12px;font-weight:700;">${r.c.nome} ${r.c.cognome || ''}${r.c.exCliente?' · <span style="color:var(--text3);font-size:10px;">EX CLIENTE</span>':''}</div>
           <div style="${mono};font-size:9px;color:var(--text3);">${fmtContract(r.start)} – ${fmtContract(r.end)} · ${r.fest} festività escluse</div>
+          ${r.pending.length ? `<div style="margin-top:6px;color:var(--yellow);font-size:10px;font-weight:700;">⚠ ${r.pending.length} presenz${r.pending.length===1?'a':'e'} non verificat${r.pending.length===1?'a':'e'} (saldo potenziale: ${r.balance-r.pending.length})</div>${r.pending.slice(0,30).map(a=>`<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin:4px 0;font-size:10px;">${a.date} <button type="button" onclick="statsSetArchiveConfirmation('${String(r.c.id)}','${a.date}',true)" style="border:1px solid var(--green);border-radius:5px;padding:3px 5px;background:var(--green-bg);color:var(--green);">✓ Svolta</button><button type="button" onclick="statsSetArchiveConfirmation('${String(r.c.id)}','${a.date}',false)" style="border:1px solid var(--border);border-radius:5px;padding:3px 5px;background:var(--surface2);">Non svolta</button></div>`).join('')}` : ''}
+          ${r.conflicts.length ? `<div style="font-size:10px;color:var(--red);">⚠ ${r.conflicts.length} conflitti tra scheda e assenza: verificare</div>` : ''}
           ${r.prorogaCount ? `<div style="font-size:10px;font-weight:700;color:var(--accent2);margin-top:4px;">⏸ Sospensione/proroga utilizzata: ${r.prorogaDays} giorni (${r.prorogaCount} richieste) · ${Math.max(0,30-r.prorogaDays)} gg residui</div>` : ''}</td>
         <td style="${mono};text-align:center;font-weight:700;">${r.expected}</td>
         <td style="${mono};text-align:center;font-weight:700;">${r.done}</td>
